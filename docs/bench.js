@@ -108,6 +108,16 @@
     notesHtml = md.split(/\n{2,}/).map((blk) => {
       if (/^##\s/.test(blk)) return '<h2>' + inline(blk.replace(/^##\s*/, '')) + '</h2>';
       if (/^#\s/.test(blk)) return '<h1>' + inline(blk.replace(/^#\s*/, '')) + '</h1>';
+      if (/^\|.*\|\s*$/m.test(blk)) {
+        const rows = blk.split('\n').filter((l) => /^\|.*\|\s*$/.test(l.trim()));
+        const cells = (l) => l.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const isRule = (l) => /^[\s|:-]+$/.test(l);
+        const head = cells(rows[0]);
+        const body = rows.slice(1).filter((l) => !isRule(l));
+        return '<div class="scroll"><table><thead><tr>' + head.map((c) => '<th>' + inline(c) + '</th>').join('') +
+          '</tr></thead><tbody>' + body.map((r) => '<tr>' + cells(r).map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('') +
+          '</tbody></table></div>';
+      }
       if (/^[-*]\s/m.test(blk)) return '<ul>' + blk.split('\n').filter((l) => /^[-*]\s/.test(l.trim())).map((l) => '<li>' + inline(l.replace(/^\s*[-*]\s*/, '')) + '</li>').join('') + '</ul>';
       return '<p>' + inline(blk) + '</p>';
     }).join('\n');
