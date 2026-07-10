@@ -5,7 +5,10 @@ frontier and open language models — every score published with its full
 method: exact prompts, model and provider configuration, confidence
 intervals, per-task outputs, and cost.
 
-**Site:** rendered from `docs/` (GitHub Pages).
+**Site:** rendered from `docs/` (GitHub Pages). Design: the Misty Step
+[aesthetic](https://github.com/misty-step/aesthetic) kit (`docs/ae.css`,
+vendored pin from aesthetic@6cf40bc); `docs/bench.css` is layout-only and
+derives every color from kit tokens — light/dark follows the system.
 
 ## How it works
 

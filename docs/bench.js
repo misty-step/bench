@@ -11,13 +11,28 @@
   /* ---------- index ---------- */
   const cardsEl = $('#cards');
   if (cardsEl) {
-    cardsEl.innerHTML = manifest.benchmarks.map((b) => `
-      <a class="card" href="benchmark.html?id=${encodeURIComponent(b.id)}">
-        <span class="tag">${esc(b.edition || 'v0')} · ${b.tasks} tasks</span>
-        <h2>${esc(b.title)}</h2>
-        <p>${esc(b.tagline)}</p>
-        <div class="foot"><span>${b.packets.length} published run${b.packets.length === 1 ? '' : 's'}</span><span>${esc(b.grader)}</span></div>
-      </a>`).join('');
+    // One card per benchmark FAMILY; editions of the same benchmark are
+    // lineage inside the card, never sibling cards.
+    const families = new Map();
+    for (const b of manifest.benchmarks) {
+      const key = b.family || b.id;
+      if (!families.has(key)) families.set(key, []);
+      families.get(key).push(b);
+    }
+    cardsEl.innerHTML = [...families.values()].map((eds) => {
+      const cur = eds[0]; // manifest order: current edition first
+      const runs = eds.reduce((n, e) => n + e.packets.length, 0);
+      const lineage = eds.map((e, i) =>
+        `<a href="benchmark.html?id=${encodeURIComponent(e.id)}">${esc(e.edition)}${i === 0 ? ' (current)' : ''}</a>`).join(' · ');
+      return `
+      <div class="card">
+        <span class="tag">${esc(cur.edition)} · ${cur.tasks} tasks</span>
+        <h2><a href="benchmark.html?id=${encodeURIComponent(cur.id)}">${esc(cur.family_title || cur.title)}</a></h2>
+        <p>${esc(cur.tagline)}</p>
+        <div class="foot"><span>${runs} published run${runs === 1 ? '' : 's'} across ${eds.length} edition${eds.length === 1 ? '' : 's'}</span><span>${esc(cur.grader)}</span></div>
+        <div class="editions">editions: ${lineage}</div>
+      </div>`;
+    }).join('');
     return;
   }
 
@@ -39,13 +54,14 @@
     const when = new Date(p.executed_at_unix_ms).toISOString().slice(0, 10);
     const cost = p.totals && p.totals.cost_usd != null ? '$' + p.totals.cost_usd.toFixed(4) : '—';
     const dur = p.totals && p.totals.duration_ms != null ? humanMs(p.totals.duration_ms) : null;
+    const lead = p === packets[0] ? ' is-lead' : '';
     return `<div class="lb-row">
       <div class="lb-model"><div class="name">${esc(shortModel(p.config.model))}</div>
         <div class="when num">${when} · ${esc(p.provenance?.repo || '?')}@${esc((p.provenance?.git_sha || '').slice(0, 7))}</div></div>
       <div class="lb-score">
-        <div class="lb-track">
-          <div class="lb-fill" style="width:${s.point * 100}%"></div>
-          <div class="lb-ci" style="left:${s.lower * 100}%;width:${(s.upper - s.lower) * 100}%"></div>
+        <div class="ae-ci${lead}">
+          <div class="ae-ci-band" style="left:${s.lower * 100}%;width:${(s.upper - s.lower) * 100}%"></div>
+          <div class="ae-ci-mean" style="left:${s.point * 100}%"></div>
         </div>
         <div class="lb-nums num"><b>${pct(s.point)}</b><span>${s.successes}/${s.n}</span><span>95% CI [${pct(s.lower)}, ${pct(s.upper)}]</span><span>${cost}</span>${dur ? `<span>${dur} model-time</span>` : ''}${drift(p)}</div>
       </div>
@@ -89,7 +105,7 @@
     </details>`).join('');
 
   /* method table from packets */
-  const method = `<div class="scroll"><table>
+  const method = `<div class="scroll"><table class="ae-table">
     <tr><th>model</th><th>provider</th><th>temp</th><th>max&nbsp;tokens</th><th>tokens</th><th>cost</th><th>config id</th></tr>
     ${packets.map((p) => `<tr class="num">
       <td class="mono">${esc(p.config.model)}</td><td>${esc(p.config.provider)}</td>
@@ -131,12 +147,18 @@
       .replace(/\*([^*]+)\*/g, '<i>$1</i>');
   }
 
+  const siblings = manifest.benchmarks.filter((b) => (b.family || b.id) === (bench.family || bench.id));
+  const lineage = siblings.length > 1
+    ? ' · editions: ' + siblings.map((b) => b.id === bench.id
+        ? `<a class="cur">${esc(b.edition)}</a>`
+        : `<a href="benchmark.html?id=${encodeURIComponent(b.id)}">${esc(b.edition)}</a>`).join(' ')
+    : '';
   root.innerHTML = `
     <div class="bhead">
-      <h1>${esc(bench.title)}</h1>
-      <p class="slug">${esc(bench.id)} · <a href="${esc(bench.spec_url)}">spec</a> · ${bench.tasks} tasks · ${esc(bench.grader)}</p>
+      <h1>${esc(bench.family_title || bench.title)} <span class="muted">· ${esc(bench.edition)}</span></h1>
+      <p class="slug">${esc(bench.id)} · <a href="${esc(bench.spec_url)}">spec</a> · ${bench.tasks} tasks · ${esc(bench.grader)}${lineage}</p>
       <p class="thesis">${esc(bench.thesis)}</p>
-      <div class="chips">${(bench.families || []).map((f) => `<span class="chip">${esc(f)}</span>`).join('')}</div>
+      <div class="chips">${(bench.families || []).map((f) => `<span class="ae-chip">${esc(f)}</span>`).join('')}</div>
     </div>
     <section><p class="sect-title">Results</p><div class="lb">${leaderboard}</div></section>
     <section><p class="sect-title">Lab notes</p><div class="notes">${notesHtml}</div></section>
