@@ -106,12 +106,13 @@
 
   /* method table from packets */
   const method = `<div class="scroll"><table class="ae-table">
-    <tr><th>model</th><th>provider</th><th>temp</th><th>max&nbsp;tokens</th><th>tokens</th><th>cost</th><th>config id</th></tr>
+    <tr><th>model</th><th>provider</th><th>temp</th><th>max&nbsp;tokens</th><th>tokens</th><th>cost</th><th>model-time</th><th>config id</th></tr>
     ${packets.map((p) => `<tr class="num">
       <td class="mono">${esc(p.config.model)}</td><td>${esc(p.config.provider)}</td>
       <td>${p.config.temperature ?? '—'}</td><td>${p.config.max_tokens ?? '—'}</td>
       <td>${p.totals?.tokens ?? '—'}</td><td>${p.totals?.cost_usd != null ? '$' + p.totals.cost_usd.toFixed(4) : '—'}</td>
-      <td class="mono" style="font-size:.68rem;overflow-wrap:anywhere">${esc(p.config.config_id)}</td>
+      <td>${p.totals?.duration_ms != null ? humanMs(p.totals.duration_ms) : '—'}</td>
+      <td class="mono cfgid">${esc(p.config.config_id)}</td>
     </tr>`).join('')}
   </table></div>
   <p>System prompt (identical across runs):</p>
@@ -136,7 +137,14 @@
           '</tr></thead><tbody>' + body.map((r) => '<tr>' + cells(r).map((c) => '<td>' + inline(c) + '</td>').join('') + '</tr>').join('') +
           '</tbody></table></div>';
       }
-      if (/^[-*]\s/m.test(blk)) return '<ul>' + blk.split('\n').filter((l) => /^[-*]\s/.test(l.trim())).map((l) => '<li>' + inline(l.replace(/^\s*[-*]\s*/, '')) + '</li>').join('') + '</ul>';
+      if (/^[-*]\s/m.test(blk)) {
+        const items = [];
+        for (const l of blk.split('\n')) {
+          if (/^[-*]\s/.test(l.trim())) items.push(l.replace(/^\s*[-*]\s*/, ''));
+          else if (items.length) items[items.length - 1] += ' ' + l.trim();
+        }
+        return '<ul>' + items.map((it) => '<li>' + inline(it) + '</li>').join('') + '</ul>';
+      }
       return '<p>' + inline(blk) + '</p>';
     }).join('\n');
   } catch (e) { notesHtml = '<p class="muted">No notes yet.</p>'; }

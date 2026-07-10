@@ -13,20 +13,20 @@ floor tightened accordingly.
 
 ## Round 1 (2026-07-10) — eleven models
 
-| model | score | 95% CI | cost |
-|---|---|---|---|
-| qwen3.7-max | 34/34 · 100% | [89.8, 100.0] | see packet |
-| claude-sonnet-5 | 31/34 · 91.2% | [77.0, 97.0] | — |
-| deepseek-v4-pro | 31/34 · 91.2% | [77.0, 97.0] | — |
-| grok-4.5 | 30/34 · 88.2% | [73.4, 95.3] | — |
-| glm-5.2 | 29/34 · 85.3% | [69.9, 93.6] | — |
-| gpt-5.4 | 29/34 · 85.3% | [69.9, 93.6] | — |
-| kimi-k2.6 | 29/34 · 85.3% | [69.9, 93.6] | — |
-| gemini-3.5-flash | 29/34 · 85.3% | [69.9, 93.6] | — |
-| minimax-m3 | 28/34 · 82.4% | [66.5, 91.7] | — |
-| deepseek-v4-flash | 27/34 · 79.4% | [63.2, 89.7] | — |
-| minimax-m2 | 25/34 · 73.5% | [56.9, 85.4] | — |
-| kimi-k2 | 23/34 · 67.6% | [50.8, 80.9] | — |
+| model | score | 95% CI |
+|---|---|---|
+| qwen3.7-max | 34/34 · 100% | [89.8, 100.0] |
+| claude-sonnet-5 | 31/34 · 91.2% | [77.0, 97.0] |
+| deepseek-v4-pro | 31/34 · 91.2% | [77.0, 97.0] |
+| grok-4.5 | 30/34 · 88.2% | [73.4, 95.3] |
+| glm-5.2 | 29/34 · 85.3% | [69.9, 93.6] |
+| gpt-5.4 | 29/34 · 85.3% | [69.9, 93.6] |
+| kimi-k2.6 | 29/34 · 85.3% | [69.9, 93.6] |
+| gemini-3.5-flash | 29/34 · 85.3% | [69.9, 93.6] |
+| minimax-m3 | 28/34 · 82.4% | [66.5, 91.7] |
+| deepseek-v4-flash | 27/34 · 79.4% | [63.2, 89.7] |
+| minimax-m2 | 25/34 · 73.5% | [56.9, 85.4] |
+| kimi-k2 | 23/34 · 67.6% | [50.8, 80.9] |
 
 kimi-k2.6's seat was initially empty: its long reasoning traces exceeded
 the runner's old 60-second HTTP timeout eight straight times. We raised the

@@ -65,13 +65,18 @@ section { margin: 2.3rem 0; }
 .lb-model .name { font-family: var(--ae-font-mono); font-weight: 550; overflow-wrap: anywhere; }
 .lb-model .when { font-family: var(--ae-font-mono); font-size: 13px; color: var(--ae-ink-faint); }
 .lb-score { min-width: 0; }
+.lb-score .ae-ci { margin: 0 2px; }
 .lb-nums { display: flex; gap: 1rem; flex-wrap: wrap; font-family: var(--ae-font-mono); font-size: 13px; color: var(--ae-ink-muted); margin-top: .3rem; }
 .lb-nums b { color: var(--ae-ink); font-weight: 800; }
 .drift { color: var(--ae-warn); }
 @media (max-width: 600px) { .lb-row { grid-template-columns: 1fr; gap: .35rem; } }
+@media (max-width: 520px) { .mast .sub { display: none; } }
 
 /* lab notes */
 .notes { max-width: 68ch; }
+.notes table { border-collapse: collapse; width: 100%; }
+.notes th, .notes td { text-align: left; padding: .35rem .6rem; border-bottom: 1px solid var(--ae-line); font-variant-numeric: tabular-nums; }
+.notes th { font-family: var(--ae-font-mono); font-size: 13px; font-weight: 550; color: var(--ae-ink-muted); }
 .notes h1, .notes h2 { font-weight: 800; margin: 1.4em 0 .35em; }
 .notes p, .notes li { color: var(--ae-ink); }
 .notes ul { padding-left: 1.2rem; }
@@ -106,7 +111,10 @@ section { margin: 2.3rem 0; }
 .out pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--ae-font-mono); font-size: 13px; line-height: 1.5; color: var(--ae-ink); max-height: 16rem; overflow-y: auto; }
 
 /* method */
-.method { max-width: 72ch; }
+.method p { max-width: 72ch; }
 .method .scroll { overflow-x: auto; border: 1px solid var(--ae-line); }
+.method table { min-width: 56rem; }
+.method td, .method th { white-space: nowrap; text-align: left; }
+.method td.cfgid { font-size: 11px; color: var(--ae-ink-muted); }
 .method pre { background: var(--ae-wash); border: 1px solid var(--ae-line); padding: .7rem .8rem; overflow-x: auto; font-family: var(--ae-font-mono); font-size: 13px; line-height: 1.5; }
 footer { margin-top: 3rem; border-top: 1px solid var(--ae-line); padding-top: 1rem; color: var(--ae-ink-muted); font-size: 13px; }
