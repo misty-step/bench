@@ -1,0 +1,560 @@
+{
+  "schema_version": "crucible.bench_packet.v1",
+  "benchmark": "constraint-gauntlet-v1",
+  "title": "The Constraint Gauntlet",
+  "decision": "Can this model actually obey hard countable constraints — counting its own words, banning a letter, holding an acrostic — or does it merely gesture at the instruction? A capability prior for constrained generation, and a public, reproducible sensor: every reference answer passes its own grader, every near-miss fails it.",
+  "run_id": "run-1783714724772-58451-0:constraint-gauntlet-v1",
+  "executed_at_unix_ms": 1783714724772,
+  "provenance": {
+    "repo": "bench",
+    "git_sha": "7547fd647b7b19ddb828e9dffcff7745803c6600"
+  },
+  "config": {
+    "config_id": "prompt:open_router:anthropic/claude-sonnet-5:temp=0:max=8000:prompt=fnv1a64:76b48c0b7faa7d34:scoring=fnv1a64:430094bc9114273e",
+    "provider": "open_router",
+    "model": "anthropic/claude-sonnet-5",
+    "temperature": 0,
+    "max_tokens": 8000,
+    "system_prompt": "You are taking a constrained-writing benchmark. Follow each instruction exactly. Output ONLY the requested text: no preamble, no explanation, no markdown fences, no surrounding quotes."
+  },
+  "response_model": "anthropic/claude-sonnet-5-20260630",
+  "trusted": true,
+  "score": {
+    "successes": 31,
+    "n": 34,
+    "point": 0.9117647058823529,
+    "lower": 0.7703918204763959,
+    "upper": 0.9695346096956899,
+    "method": "Wilson",
+    "confidence": 0.95
+  },
+  "classes": [
+    {
+      "class": "acrostic",
+      "successes": 4,
+      "n": 4
+    },
+    {
+      "class": "alliteration",
+      "successes": 1,
+      "n": 3
+    },
+    {
+      "class": "anaphora",
+      "successes": 3,
+      "n": 3
+    },
+    {
+      "class": "combination",
+      "successes": 5,
+      "n": 6
+    },
+    {
+      "class": "ending",
+      "successes": 2,
+      "n": 2
+    },
+    {
+      "class": "line_count",
+      "successes": 3,
+      "n": 3
+    },
+    {
+      "class": "lipogram",
+      "successes": 4,
+      "n": 4
+    },
+    {
+      "class": "structure",
+      "successes": 4,
+      "n": 4
+    },
+    {
+      "class": "word_count",
+      "successes": 5,
+      "n": 5
+    }
+  ],
+  "totals": {
+    "tokens": 13747,
+    "cost_usd": 0.105846
+  },
+  "tasks": [
+    {
+      "task_id": "words-15-lighthouse",
+      "class": "word_count",
+      "summary": "Exactly 15 whitespace-separated words about a lighthouse keeper.",
+      "prompt": "Describe a lighthouse keeper's morning in exactly 15 words. Words are anything separated by spaces. Output only those 15 words.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){14}\\s*\\z"
+      },
+      "output": "He climbs worn stairs, checks the fading lamp, then brews strong black coffee very slowly.",
+      "passed": true,
+      "tokens": 404,
+      "cost_usd": 0.003112
+    },
+    {
+      "task_id": "words-25-recipe",
+      "class": "word_count",
+      "summary": "Exactly 25 words: a recipe instruction.",
+      "prompt": "Write a single cooking instruction for tomato soup in exactly 25 words. Count every whitespace-separated token as one word. Output only the instruction.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){24}\\s*\\z"
+      },
+      "output": "Simmer chopped tomatoes, onions, garlic, and vegetable broth together for twenty minutes, then blend until smooth, season generously with salt, pepper, and fresh basil leaves.",
+      "passed": true,
+      "tokens": 610,
+      "cost_usd": 0.005148
+    },
+    {
+      "task_id": "words-40-storm",
+      "class": "word_count",
+      "summary": "Exactly 40 words describing a storm at sea.",
+      "prompt": "Describe a storm at sea in exactly 40 words. Every whitespace-separated token counts as one word. Output only the description.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){39}\\s*\\z"
+      },
+      "output": "Black waves rose like mountains, crashing against the ship's groaning hull. Lightning split the sky as thunder roared overhead. Wind screamed through torn sails while sailors clung desperately to ropes, praying the vessel would survive the ocean's furious, relentless rage.",
+      "passed": true,
+      "tokens": 322,
+      "cost_usd": 0.002332
+    },
+    {
+      "task_id": "lipogram-sunset",
+      "class": "lipogram",
+      "summary": "Describe a sunset without the letter e.",
+      "prompt": "Describe a sunset in one to three sentences without using the letter \"e\" anywhere, in any word, uppercase or lowercase. Output only the description.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^eE]+\\z"
+      },
+      "output": "Sun sinks low, painting sky in gold, crimson, and blush. Long shadows fall across silky sand as light slowly dims. A calm hush falls, and stars start to glow.",
+      "passed": true,
+      "tokens": 1497,
+      "cost_usd": 0.014026
+    },
+    {
+      "task_id": "lipogram-coffee",
+      "class": "lipogram",
+      "summary": "Praise coffee without the letter a.",
+      "prompt": "Write two sentences praising coffee without using the letter \"a\" anywhere, uppercase or lowercase. Output only the two sentences.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^aA]+\\z"
+      },
+      "output": "Coffee is delicious, rich, hot, energizing, giving strength every sip. This brew brings joy, comfort, delight to every morning.",
+      "passed": true,
+      "tokens": 1201,
+      "cost_usd": 0.011098
+    },
+    {
+      "task_id": "acrostic-ember",
+      "class": "acrostic",
+      "summary": "Five lines whose first letters spell EMBER.",
+      "prompt": "Write a five-line poem in which the first letter of line one is E, line two M, line three B, line four E, line five R — spelling EMBER downward. Output only the five lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Ee][^\\n]*\\n[Mm][^\\n]*\\n[Bb][^\\n]*\\n[Ee][^\\n]*\\n[Rr][^\\n]*\\n?\\z"
+      },
+      "output": "Embers glow where daylight fled,\nMemory curls in threads of red,\nBeneath the ash a warmth remains,\nEven night cannot erase its stains,\nRising softly, it whispers and wanes.",
+      "passed": true,
+      "tokens": 253,
+      "cost_usd": 0.00153
+    },
+    {
+      "task_id": "acrostic-stone",
+      "class": "acrostic",
+      "summary": "Five lines whose first letters spell STONE.",
+      "prompt": "Write a five-line poem in which the first letters of the lines spell STONE, in order. Output only the five lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Ss][^\\n]*\\n[Tt][^\\n]*\\n[Oo][^\\n]*\\n[Nn][^\\n]*\\n[Ee][^\\n]*\\n?\\z"
+      },
+      "output": "Silent giants rest along the shore,\nTheir edges smoothed by ancient tides,\nOnward the river carves its path,\nNestled deep where moss abides,\nEternal weight the earth still holds.",
+      "passed": true,
+      "tokens": 194,
+      "cost_usd": 0.001092
+    },
+    {
+      "task_id": "lines-4-seasons",
+      "class": "line_count",
+      "summary": "Exactly four lines, one per season.",
+      "prompt": "Write exactly four lines: one line for each season, in order from spring to winter. No blank lines. Output only the four lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){3}[ \\t]*\\S[^\\n]*\\n?\\z"
+      },
+      "output": "Spring awakens with blossoms and gentle rain.\nSummer glows with long days and warm golden light.\nAutumn scatters leaves in amber and rust.\nWinter blankets the earth in quiet snow.",
+      "passed": true,
+      "tokens": 203,
+      "cost_usd": 0.001158
+    },
+    {
+      "task_id": "lines-7-week",
+      "class": "line_count",
+      "summary": "Exactly seven lines, one per weekday.",
+      "prompt": "Write exactly seven lines, one for each day of the week starting Monday, each line naming its day. No blank lines. Output only the seven lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){6}[ \\t]*\\S[^\\n]*\\n?\\z"
+      },
+      "output": "Monday is for fresh starts.\nTuesday brings steady progress.\nWednesday sits at the week's heart.\nThursday pushes toward the weekend.\nFriday hums with anticipation.\nSaturday opens up for rest.\nSunday closes the week gently.",
+      "passed": true,
+      "tokens": 233,
+      "cost_usd": 0.001402
+    },
+    {
+      "task_id": "anaphora-because",
+      "class": "anaphora",
+      "summary": "Six lines, each beginning with the word Because.",
+      "prompt": "Write exactly six lines, each beginning with the word \"Because\" followed by a space. No blank lines. Output only the six lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:Because [^\\n]*\\n){5}Because [^\\n]*\\n?\\z"
+      },
+      "output": "Because the rain fell softly on the empty streets tonight\nBecause I remembered your voice before I remembered your name\nBecause the candle burned down to nothing while we talked\nBecause silence can say more than a thousand words\nBecause the stars still show up even when we forget to look\nBecause tomorrow always arrives whether we are ready or not",
+      "passed": true,
+      "tokens": 236,
+      "cost_usd": 0.001472
+    },
+    {
+      "task_id": "anaphora-never",
+      "class": "anaphora",
+      "summary": "Five lines, each beginning with Never.",
+      "prompt": "Write exactly five lines of advice, each beginning with the word \"Never\" followed by a space. No blank lines. Output only the five lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:Never [^\\n]*\\n){4}Never [^\\n]*\\n?\\z"
+      },
+      "output": "Never trust a promise made without accountability.\nNever sacrifice your health for short-term gains.\nNever let fear make your decisions for you.\nNever burn a bridge you might need to cross again.\nNever stop learning from your own mistakes.",
+      "passed": true,
+      "tokens": 215,
+      "cost_usd": 0.001238
+    },
+    {
+      "task_id": "alliteration-s",
+      "class": "alliteration",
+      "summary": "A sentence of 8+ words, every word starting with s.",
+      "prompt": "Write one sentence of at least eight words in which every word begins with the letter \"s\". Use no punctuation except one final period. Output only the sentence.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Ss][a-z]*(?: [Ss][a-z]*){7,}\\.[ \\t]*\\z"
+      },
+      "output": "Silly slippery snakes silently slid slowly southward some sunny sunday",
+      "passed": false,
+      "tokens": 143,
+      "cost_usd": 0.000502
+    },
+    {
+      "task_id": "alliteration-b",
+      "class": "alliteration",
+      "summary": "A sentence of 8+ words, every word starting with b.",
+      "prompt": "Write one sentence of at least eight words in which every word begins with the letter \"b\". Use no punctuation except one final period. Output only the sentence.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Bb][a-z]*(?: [Bb][a-z]*){7,}\\.[ \\t]*\\z"
+      },
+      "output": "Big brown bears bravely built beautiful bamboo boats before breakfast.",
+      "passed": true,
+      "tokens": 144,
+      "cost_usd": 0.000512
+    },
+    {
+      "task_id": "ends-lamp",
+      "class": "ending",
+      "summary": "A short story whose final words are fixed.",
+      "prompt": "Write a story of two to four sentences that ends with exactly this sentence: \"Then the lamp went out.\" Output only the story.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A.+Then the lamp went out\\.\\s*\\z"
+      },
+      "output": "The old house had been silent for years before Marta returned to pack her mother's things. In the attic, she found a lamp that flickered on by itself, casting shadows shaped like her mother's hands across the walls. She whispered a goodbye she'd never had the chance to say. Then the lamp went out.",
+      "passed": true,
+      "tokens": 239,
+      "cost_usd": 0.00151
+    },
+    {
+      "task_id": "starts-door",
+      "class": "ending",
+      "summary": "A story whose first words are fixed.",
+      "prompt": "Write a story of two to four sentences that begins with exactly these words: \"The door had been painted shut for years\". Output only the story.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\AThe door had been painted shut for years.+\\z"
+      },
+      "output": "The door had been painted shut for years, layers of white congealed like frozen rivers around its edges. Mara took the knife from the kitchen drawer and worked it along the seam, patient as a surgeon, until the wood finally sighed open. Dust and light rushed out together, and with them, a smell she hadn't breathed since she was twelve. She stood on the threshold a long moment before deciding she wasn't ready to go in yet.",
+      "passed": true,
+      "tokens": 282,
+      "cost_usd": 0.00194
+    },
+    {
+      "task_id": "one-sentence-city",
+      "class": "structure",
+      "summary": "Exactly one sentence: no internal periods.",
+      "prompt": "Describe a city waking up in exactly one sentence, ending with a single period and containing no other periods. Output only the sentence.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^.]+\\.\\s*\\z"
+      },
+      "output": "As the first pale light slips over rooftops, streetlights blink off one by one, delivery trucks rumble through waking avenues, shutters rattle open above yawning cafés, pigeons scatter from window ledges, and the low murmur of a million stirring lives rises into the cool morning air like steam from a thousand cups of coffee.",
+      "passed": true,
+      "tokens": 219,
+      "cost_usd": 0.00131
+    },
+    {
+      "task_id": "all-caps-warning",
+      "class": "structure",
+      "summary": "A warning sign in capitals only.",
+      "prompt": "Write a two-sentence warning sign about a sleeping dragon using only capital letters (punctuation and spaces allowed, no lowercase letters anywhere). Output only the sign.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^a-z]+\\z"
+      },
+      "output": "WARNING: DRAGON SLEEPING BEYOND THIS POINT. DO NOT DISTURB OR YOU WILL BE EATEN.",
+      "passed": true,
+      "tokens": 240,
+      "cost_usd": 0.00136
+    },
+    {
+      "task_id": "combo-words12-noe",
+      "class": "combination",
+      "summary": "Exactly 12 words AND no letter e.",
+      "prompt": "Describe rain in exactly 12 words without using the letter \"e\" anywhere. Words are whitespace-separated tokens. Output only the description.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*[^eE\\s]+(?:\\s+[^eE\\s]+){11}\\s*\\z"
+      },
+      "output": "Rain drops fall down, wash dust, soak grass, calm loud gray sky.",
+      "passed": true,
+      "tokens": 449,
+      "cost_usd": 0.003554
+    },
+    {
+      "task_id": "combo-acrostic-rain-caps",
+      "class": "combination",
+      "summary": "Acrostic RAIN, every line all-caps.",
+      "prompt": "Write four lines spelling RAIN downward by first letters, using only capital letters throughout (punctuation allowed, no lowercase anywhere). Output only the four lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\AR[^a-z\\n]*\\nA[^a-z\\n]*\\nI[^a-z\\n]*\\nN[^a-z\\n]*\\n?\\z"
+      },
+      "output": "RAIN falls softly on the ground.\nA gentle wind moves all around.\nIN every drop a story hides.\nNIGHT arrives as daylight slides.",
+      "passed": false,
+      "tokens": 219,
+      "cost_usd": 0.001182
+    },
+    {
+      "task_id": "combo-lines3-because",
+      "class": "combination",
+      "summary": "Exactly 3 lines, each starting with Because, each ending with a question mark.",
+      "prompt": "Write exactly three lines, each beginning with the word \"Because\" followed by a space and each ending with a question mark. No blank lines. Output only the three lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:Because [^\\n]*\\?[ \\t]*\\n){2}Because [^\\n]*\\?[ \\t]*\\n?\\z"
+      },
+      "output": "Because you left without saying goodbye, did you think I wouldn't notice?\nBecause the sky turned gray so suddenly, will the storm reach us tonight?\nBecause we never spoke of it again, did it really happen at all?",
+      "passed": true,
+      "tokens": 220,
+      "cost_usd": 0.00124
+    },
+    {
+      "task_id": "words-10-proverb",
+      "class": "word_count",
+      "summary": "Exactly 10 words: an invented proverb.",
+      "prompt": "Invent a proverb in exactly 10 words. Words are whitespace-separated tokens. Output only the proverb.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){9}\\s*\\z"
+      },
+      "output": "A patient gardener harvests sweeter fruit than a hurried farmer.",
+      "passed": true,
+      "tokens": 249,
+      "cost_usd": 0.001618
+    },
+    {
+      "task_id": "words-60-eulogy",
+      "class": "word_count",
+      "summary": "Exactly 60 words: a eulogy for a houseplant.",
+      "prompt": "Write a eulogy for a beloved houseplant in exactly 60 words. Every whitespace-separated token counts as one word. Output only the eulogy.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){59}\\s*\\z"
+      },
+      "output": "We gather to remember Fernando, our green companion who lived on the windowsill for nine faithful years. He drank our leftover water, forgave our forgetfulness, and stretched toward every sunbeam with quiet hope. Fernando taught us patience, growth, and steady love. Though his leaves have fallen, his roots remain in our hearts forever. Rest gently, dear friend, among the light.",
+      "passed": true,
+      "tokens": 1132,
+      "cost_usd": 0.010352
+    },
+    {
+      "task_id": "lipogram-t-travel",
+      "class": "lipogram",
+      "summary": "A travel ad without the letter t.",
+      "prompt": "Write a two-sentence travel advertisement for an island without using the letter \"t\" anywhere, uppercase or lowercase. Output only the two sentences.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^tT]+\\z"
+      },
+      "output": "Escape daily life on our island paradise, where warm sand caresses clear blue waves. Unwind under swaying palms, savor fresh mangoes, and lose yourself in pure island bliss.",
+      "passed": true,
+      "tokens": 1144,
+      "cost_usd": 0.01048
+    },
+    {
+      "task_id": "lipogram-o-night",
+      "class": "lipogram",
+      "summary": "Describe the night sky without the letter o.",
+      "prompt": "Describe the night sky in one to three sentences without using the letter \"o\" anywhere, uppercase or lowercase. Output only the description.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^oO]+\\z"
+      },
+      "output": "Stars twinkle amid velvety black darkness, sending silver light earthward. A pale crescent hangs high, ancient and eternal. Every distant flicker reveals stellar secrets unseen.",
+      "passed": true,
+      "tokens": 605,
+      "cost_usd": 0.005138
+    },
+    {
+      "task_id": "acrostic-crucible",
+      "class": "acrostic",
+      "summary": "Eight lines whose first letters spell CRUCIBLE.",
+      "prompt": "Write an eight-line poem in which the first letters of the lines spell CRUCIBLE, in order. Output only the eight lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Cc][^\\n]*\\n[Rr][^\\n]*\\n[Uu][^\\n]*\\n[Cc][^\\n]*\\n[Ii][^\\n]*\\n[Bb][^\\n]*\\n[Ll][^\\n]*\\n[Ee][^\\n]*\\n?\\z"
+      },
+      "output": "Crushed beneath the weight of flame,\nRaw ore forgets its former name,\nUnder fire, it learns to bend,\nCracks reveal what shadows tend.\nIron will refines to light,\nBurning doubts dissolve in night,\nLonging shapes the molten core,\nEmerging stronger than before.",
+      "passed": true,
+      "tokens": 316,
+      "cost_usd": 0.002256
+    },
+    {
+      "task_id": "acrostic-winter",
+      "class": "acrostic",
+      "summary": "Six lines whose first letters spell WINTER.",
+      "prompt": "Write a six-line poem in which the first letters of the lines spell WINTER, in order. Output only the six lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Ww][^\\n]*\\n[Ii][^\\n]*\\n[Nn][^\\n]*\\n[Tt][^\\n]*\\n[Ee][^\\n]*\\n[Rr][^\\n]*\\n?\\z"
+      },
+      "output": "White flakes drift down in silent grace,\nIcy winds sweep across the land,\nNights grow long in the cold embrace,\nTrees stand bare, a frozen band,\nEvery breath turns to misty air,\nRivers freeze, still and rare.",
+      "passed": true,
+      "tokens": 209,
+      "cost_usd": 0.001234
+    },
+    {
+      "task_id": "lines-10-inventory",
+      "class": "line_count",
+      "summary": "Exactly ten lines: a wizard-shop inventory.",
+      "prompt": "Write a wizard shop's inventory as exactly ten lines, one item per line. No blank lines, no numbering required. Output only the ten lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){9}[ \\t]*\\S[^\\n]*\\n?\\z"
+      },
+      "output": "Enchanted Amethyst Wand\nBottle of Bottled Starlight\nCloak of Whispering Shadows\nVial of Phoenix Tears\nGrimoire of Forgotten Runes\nCrystal Orb of Farsight\nPouch of Everburning Coals\nRing of Silent Steps\nFeather Quill of Truth\nCauldron of Endless Brew",
+      "passed": true,
+      "tokens": 277,
+      "cost_usd": 0.001826
+    },
+    {
+      "task_id": "anaphora-if",
+      "class": "anaphora",
+      "summary": "Seven lines of folk wisdom, each beginning with If.",
+      "prompt": "Write exactly seven lines of folk wisdom, each beginning with the word \"If\" followed by a space. No blank lines. Output only the seven lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:If [^\\n]*\\n){6}If [^\\n]*\\n?\\z"
+      },
+      "output": "If you plant kindness, you will harvest friendship.\nIf the well is deep, do not throw away the rope.\nIf a fool speaks, let silence be your answer.\nIf the wind changes, turn your sail with it.\nIf you owe a debt of gratitude, pay it before the sun sets.\nIf the path is crooked, walk it with a straight heart.\nIf winter is harsh, remember spring always returns.",
+      "passed": true,
+      "tokens": 269,
+      "cost_usd": 0.001738
+    },
+    {
+      "task_id": "alliteration-m",
+      "class": "alliteration",
+      "summary": "A sentence of 10+ words, every word starting with m.",
+      "prompt": "Write one sentence of at least ten words in which every word begins with the letter \"m\". Use no punctuation except commas and one final period. Output only the sentence.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Mm][a-z]*,?(?: [Mm][a-z]*,?){9,}\\.[ \\t]*\\z"
+      },
+      "output": "Many mighty monkeys methodically munched multiple mangoes, making merry moments minute by minute.",
+      "passed": false,
+      "tokens": 154,
+      "cost_usd": 0.000588
+    },
+    {
+      "task_id": "grid-4x5",
+      "class": "structure",
+      "summary": "Four lines, each exactly five words.",
+      "prompt": "Write four lines about the tide, each line containing exactly five whitespace-separated words. No blank lines. Output only the four lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:[ \\t]*\\S+(?:[ \\t]+\\S+){4}[ \\t]*\\n){3}[ \\t]*\\S+(?:[ \\t]+\\S+){4}[ \\t]*\\n?\\z"
+      },
+      "output": "The tide rolls in slowly.\nWaves crash against the shore.\nMoonlight pulls water toward land.\nSand shifts beneath the foam.",
+      "passed": true,
+      "tokens": 389,
+      "cost_usd": 0.002994
+    },
+    {
+      "task_id": "sentences-3-key",
+      "class": "structure",
+      "summary": "Exactly three sentences, each ending with a period.",
+      "prompt": "Write about an old key in exactly three sentences. Each sentence ends with a period; use no question marks or exclamation points and no other periods. Output only the three sentences.",
+      "expectation": {
+        "kind": "regex",
+        "value": "(?s)\\A[^.!?]+\\.[^.!?]+\\.[^.!?]+\\.\\s*\\z"
+      },
+      "output": "The old key rested in the drawer, its brass surface dulled by decades of neglect. Its teeth were worn smooth from countless turns in a lock long since replaced. No one remembered which door it once opened, yet it was kept as a quiet piece of the past.",
+      "passed": true,
+      "tokens": 260,
+      "cost_usd": 0.001616
+    },
+    {
+      "task_id": "combo-acrostic-fog-noe",
+      "class": "combination",
+      "summary": "Three lines spelling FOG, containing no letter e.",
+      "prompt": "Write three lines in which the first letters spell FOG downward, and the letter \"e\" never appears anywhere, uppercase or lowercase. Output only the three lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[Ff][^eE\\n]*\\n[Oo][^eE\\n]*\\n[Gg][^eE\\n]*\\n?\\z"
+      },
+      "output": "Fog drifts along calm dark roads\nOwls call out through misty night\nGround stays calm, still and dry",
+      "passed": true,
+      "tokens": 700,
+      "cost_usd": 0.006016
+    },
+    {
+      "task_id": "combo-anaphora-we-period",
+      "class": "combination",
+      "summary": "Five lines starting with We, each ending in a period.",
+      "prompt": "Write exactly five lines, each beginning with the word \"We\" followed by a space and each ending with a period. No blank lines. Output only the five lines.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A(?:We [^\\n]*\\.[ \\t]*\\n){4}We [^\\n]*\\.[ \\t]*\\n?\\z"
+      },
+      "output": "We walked through the quiet streets at dawn.\nWe shared stories that lingered in the cool air.\nWe watched the sun rise over distant hills.\nWe gathered strength from simple moments together.\nWe carried hope forward into the new day.",
+      "passed": true,
+      "tokens": 224,
+      "cost_usd": 0.001304
+    },
+    {
+      "task_id": "combo-allcaps-words8",
+      "class": "combination",
+      "summary": "A warning of exactly eight words, capitals only.",
+      "prompt": "Write a warning sign of exactly eight whitespace-separated words using only capital letters (punctuation allowed, no lowercase anywhere). Output only the sign.",
+      "expectation": {
+        "kind": "regex",
+        "value": "\\A[ \\t]*[^a-z\\s]+(?:[ \\t]+[^a-z\\s]+){7}[ \\t]*\\z"
+      },
+      "output": "DANGER: HIGH VOLTAGE. KEEP AWAY OR DIE INSTANTLY.",
+      "passed": true,
+      "tokens": 296,
+      "cost_usd": 0.001968
+    }
+  ]
+}

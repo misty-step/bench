@@ -1,11 +1,45 @@
 {
  "benchmarks": [
   {
-   "id": "constraint-gauntlet-v0",
+   "id": "constraint-gauntlet-v1",
    "title": "The Constraint Gauntlet",
-   "edition": "v0",
-   "tagline": "Counting is not writing: exact word counts, lipograms, acrostics, and other mechanically checkable constraints.",
+   "edition": "v1",
+   "tagline": "Counting is not writing: 34 mechanically checkable constraints \u2014 word counts, lipograms, acrostics, grids, and brutal combinations.",
    "thesis": "Can a model actually obey a hard countable constraint \u2014 count its own words, ban a letter, hold an acrostic \u2014 or does it merely gesture at the instruction? The grader is mechanical; the score is pure obedience. Content quality is deliberately unscored: read the outputs.",
+   "tasks": 34,
+   "grader": "deterministic regex",
+   "families": [
+    "word_count",
+    "lipogram",
+    "acrostic",
+    "line_count",
+    "anaphora",
+    "alliteration",
+    "ending",
+    "structure",
+    "combination"
+   ],
+   "spec_url": "https://github.com/misty-step/bench/blob/master/benchmarks/constraint-gauntlet-v1.json",
+   "packets": [
+    "packets/constraint-gauntlet-v1--anthropic-claude-sonnet-5--d26df9d6f7.json",
+    "packets/constraint-gauntlet-v1--deepseek-deepseek-v4-flash--5826209c40.json",
+    "packets/constraint-gauntlet-v1--deepseek-deepseek-v4-pro--ddb31f6f20.json",
+    "packets/constraint-gauntlet-v1--google-gemini-3-5-flash--4d9bb87f50.json",
+    "packets/constraint-gauntlet-v1--minimax-minimax-m2--7f23445519.json",
+    "packets/constraint-gauntlet-v1--minimax-minimax-m3--c8482bf38b.json",
+    "packets/constraint-gauntlet-v1--moonshotai-kimi-k2--231b3e5cca.json",
+    "packets/constraint-gauntlet-v1--openai-gpt-5-4--18a171c5e2.json",
+    "packets/constraint-gauntlet-v1--qwen-qwen3-7-max--b513d7daea.json",
+    "packets/constraint-gauntlet-v1--x-ai-grok-4-5--14b015d825.json",
+    "packets/constraint-gauntlet-v1--z-ai-glm-5-2--cbd41a689d.json"
+   ]
+  },
+  {
+   "id": "constraint-gauntlet-v0",
+   "title": "The Constraint Gauntlet (v0)",
+   "edition": "v0",
+   "tagline": "The original 20-task edition \u2014 kept for lineage; scores are not comparable across editions.",
+   "thesis": "Edition v0 of the gauntlet: 20 tasks, four models, and the lab's first defensible claim. Superseded by v1's 34-task corpus.",
    "tasks": 20,
    "grader": "deterministic regex",
    "families": [
