@@ -1,0 +1,240 @@
+{
+  "schema_version": "crucible.eval_spec.v1",
+  "id": "constraint-gauntlet-v0",
+  "title": "The Constraint Gauntlet",
+  "context": "bench",
+  "task": "constraint-gauntlet",
+  "inputs": "20 writing tasks, each carrying one mechanically checkable constraint: exact word counts, lipograms (banned letters), acrostics, exact line counts, anaphora, alliteration, fixed openings/endings, capitals-only, and combined constraints. Clean-room corpus: every task authored for this benchmark, no external or proprietary text.",
+  "outputs": "Free text graded purely on constraint compliance by anchored regex. Content quality is deliberately unscored — read the outputs; the score only says whether the model obeyed.",
+  "graders": {
+    "graders": [
+      {
+        "id": "constraint_regex",
+        "kind": "deterministic"
+      }
+    ]
+  },
+  "aggregation": "proportion",
+  "uncertainty": {
+    "method": "wilson",
+    "confidence": 0.95
+  },
+  "min_effect_of_interest": 0.3,
+  "decision": "Can this model actually obey hard countable constraints — counting its own words, banning a letter, holding an acrostic — or does it merely gesture at the instruction? A capability prior for constrained generation, and a public, reproducible sensor: every reference answer passes its own grader, every near-miss fails it.",
+  "runner": {
+    "kind": "prompt_benchmark",
+    "corpus": {
+      "source": "prompt_benchmark",
+      "config": {
+        "provider": "open_router",
+        "model": "deepseek/deepseek-v4-flash",
+        "system_prompt": "You are taking a constrained-writing benchmark. Follow each instruction exactly. Output ONLY the requested text: no preamble, no explanation, no markdown fences, no surrounding quotes.",
+        "credential_env": "OPENROUTER_API_KEY",
+        "max_tokens": 8000,
+        "temperature": 0
+      },
+      "tasks": [
+        {
+          "task_id": "words-15-lighthouse",
+          "class": "word_count",
+          "summary": "Exactly 15 whitespace-separated words about a lighthouse keeper.",
+          "prompt": "Describe a lighthouse keeper's morning in exactly 15 words. Words are anything separated by spaces. Output only those 15 words.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A\\s*\\S+(?:\\s+\\S+){14}\\s*\\z"
+          }
+        },
+        {
+          "task_id": "words-25-recipe",
+          "class": "word_count",
+          "summary": "Exactly 25 words: a recipe instruction.",
+          "prompt": "Write a single cooking instruction for tomato soup in exactly 25 words. Count every whitespace-separated token as one word. Output only the instruction.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A\\s*\\S+(?:\\s+\\S+){24}\\s*\\z"
+          }
+        },
+        {
+          "task_id": "words-40-storm",
+          "class": "word_count",
+          "summary": "Exactly 40 words describing a storm at sea.",
+          "prompt": "Describe a storm at sea in exactly 40 words. Every whitespace-separated token counts as one word. Output only the description.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A\\s*\\S+(?:\\s+\\S+){39}\\s*\\z"
+          }
+        },
+        {
+          "task_id": "lipogram-sunset",
+          "class": "lipogram",
+          "summary": "Describe a sunset without the letter e.",
+          "prompt": "Describe a sunset in one to three sentences without using the letter \"e\" anywhere, in any word, uppercase or lowercase. Output only the description.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A[^eE]+\\z"
+          }
+        },
+        {
+          "task_id": "lipogram-coffee",
+          "class": "lipogram",
+          "summary": "Praise coffee without the letter a.",
+          "prompt": "Write two sentences praising coffee without using the letter \"a\" anywhere, uppercase or lowercase. Output only the two sentences.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A[^aA]+\\z"
+          }
+        },
+        {
+          "task_id": "acrostic-ember",
+          "class": "acrostic",
+          "summary": "Five lines whose first letters spell EMBER.",
+          "prompt": "Write a five-line poem in which the first letter of line one is E, line two M, line three B, line four E, line five R — spelling EMBER downward. Output only the five lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A[Ee][^\\n]*\\n[Mm][^\\n]*\\n[Bb][^\\n]*\\n[Ee][^\\n]*\\n[Rr][^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "acrostic-stone",
+          "class": "acrostic",
+          "summary": "Five lines whose first letters spell STONE.",
+          "prompt": "Write a five-line poem in which the first letters of the lines spell STONE, in order. Output only the five lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A[Ss][^\\n]*\\n[Tt][^\\n]*\\n[Oo][^\\n]*\\n[Nn][^\\n]*\\n[Ee][^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "lines-4-seasons",
+          "class": "line_count",
+          "summary": "Exactly four lines, one per season.",
+          "prompt": "Write exactly four lines: one line for each season, in order from spring to winter. No blank lines. Output only the four lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A(?:[ \\t]*\\S[^\\n]*\\n){3}[ \\t]*\\S[^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "lines-7-week",
+          "class": "line_count",
+          "summary": "Exactly seven lines, one per weekday.",
+          "prompt": "Write exactly seven lines, one for each day of the week starting Monday, each line naming its day. No blank lines. Output only the seven lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A(?:[ \\t]*\\S[^\\n]*\\n){6}[ \\t]*\\S[^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "anaphora-because",
+          "class": "anaphora",
+          "summary": "Six lines, each beginning with the word Because.",
+          "prompt": "Write exactly six lines, each beginning with the word \"Because\" followed by a space. No blank lines. Output only the six lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A(?:Because [^\\n]*\\n){5}Because [^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "anaphora-never",
+          "class": "anaphora",
+          "summary": "Five lines, each beginning with Never.",
+          "prompt": "Write exactly five lines of advice, each beginning with the word \"Never\" followed by a space. No blank lines. Output only the five lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A(?:Never [^\\n]*\\n){4}Never [^\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "alliteration-s",
+          "class": "alliteration",
+          "summary": "A sentence of 8+ words, every word starting with s.",
+          "prompt": "Write one sentence of at least eight words in which every word begins with the letter \"s\". Use no punctuation except one final period. Output only the sentence.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A[Ss][a-z]*(?: [Ss][a-z]*){7,}\\.[ \\t]*\\z"
+          }
+        },
+        {
+          "task_id": "alliteration-b",
+          "class": "alliteration",
+          "summary": "A sentence of 8+ words, every word starting with b.",
+          "prompt": "Write one sentence of at least eight words in which every word begins with the letter \"b\". Use no punctuation except one final period. Output only the sentence.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A[Bb][a-z]*(?: [Bb][a-z]*){7,}\\.[ \\t]*\\z"
+          }
+        },
+        {
+          "task_id": "ends-lamp",
+          "class": "ending",
+          "summary": "A short story whose final words are fixed.",
+          "prompt": "Write a story of two to four sentences that ends with exactly this sentence: \"Then the lamp went out.\" Output only the story.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A.+Then the lamp went out\\.\\s*\\z"
+          }
+        },
+        {
+          "task_id": "starts-door",
+          "class": "ending",
+          "summary": "A story whose first words are fixed.",
+          "prompt": "Write a story of two to four sentences that begins with exactly these words: \"The door had been painted shut for years\". Output only the story.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\AThe door had been painted shut for years.+\\z"
+          }
+        },
+        {
+          "task_id": "one-sentence-city",
+          "class": "structure",
+          "summary": "Exactly one sentence: no internal periods.",
+          "prompt": "Describe a city waking up in exactly one sentence, ending with a single period and containing no other periods. Output only the sentence.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A[^.]+\\.\\s*\\z"
+          }
+        },
+        {
+          "task_id": "all-caps-warning",
+          "class": "structure",
+          "summary": "A warning sign in capitals only.",
+          "prompt": "Write a two-sentence warning sign about a sleeping dragon using only capital letters (punctuation and spaces allowed, no lowercase letters anywhere). Output only the sign.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A[^a-z]+\\z"
+          }
+        },
+        {
+          "task_id": "combo-words12-noe",
+          "class": "combination",
+          "summary": "Exactly 12 words AND no letter e.",
+          "prompt": "Describe rain in exactly 12 words without using the letter \"e\" anywhere. Words are whitespace-separated tokens. Output only the description.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "(?s)\\A\\s*[^eE\\s]+(?:\\s+[^eE\\s]+){11}\\s*\\z"
+          }
+        },
+        {
+          "task_id": "combo-acrostic-rain-caps",
+          "class": "combination",
+          "summary": "Acrostic RAIN, every line all-caps.",
+          "prompt": "Write four lines spelling RAIN downward by first letters, using only capital letters throughout (punctuation allowed, no lowercase anywhere). Output only the four lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\AR[^a-z\\n]*\\nA[^a-z\\n]*\\nI[^a-z\\n]*\\nN[^a-z\\n]*\\n?\\z"
+          }
+        },
+        {
+          "task_id": "combo-lines3-because",
+          "class": "combination",
+          "summary": "Exactly 3 lines, each starting with Because, each ending with a question mark.",
+          "prompt": "Write exactly three lines, each beginning with the word \"Because\" followed by a space and each ending with a question mark. No blank lines. Output only the three lines.",
+          "expectation": {
+            "kind": "regex",
+            "pattern": "\\A(?:Because [^\\n]*\\?[ \\t]*\\n){2}Because [^\\n]*\\?[ \\t]*\\n?\\z"
+          }
+        }
+      ]
+    }
+  }
+}

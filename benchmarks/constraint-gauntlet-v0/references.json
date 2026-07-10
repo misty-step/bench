@@ -1,0 +1,102 @@
+[
+  {
+    "task_id": "words-15-lighthouse",
+    "reference": "The keeper climbs the spiral stairs, snuffs the lamp, and watches dawn silver the sea.",
+    "near_miss": "The keeper climbs the spiral stairs, snuffs the lamp, and watches dawn silver the quiet sea."
+  },
+  {
+    "task_id": "words-25-recipe",
+    "reference": "Simmer the crushed tomatoes with butter, onion, and a pinch of salt for forty minutes, then blend until smooth and finish with cream before serving.",
+    "near_miss": "Simmer the crushed tomatoes with butter, onion, and salt for forty minutes, then blend until smooth and finish with cream before serving."
+  },
+  {
+    "task_id": "words-40-storm",
+    "reference": "The horizon vanished first, swallowed by a wall of green water and wind. Rigging shrieked, decks tilted, and every wave landed like a fist. Between lightning bursts the crew counted heartbeats, waiting for the old hull to remember its shape.",
+    "near_miss": "The horizon vanished, swallowed by a wall of green water and wind. Rigging shrieked, decks tilted, and every wave landed like a fist. Between lightning bursts the crew counted heartbeats, waiting for the hull to remember its shape."
+  },
+  {
+    "task_id": "lipogram-sunset",
+    "reference": "A crimson orb sinks low. Sky glows gold, pink and plum wash across it, and night follows soon.",
+    "near_miss": "A crimson orb sinks low. The sky glows gold and plum, and night follows soon."
+  },
+  {
+    "task_id": "lipogram-coffee",
+    "reference": "Coffee lifts fog from tired minds. Every morning it offers heft, focus, comfort, when we need it most.",
+    "near_miss": "Coffee lifts fog from tired minds. Every morning it offers heft, focus, and comfort, when we need it most."
+  },
+  {
+    "task_id": "acrostic-ember",
+    "reference": "Evenings end in orange ash.\nMemory keeps the warmth awhile.\nBeneath the grate a glow persists.\nEven cold rooms remember fire.\nRekindle it with one dry breath.",
+    "near_miss": "Evenings end in orange ash.\nMemory keeps the warmth awhile.\nUnder the grate a glow persists.\nEven cold rooms remember fire.\nRekindle it with one dry breath."
+  },
+  {
+    "task_id": "acrostic-stone",
+    "reference": "Silent under moss it waits.\nTime files its edges smooth.\nOceans once rolled it here.\nNothing hurries it now.\nEternity fits in a palm.",
+    "near_miss": "Silent under moss it waits.\nTime files its edges smooth.\nNothing hurries it now.\nOceans once rolled it here.\nEternity fits in a palm."
+  },
+  {
+    "task_id": "lines-4-seasons",
+    "reference": "Spring unclenches the frozen ground.\nSummer stretches the daylight thin.\nAutumn barters green for gold.\nWinter files the world to bone.",
+    "near_miss": "Spring unclenches the frozen ground.\nSummer stretches the daylight thin.\n\nAutumn barters green for gold.\nWinter files the world to bone."
+  },
+  {
+    "task_id": "lines-7-week",
+    "reference": "Monday sharpens its pencils.\nTuesday answers old mail.\nWednesday leans on the fence.\nThursday smells like rain.\nFriday loosens its tie.\nSaturday sleeps past nine.\nSunday winds the clock again.",
+    "near_miss": "Monday sharpens its pencils.\nTuesday answers old mail.\nWednesday leans on the fence.\nThursday smells like rain.\nFriday loosens its tie.\nSaturday sleeps past nine."
+  },
+  {
+    "task_id": "anaphora-because",
+    "reference": "Because the bridge was out we learned the river.\nBecause the map lied we met the mountain.\nBecause the well was dry we tasted rain.\nBecause the lamp died we counted stars.\nBecause the road ended we kept walking.\nBecause nobody asked we sang anyway.",
+    "near_miss": "Because the bridge was out we learned the river.\nBecause the map lied we met the mountain.\nBecause the well was dry we tasted rain.\nSince the lamp died we counted stars.\nBecause the road ended we kept walking.\nBecause nobody asked we sang anyway."
+  },
+  {
+    "task_id": "anaphora-never",
+    "reference": "Never argue with the tide.\nNever lend your only knife.\nNever trust a silent dog.\nNever count another man's harvest.\nNever waste a clear night.",
+    "near_miss": "Never argue with the tide.\nNever lend your only knife.\nNever trust a silent dog.\nDo not count another man's harvest.\nNever waste a clear night."
+  },
+  {
+    "task_id": "alliteration-s",
+    "reference": "Seven silver salmon swim slowly seeking shaded sandbars.",
+    "near_miss": "Seven silver salmon swim slowly toward shaded sandbars."
+  },
+  {
+    "task_id": "alliteration-b",
+    "reference": "Bold brown bears bring berries back before breakfast begins.",
+    "near_miss": "Bold brown bears bring berries back before breakfast starts."
+  },
+  {
+    "task_id": "ends-lamp",
+    "reference": "The archivist shelved the last folio and listened to the building settle. Somewhere below, a door she had never found clicked shut. Then the lamp went out.",
+    "near_miss": "The archivist shelved the last folio and listened to the building settle. Then the lamp went out. She lit a match."
+  },
+  {
+    "task_id": "starts-door",
+    "reference": "The door had been painted shut for years, which suited everyone in the house fine. Nobody remembered what was behind it. The smell of cedar, though, never quite left the hallway.",
+    "near_miss": "For years the door had been painted shut, which suited everyone in the house fine. Nobody remembered what was behind it."
+  },
+  {
+    "task_id": "one-sentence-city",
+    "reference": "The city wakes in increments — first the bakers, then the buses, then ten thousand kettles arguing with the dawn.",
+    "near_miss": "The city wakes in increments. First the bakers, then the buses."
+  },
+  {
+    "task_id": "all-caps-warning",
+    "reference": "BEWARE: A DRAGON SLEEPS BEYOND THIS GATE. DO NOT WHISTLE, CLANK, OR SMELL OF SHEEP.",
+    "near_miss": "BEWARE: A DRAGON SLEEPS BEYOND THIS GATE. DO NOT WHISTLE, CLANK, or SMELL OF SHEEP."
+  },
+  {
+    "task_id": "combo-words12-noe",
+    "reference": "Rain taps tin roofs all night, soft rhythms drumming us toward calm.",
+    "near_miss": "Rain taps tin roofs all night, soft rhythms drumming us toward sleep."
+  },
+  {
+    "task_id": "combo-acrostic-rain-caps",
+    "reference": "ROOFS DRUM ALL NIGHT.\nATTICS HOLD THE SOUND.\nINSIDE, WE COUNT DROPS.\nNOBODY MINDS THE FLOOD.",
+    "near_miss": "ROOFS DRUM ALL NIGHT.\nATTICS HOLD THE SOUND.\nINSIDE, we COUNT DROPS.\nNOBODY MINDS THE FLOOD."
+  },
+  {
+    "task_id": "combo-lines3-because",
+    "reference": "Because the stars are patient, why should we hurry?\nBecause the well echoes, who else is listening?\nBecause the map is old, what grew over the roads?",
+    "near_miss": "Because the stars are patient, why should we hurry?\nBecause the well echoes, who else is listening?\nBecause the map is old, what grew over the roads."
+  }
+]

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Misty Step Bench — a public benchmark laboratory</title>
+<meta name="description" content="Small, sharp, reproducible language-model benchmarks. Every score ships with its full method: prompts, config, confidence intervals, outputs, cost.">
+<link rel="stylesheet" href="bench.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <a class="word" href="./">misty&nbsp;step&nbsp;<b>bench</b></a>
+    <span class="sub">a public benchmark laboratory</span>
+    <span class="spacer"></span>
+    <a class="gh" href="https://github.com/misty-step/bench">source</a>
+  </header>
+  <div class="hero">
+    <h1>Benchmarks with their homework attached.</h1>
+    <p>Small, sharp, reproducible probes of what language models can actually do.
+       Every score ships with its full method — exact prompts, model and provider
+       configuration, 95% confidence intervals, per-task outputs, and cost — as a
+       single published packet you can audit or reproduce with your own keys.</p>
+  </div>
+  <div class="cards" id="cards"></div>
+  <footer>MIT · specs and results in the open · runs executed through
+    <a href="https://github.com/misty-step/crucible">Crucible</a>, which refuses to
+    report a delta it cannot defend.</footer>
+</div>
+<script src="bench.js"></script>
+</body>
+</html>
