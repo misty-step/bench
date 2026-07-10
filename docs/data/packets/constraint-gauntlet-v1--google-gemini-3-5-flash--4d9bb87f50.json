@@ -77,7 +77,8 @@
   ],
   "totals": {
     "tokens": 3655,
-    "cost_usd": 0.016604999999999998
+    "cost_usd": 0.016604999999999998,
+    "duration_ms": 48070
   },
   "tasks": [
     {
@@ -91,6 +92,7 @@
       },
       "output": "He douses the brass lantern, sips black coffee, and watches dawn paint the cold sea.",
       "passed": true,
+      "duration_ms": 1310,
       "tokens": 83,
       "cost_usd": 0.0002745
     },
@@ -105,6 +107,7 @@
       },
       "output": "Simmer pureed tomatoes, vegetable broth, minced garlic, and heavy cream in a saucepan over medium heat for fifteen minutes, stirring occasionally until completely heated through.",
       "passed": true,
+      "duration_ms": 1223,
       "tokens": 96,
       "cost_usd": 0.000384
     },
@@ -119,6 +122,7 @@
       },
       "output": "Black waves crash against the shivering hull. Howling winds tear the canvas, while jagged lightning splits the bruised sky. Sailors cling to freezing ropes, praying as the relentless ocean threatens to swallow their fragile wooden world into the deep.",
       "passed": false,
+      "duration_ms": 1753,
       "tokens": 106,
       "cost_usd": 0.0004965
     },
@@ -133,6 +137,7 @@
       },
       "output": "A crimson sun sinks low, casting warm gold light across a dark, still bay. Soft pink clouds drift by as day turns to night. Dusk falls, and stars start to glow.",
       "passed": true,
+      "duration_ms": 1434,
       "tokens": 101,
       "cost_usd": 0.000429
     },
@@ -147,6 +152,7 @@
       },
       "output": "This delicious brew offers pure energy to the mind. Every hot cup brings immense joy to my life.",
       "passed": true,
+      "duration_ms": 1044,
       "tokens": 78,
       "cost_usd": 0.000267
     },
@@ -161,6 +167,7 @@
       },
       "output": "Each autumn leaf begins to fade and fall,\nMyriad colors drift upon the breeze,\nBeneath the gray and silent winter sky,\nEarth prepares to sleep in frozen dreams,\nResting until the warmth of spring returns.",
       "passed": true,
+      "duration_ms": 1316,
       "tokens": 125,
       "cost_usd": 0.00054
     },
@@ -175,6 +182,7 @@
       },
       "output": "Silent cliffs of ancient gray,\nTowering high above the bay,\nOverlooking seas that roar,\nNever moving from the shore,\nEndless through the passing day.",
       "passed": true,
+      "duration_ms": 1543,
       "tokens": 96,
       "cost_usd": 0.000414
     },
@@ -189,6 +197,7 @@
       },
       "output": "Green shoots break through the warming earth as life begins anew.\nGolden sunbeams drench the fields in long and lazy afternoons.\nCrimson leaves drift slowly down to carpet forest floors.\nSilent snow wraps all the world in cold and quiet sleep.",
       "passed": true,
+      "duration_ms": 1379,
       "tokens": 113,
       "cost_usd": 0.000552
     },
@@ -203,6 +212,7 @@
       },
       "output": "Monday brings the start of a brand new week.\nTuesday arrives as the busy work continues to unfold.\nWednesday marks the middle of our journey toward the weekend.\nThursday builds anticipation as the days quickly slip away.\nFriday delivers the welcome relief we have waited for.\nSaturday offers a peaceful space to rest and play.\nSunday concludes the cycle with quiet moments of reflection.",
       "passed": true,
+      "duration_ms": 1629,
       "tokens": 142,
       "cost_usd": 0.0007905
     },
@@ -217,6 +227,7 @@
       },
       "output": "Because the morning sun began to rise, the shadows faded away.\nBecause the cold wind blew fiercely, we stayed inside by the fire.\nBecause you listened to my quiet words, I felt truly understood.\nBecause the path was steep and rocky, we walked with careful steps.\nBecause we dared to dream of better days, we found the strength to try.\nBecause the journey is finally complete, we can rest in peace at last.",
       "passed": true,
+      "duration_ms": 2046,
       "tokens": 152,
       "cost_usd": 0.000903
     },
@@ -231,6 +242,7 @@
       },
       "output": "Never compromise your integrity for temporary gains or fleeting approval.\nNever underestimate the power of small, consistent steps toward your goals.\nNever let the fear of failure prevent you from trying something new.\nNever forget to show gratitude to those who support you along the way.\nNever allow the opinions of others to define your self-worth and potential.",
       "passed": true,
+      "duration_ms": 1553,
       "tokens": 134,
       "cost_usd": 0.000726
     },
@@ -245,6 +257,7 @@
       },
       "output": "Seven serious sisters silently spun soft silver silk.",
       "passed": true,
+      "duration_ms": 1076,
       "tokens": 75,
       "cost_usd": 0.00018
     },
@@ -259,6 +272,7 @@
       },
       "output": "Beautiful brown bears briskly build big birch barriers.",
       "passed": true,
+      "duration_ms": 973,
       "tokens": 76,
       "cost_usd": 0.000189
     },
@@ -273,6 +287,7 @@
       },
       "output": "For hours, Clara sat huddled beneath the heavy blankets, listening to the relentless scratching against her bedroom window. She kept her eyes fixed on the flickering wick of her bedside light, praying the fragile flame would ward off whatever was waiting in the dark. Then the lamp went out.",
       "passed": true,
+      "duration_ms": 1545,
       "tokens": 116,
       "cost_usd": 0.0005865
     },
@@ -287,6 +302,7 @@
       },
       "output": "The door had been painted shut for years, its edges sealed by thick, yellowed layers of enamel that felt as hard as bone. When Arthur finally drove the chisel into the seam, the wood groaned and gave way with a sound like a dry cough. From the darkness beyond, something wet and heavy slid against the other side of the wood, eager to finally be let out.",
       "passed": true,
+      "duration_ms": 1959,
       "tokens": 140,
       "cost_usd": 0.00078
     },
@@ -301,6 +317,7 @@
       },
       "output": "As the first trolley clangs along the avenue, golden sunlight spills over the rooftops, coaxing sleepy shopkeepers to sweep their doorsteps while the aroma of fresh espresso begins to drift through the awakening streets.",
       "passed": true,
+      "duration_ms": 1339,
       "tokens": 101,
       "cost_usd": 0.000459
     },
@@ -315,6 +332,7 @@
       },
       "output": "SILENCE IS YOUR ONLY PROTECTION AS THE BEAST SLUMBERS WITHIN. DO NOT MAKE A SOUND OR YOU WILL BECOME ITS NEXT MEAL.",
       "passed": true,
+      "duration_ms": 1414,
       "tokens": 95,
       "cost_usd": 0.0003675
     },
@@ -329,6 +347,7 @@
       },
       "output": "Soft drops fall from clouds, pouring down on dry dusty ground.",
       "passed": false,
+      "duration_ms": 1069,
       "tokens": 76,
       "cost_usd": 0.0002115
     },
@@ -343,6 +362,7 @@
       },
       "output": "RUSHING WATER FALLS FROM THE SKY.\nALWAYS DRENCHING THE DRY EARTH.\nINTO THE SOIL IT SOAKS.\nNATURE DRINKS THE FRESH DROPLETS.",
       "passed": true,
+      "duration_ms": 1468,
       "tokens": 105,
       "cost_usd": 0.000465
     },
@@ -357,6 +377,7 @@
       },
       "output": "Because the stars refuse to shine tonight?\nBecause we lost the map we drew in youth?\nBecause the silence speaks the loudest truth?",
       "passed": true,
+      "duration_ms": 1139,
       "tokens": 97,
       "cost_usd": 0.0003555
     },
@@ -371,6 +392,7 @@
       },
       "output": "A quiet river carries no warning of the waterfall ahead.",
       "passed": true,
+      "duration_ms": 886,
       "tokens": 67,
       "cost_usd": 0.000183
     },
@@ -385,6 +407,7 @@
       },
       "output": "Dear green companion, you graced my windowsill with quiet, vibrant life. Through dry spells and overwatering, you persevered, unfurling tender leaves toward the morning sun. Your sudden, tragic wilt leaves a dusty, empty pot and a heavy heart. I will deeply miss your silent, soothing presence. Rest in peace, leafy friend. May your compost nourish future blooms.",
       "passed": false,
+      "duration_ms": 1626,
       "tokens": 141,
       "cost_usd": 0.000774
     },
@@ -399,6 +422,7 @@
       },
       "output": "Come explore our calm golden beaches and swim in a warm blue lagoon. Relax under swaying palms as mild ocean breezes soothe your weary mind.",
       "passed": false,
+      "duration_ms": 1217,
       "tokens": 90,
       "cost_usd": 0.0003375
     },
@@ -413,6 +437,7 @@
       },
       "output": "Darkness blankets the silent earth as tiny silver pinpricks gleam in the deep sky. A pale crescent shines, casting its dim light upon the quiet land. Brilliant stars glitter like dust scattered in the air.",
       "passed": false,
+      "duration_ms": 1547,
       "tokens": 104,
       "cost_usd": 0.0004785
     },
@@ -427,6 +452,7 @@
       },
       "output": "Cold winds whisper through the darkened trees,\nRaging storms begin to shake the ground,\nUnderneath the weight of ancient seas,\nCrashing waves produce a solemn sound.\nIn the fire, the metal starts to glow,\nBoundless heat will shape the iron band,\nLife is forged within the depths below,\nEntering a new and altered land.",
       "passed": true,
+      "duration_ms": 1717,
       "tokens": 136,
       "cost_usd": 0.000759
     },
@@ -441,6 +467,7 @@
       },
       "output": "Wind howls through the barren trees,\nIce begins to freeze the lake,\nNight descends with freezing breeze,\nTrees are shivering in the cold,\nEach soft snowflake starts to fall,\nResting on the silent ground.",
       "passed": true,
+      "duration_ms": 1394,
       "tokens": 107,
       "cost_usd": 0.000513
     },
@@ -455,6 +482,7 @@
       },
       "output": "Bottled starlight harvested during the winter solstice\nA silver cauldron that stirs itself clockwise\nDried phoenix feathers preserved in amber jars\nA leather-bound grimoire whispering forgotten languages\nPolished obsidian mirrors for scrying distant realms\nEssence of thunderstorm captured in crystal vials\nA brass astrolabe that maps shifting constellations\nVelvet pouches containing powdered unicorn horn\nSelf-lighting candles that burn with blue flames\nA wooden staff carved from a lightning-struck oak",
       "passed": true,
+      "duration_ms": 1888,
       "tokens": 159,
       "cost_usd": 0.0009435
     },
@@ -469,6 +497,7 @@
       },
       "output": "If the river runs silent, tread with caution on the bank.\nIf the hearth fire crackles blue, expect a visitor by night.\nIf the swallows fly low, prepare your roof for heavy rain.\nIf you plant in the dark moon, your harvest will be thin.\nIf a dog barks at nothing, let him guide you past the gate.\nIf you speak of your sorrow to the wind, it will carry it away.\nIf the oak sheds its leaves early, the winter will be long.",
       "passed": true,
+      "duration_ms": 1913,
       "tokens": 172,
       "cost_usd": 0.0010605
     },
@@ -483,6 +512,7 @@
       },
       "output": "Many mighty, majestic monarchs make massive mountains meet modern, magnificent milestones.",
       "passed": true,
+      "duration_ms": 1198,
       "tokens": 82,
       "cost_usd": 0.000228
     },
@@ -497,6 +527,7 @@
       },
       "output": "The ocean pulls the sand\nAway into the deep blue\nThen returns with gentle waves\nWashing all the shore clean",
       "passed": true,
+      "duration_ms": 1366,
       "tokens": 85,
       "cost_usd": 0.0003075
     },
@@ -511,6 +542,7 @@
       },
       "output": "Coated in a thick layer of rust, the heavy iron key lay forgotten at the bottom of the dusty drawer. It once unlocked the grand oak doors of a manor that had long since crumbled into ruin. Now, it remained only as a silent keeper of secrets that no living soul would ever discover.",
       "passed": true,
+      "duration_ms": 1509,
       "tokens": 129,
       "cost_usd": 0.0006435
     },
@@ -525,6 +557,7 @@
       },
       "output": "From a cold harbor,\nOnward rolls a gray shroud,\nGloom masks our world.",
       "passed": true,
+      "duration_ms": 1208,
       "tokens": 87,
       "cost_usd": 0.0002805
     },
@@ -539,6 +572,7 @@
       },
       "output": "We walk along the quiet shore.\nWe watch the waves crash on the sand.\nWe listen to the seagulls cry.\nWe feel the cold wind on our skin.\nWe find our peace in this place.",
       "passed": true,
+      "duration_ms": 1363,
       "tokens": 112,
       "cost_usd": 0.000498
     },
@@ -553,6 +587,7 @@
       },
       "output": "DANGER! HIGH VOLTAGE! KEEP OUT! AUTHORIZED PERSONNEL ONLY!",
       "passed": true,
+      "duration_ms": 1026,
       "tokens": 77,
       "cost_usd": 0.000228
     }

@@ -3,28 +3,28 @@
   "benchmark": "constraint-gauntlet-v1",
   "title": "The Constraint Gauntlet",
   "decision": "Can this model actually obey hard countable constraints — counting its own words, banning a letter, holding an acrostic — or does it merely gesture at the instruction? A capability prior for constrained generation, and a public, reproducible sensor: every reference answer passes its own grader, every near-miss fails it.",
-  "run_id": "run-1783714724772-58451-0:constraint-gauntlet-v1",
-  "executed_at_unix_ms": 1783714724772,
+  "run_id": "run-1783721841518-9575-0:constraint-gauntlet-v1",
+  "executed_at_unix_ms": 1783721841518,
   "provenance": {
     "repo": "bench",
-    "git_sha": "7547fd647b7b19ddb828e9dffcff7745803c6600"
+    "git_sha": "4f3d1fe9cfe8358138eaa1b39730d51ac0ae5af8"
   },
   "config": {
-    "config_id": "prompt:open_router:anthropic/claude-sonnet-5:temp=0:max=8000:prompt=fnv1a64:76b48c0b7faa7d34:scoring=fnv1a64:430094bc9114273e",
+    "config_id": "prompt:open_router:moonshotai/kimi-k2.6:temp=0:max=8000:prompt=fnv1a64:76b48c0b7faa7d34:scoring=fnv1a64:430094bc9114273e",
     "provider": "open_router",
-    "model": "anthropic/claude-sonnet-5",
+    "model": "moonshotai/kimi-k2.6",
     "temperature": 0,
     "max_tokens": 8000,
     "system_prompt": "You are taking a constrained-writing benchmark. Follow each instruction exactly. Output ONLY the requested text: no preamble, no explanation, no markdown fences, no surrounding quotes."
   },
-  "response_model": "anthropic/claude-sonnet-5-20260630",
+  "response_model": "moonshotai/kimi-k2.6-20260420",
   "trusted": true,
   "score": {
-    "successes": 31,
+    "successes": 29,
     "n": 34,
-    "point": 0.9117647058823529,
-    "lower": 0.7703918204763959,
-    "upper": 0.9695346096956899,
+    "point": 0.8529411764705882,
+    "lower": 0.6987161182594804,
+    "upper": 0.9355065361737359,
     "method": "Wilson",
     "confidence": 0.95
   },
@@ -46,7 +46,7 @@
     },
     {
       "class": "combination",
-      "successes": 5,
+      "successes": 4,
       "n": 6
     },
     {
@@ -61,7 +61,7 @@
     },
     {
       "class": "lipogram",
-      "successes": 4,
+      "successes": 3,
       "n": 4
     },
     {
@@ -76,9 +76,9 @@
     }
   ],
   "totals": {
-    "tokens": 13747,
-    "cost_usd": 0.105846,
-    "duration_ms": 180043
+    "tokens": 62298,
+    "cost_usd": 0.212958462,
+    "duration_ms": 1597805
   },
   "tasks": [
     {
@@ -90,11 +90,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){14}\\s*\\z"
       },
-      "output": "He climbs worn stairs, checks the fading lamp, then brews strong black coffee very slowly.",
+      "output": "He wakes before dawn, brews coffee, climbs spiral stairs, lights the beacon, watches waves crash.",
       "passed": true,
-      "duration_ms": 6705,
-      "tokens": 404,
-      "cost_usd": 0.003112
+      "duration_ms": 16231,
+      "tokens": 555,
+      "cost_usd": 0.0016973
     },
     {
       "task_id": "words-25-recipe",
@@ -105,11 +105,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){24}\\s*\\z"
       },
-      "output": "Simmer chopped tomatoes, onions, garlic, and vegetable broth together for twenty minutes, then blend until smooth, season generously with salt, pepper, and fresh basil leaves.",
+      "output": "Simmer fresh tomatoes, onions, garlic, and basil in vegetable broth for thirty minutes, then blend until smooth and season with salt and pepper before serving.",
       "passed": true,
-      "duration_ms": 5913,
-      "tokens": 610,
-      "cost_usd": 0.005148
+      "duration_ms": 80545,
+      "tokens": 3395,
+      "cost_usd": 0.0113762
     },
     {
       "task_id": "words-40-storm",
@@ -120,11 +120,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){39}\\s*\\z"
       },
-      "output": "Black waves rose like mountains, crashing against the ship's groaning hull. Lightning split the sky as thunder roared overhead. Wind screamed through torn sails while sailors clung desperately to ropes, praying the vessel would survive the ocean's furious, relentless rage.",
+      "output": "Waves crash against hull while lightning tears through swirling clouds. Wind howls like a hungry beast, driving rain across the foaming deck. Thunder rolls over endless black water as sailors struggle to hold course through raging, chaotic darkness without stars.",
       "passed": true,
-      "duration_ms": 5150,
-      "tokens": 322,
-      "cost_usd": 0.002332
+      "duration_ms": 77898,
+      "tokens": 2343,
+      "cost_usd": 0.00779886
     },
     {
       "task_id": "lipogram-sunset",
@@ -135,11 +135,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^eE]+\\z"
       },
-      "output": "Sun sinks low, painting sky in gold, crimson, and blush. Long shadows fall across silky sand as light slowly dims. A calm hush falls, and stars start to glow.",
+      "output": "A bright sun sinks low, painting it crimson.",
       "passed": true,
-      "duration_ms": 13969,
-      "tokens": 1497,
-      "cost_usd": 0.014026
+      "duration_ms": 32492,
+      "tokens": 1785,
+      "cost_usd": 0.0058766
     },
     {
       "task_id": "lipogram-coffee",
@@ -150,11 +150,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^aA]+\\z"
       },
-      "output": "Coffee is delicious, rich, hot, energizing, giving strength every sip. This brew brings joy, comfort, delight to every morning.",
-      "passed": true,
-      "duration_ms": 11595,
-      "tokens": 1201,
-      "cost_usd": 0.011098
+      "output": "",
+      "passed": false,
+      "duration_ms": 18302,
+      "tokens": 8070,
+      "cost_usd": 0.0320665
     },
     {
       "task_id": "acrostic-ember",
@@ -165,11 +165,11 @@
         "kind": "regex",
         "value": "\\A[Ee][^\\n]*\\n[Mm][^\\n]*\\n[Bb][^\\n]*\\n[Ee][^\\n]*\\n[Rr][^\\n]*\\n?\\z"
       },
-      "output": "Embers glow where daylight fled,\nMemory curls in threads of red,\nBeneath the ash a warmth remains,\nEven night cannot erase its stains,\nRising softly, it whispers and wanes.",
+      "output": "Evening fades to ash and smoke,\nMemories flicker, then depart.\nBurning with a final heat,\nEmbers hold a pulsing heart.\nResting till the winds restart.",
       "passed": true,
-      "duration_ms": 3904,
-      "tokens": 253,
-      "cost_usd": 0.00153
+      "duration_ms": 123587,
+      "tokens": 3721,
+      "cost_usd": 0.01242
     },
     {
       "task_id": "acrostic-stone",
@@ -180,11 +180,11 @@
         "kind": "regex",
         "value": "\\A[Ss][^\\n]*\\n[Tt][^\\n]*\\n[Oo][^\\n]*\\n[Nn][^\\n]*\\n[Ee][^\\n]*\\n?\\z"
       },
-      "output": "Silent giants rest along the shore,\nTheir edges smoothed by ancient tides,\nOnward the river carves its path,\nNestled deep where moss abides,\nEternal weight the earth still holds.",
+      "output": "Stars fade above the weathered crag,\nTides of time erode its face,\nOnce a mountain, now a fragment,\nNestled in the mossy place,\nEnduring still, with silent grace.",
       "passed": true,
-      "duration_ms": 3947,
-      "tokens": 194,
-      "cost_usd": 0.001092
+      "duration_ms": 2339,
+      "tokens": 376,
+      "cost_usd": 0.0010867
     },
     {
       "task_id": "lines-4-seasons",
@@ -195,11 +195,11 @@
         "kind": "regex",
         "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){3}[ \\t]*\\S[^\\n]*\\n?\\z"
       },
-      "output": "Spring awakens with blossoms and gentle rain.\nSummer glows with long days and warm golden light.\nAutumn scatters leaves in amber and rust.\nWinter blankets the earth in quiet snow.",
+      "output": "Spring brings new life to the awakening earth.\nSummer sun shines bright and hot upon the land.\nAutumn paints the trees with vibrant shades of gold.\nWinter covers everything in silent sheets of snow.",
       "passed": true,
-      "duration_ms": 3766,
-      "tokens": 203,
-      "cost_usd": 0.001158
+      "duration_ms": 2433,
+      "tokens": 256,
+      "cost_usd": 0.00080135
     },
     {
       "task_id": "lines-7-week",
@@ -210,11 +210,11 @@
         "kind": "regex",
         "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){6}[ \\t]*\\S[^\\n]*\\n?\\z"
       },
-      "output": "Monday is for fresh starts.\nTuesday brings steady progress.\nWednesday sits at the week's heart.\nThursday pushes toward the weekend.\nFriday hums with anticipation.\nSaturday opens up for rest.\nSunday closes the week gently.",
+      "output": " Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
       "passed": true,
-      "duration_ms": 3776,
-      "tokens": 233,
-      "cost_usd": 0.001402
+      "duration_ms": 12235,
+      "tokens": 167,
+      "cost_usd": 0.00036047
     },
     {
       "task_id": "anaphora-because",
@@ -225,11 +225,11 @@
         "kind": "regex",
         "value": "\\A(?:Because [^\\n]*\\n){5}Because [^\\n]*\\n?\\z"
       },
-      "output": "Because the rain fell softly on the empty streets tonight\nBecause I remembered your voice before I remembered your name\nBecause the candle burned down to nothing while we talked\nBecause silence can say more than a thousand words\nBecause the stars still show up even when we forget to look\nBecause tomorrow always arrives whether we are ready or not",
+      "output": "Because the sun was shining brightly that morning.\nBecause she had forgotten to set her alarm clock.\nBecause the road was closed due to construction work.\nBecause he believed in second chances for everyone.\nBecause the recipe called for three large eggs.\nBecause time waits for no one, least of all us.",
       "passed": true,
-      "duration_ms": 4147,
-      "tokens": 236,
-      "cost_usd": 0.001472
+      "duration_ms": 13940,
+      "tokens": 493,
+      "cost_usd": 0.001462572
     },
     {
       "task_id": "anaphora-never",
@@ -240,11 +240,11 @@
         "kind": "regex",
         "value": "\\A(?:Never [^\\n]*\\n){4}Never [^\\n]*\\n?\\z"
       },
-      "output": "Never trust a promise made without accountability.\nNever sacrifice your health for short-term gains.\nNever let fear make your decisions for you.\nNever burn a bridge you might need to cross again.\nNever stop learning from your own mistakes.",
+      "output": "Never give up on your dreams no matter how distant they seem.\nNever forget to tell the people you love how much they mean.\nNever stop learning because life is a continuous journey.\nNever let fear decide the boundaries of your potential.\nNever underestimate the power of kindness and patience.",
       "passed": true,
-      "duration_ms": 3849,
-      "tokens": 215,
-      "cost_usd": 0.001238
+      "duration_ms": 14991,
+      "tokens": 400,
+      "cost_usd": 0.00115775
     },
     {
       "task_id": "alliteration-s",
@@ -255,11 +255,11 @@
         "kind": "regex",
         "value": "\\A[Ss][a-z]*(?: [Ss][a-z]*){7,}\\.[ \\t]*\\z"
       },
-      "output": "Silly slippery snakes silently slid slowly southward some sunny sunday",
+      "output": " Silly silver snakes swiftly slithered southward seeking small snacks.",
       "passed": false,
-      "duration_ms": 3553,
-      "tokens": 143,
-      "cost_usd": 0.000502
+      "duration_ms": 17478,
+      "tokens": 773,
+      "cost_usd": 0.00228572
     },
     {
       "task_id": "alliteration-b",
@@ -270,11 +270,11 @@
         "kind": "regex",
         "value": "\\A[Bb][a-z]*(?: [Bb][a-z]*){7,}\\.[ \\t]*\\z"
       },
-      "output": "Big brown bears bravely built beautiful bamboo boats before breakfast.",
+      "output": "Busy bees buzz boldly beyond blooming bluebells before breakfast.",
       "passed": true,
-      "duration_ms": 3113,
-      "tokens": 144,
-      "cost_usd": 0.000512
+      "duration_ms": 19118,
+      "tokens": 544,
+      "cost_usd": 0.001652
     },
     {
       "task_id": "ends-lamp",
@@ -285,11 +285,11 @@
         "kind": "regex",
         "value": "(?s)\\A.+Then the lamp went out\\.\\s*\\z"
       },
-      "output": "The old house had been silent for years before Marta returned to pack her mother's things. In the attic, she found a lamp that flickered on by itself, casting shadows shaped like her mother's hands across the walls. She whispered a goodbye she'd never had the chance to say. Then the lamp went out.",
+      "output": " Maya had read that the spirit would manifest only in the silence between heartbeats, and she held her breath until the room grew impossibly cold. A shape detached itself from the corner shadows and glided toward her across the dusty floorboards. Then the lamp went out.",
       "passed": true,
-      "duration_ms": 4164,
-      "tokens": 239,
-      "cost_usd": 0.00151
+      "duration_ms": 32534,
+      "tokens": 751,
+      "cost_usd": 0.0024113
     },
     {
       "task_id": "starts-door",
@@ -300,11 +300,11 @@
         "kind": "regex",
         "value": "(?s)\\AThe door had been painted shut for years.+\\z"
       },
-      "output": "The door had been painted shut for years, layers of white congealed like frozen rivers around its edges. Mara took the knife from the kitchen drawer and worked it along the seam, patient as a surgeon, until the wood finally sighed open. Dust and light rushed out together, and with them, a smell she hadn't breathed since she was twelve. She stood on the threshold a long moment before deciding she wasn't ready to go in yet.",
+      "output": "The door had been painted shut for years, but tonight the hinges groaned open as if summoned by the storm. A draft carried the scent of lavender and old regrets into the hallway where Margaret stood frozen, clutching her mother's key. She stepped across the threshold and finally understood why the room had been sealed away.",
       "passed": true,
-      "duration_ms": 4877,
-      "tokens": 282,
-      "cost_usd": 0.00194
+      "duration_ms": 11079,
+      "tokens": 519,
+      "cost_usd": 0.00156735
     },
     {
       "task_id": "one-sentence-city",
@@ -315,11 +315,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^.]+\\.\\s*\\z"
       },
-      "output": "As the first pale light slips over rooftops, streetlights blink off one by one, delivery trucks rumble through waking avenues, shutters rattle open above yawning cafés, pigeons scatter from window ledges, and the low murmur of a million stirring lives rises into the cool morning air like steam from a thousand cups of coffee.",
+      "output": " The city stirs from slumber as amber light washes over concrete canyons, coaxing open bakery doors, summoning the rumble of early trains, and drawing streams of bleary-eyed commuters into the crisp morning air.",
       "passed": true,
-      "duration_ms": 4015,
-      "tokens": 219,
-      "cost_usd": 0.00131
+      "duration_ms": 47756,
+      "tokens": 654,
+      "cost_usd": 0.00203489
     },
     {
       "task_id": "all-caps-warning",
@@ -330,11 +330,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^a-z]+\\z"
       },
-      "output": "WARNING: DRAGON SLEEPING BEYOND THIS POINT. DO NOT DISTURB OR YOU WILL BE EATEN.",
+      "output": " DO NOT WAKE THE SLEEPING DRAGON. YOUR LIFE DEPENDS ON SILENCE.",
       "passed": true,
-      "duration_ms": 3356,
-      "tokens": 240,
-      "cost_usd": 0.00136
+      "duration_ms": 13375,
+      "tokens": 780,
+      "cost_usd": 0.00251825
     },
     {
       "task_id": "combo-words12-noe",
@@ -345,11 +345,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*[^eE\\s]+(?:\\s+[^eE\\s]+){11}\\s*\\z"
       },
-      "output": "Rain drops fall down, wash dust, soak grass, calm loud gray sky.",
+      "output": " Storm clouds drop cold rain upon land making all mud and floods",
       "passed": true,
-      "duration_ms": 5836,
-      "tokens": 449,
-      "cost_usd": 0.003554
+      "duration_ms": 69779,
+      "tokens": 3446,
+      "cost_usd": 0.01085152
     },
     {
       "task_id": "combo-acrostic-rain-caps",
@@ -360,11 +360,11 @@
         "kind": "regex",
         "value": "\\AR[^a-z\\n]*\\nA[^a-z\\n]*\\nI[^a-z\\n]*\\nN[^a-z\\n]*\\n?\\z"
       },
-      "output": "RAIN falls softly on the ground.\nA gentle wind moves all around.\nIN every drop a story hides.\nNIGHT arrives as daylight slides.",
-      "passed": false,
-      "duration_ms": 3594,
-      "tokens": 219,
-      "cost_usd": 0.001182
+      "output": "RIVERS OVERFLOW WITH MUDDY WATER.\nA STORM RAGES WITHOUT END.\nICICLES FORM ON THE BRANCHES.\nNATURE YIELDS TO THE FLOOD.",
+      "passed": true,
+      "duration_ms": 13835,
+      "tokens": 686,
+      "cost_usd": 0.00213515
     },
     {
       "task_id": "combo-lines3-because",
@@ -375,11 +375,11 @@
         "kind": "regex",
         "value": "\\A(?:Because [^\\n]*\\?[ \\t]*\\n){2}Because [^\\n]*\\?[ \\t]*\\n?\\z"
       },
-      "output": "Because you left without saying goodbye, did you think I wouldn't notice?\nBecause the sky turned gray so suddenly, will the storm reach us tonight?\nBecause we never spoke of it again, did it really happen at all?",
-      "passed": true,
-      "duration_ms": 3708,
-      "tokens": 220,
-      "cost_usd": 0.00124
+      "output": " Because the journey never ends?\nBecause the truth remains hidden?\nBecause the dawn brings hope?",
+      "passed": false,
+      "duration_ms": 30541,
+      "tokens": 783,
+      "cost_usd": 0.00250162
     },
     {
       "task_id": "words-10-proverb",
@@ -390,11 +390,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){9}\\s*\\z"
       },
-      "output": "A patient gardener harvests sweeter fruit than a hurried farmer.",
+      "output": "An unplanted seed never doubts the rain but never grows",
       "passed": true,
-      "duration_ms": 3422,
-      "tokens": 249,
-      "cost_usd": 0.001618
+      "duration_ms": 9549,
+      "tokens": 1959,
+      "cost_usd": 0.0064824
     },
     {
       "task_id": "words-60-eulogy",
@@ -405,11 +405,11 @@
         "kind": "regex",
         "value": "(?s)\\A\\s*\\S+(?:\\s+\\S+){59}\\s*\\z"
       },
-      "output": "We gather to remember Fernando, our green companion who lived on the windowsill for nine faithful years. He drank our leftover water, forgave our forgetfulness, and stretched toward every sunbeam with quiet hope. Fernando taught us patience, growth, and steady love. Though his leaves have fallen, his roots remain in our hearts forever. Rest gently, dear friend, among the light.",
+      "output": "You brought life to my quiet room, reaching gently toward the sun. I gave you water, light, and love, and you gave me oxygen and peace. Now your stems are dry and brown, your pot holds only silent soil. Goodbye, dear friend. May you decompose beautifully. I will remember your green leaves always. Thank you for growing here with me.",
       "passed": true,
-      "duration_ms": 9591,
-      "tokens": 1132,
-      "cost_usd": 0.010352
+      "duration_ms": 11154,
+      "tokens": 2726,
+      "cost_usd": 0.0090605
     },
     {
       "task_id": "lipogram-t-travel",
@@ -420,11 +420,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^tT]+\\z"
       },
-      "output": "Escape daily life on our island paradise, where warm sand caresses clear blue waves. Unwind under swaying palms, savor fresh mangoes, and lose yourself in pure island bliss.",
+      "output": " Discover our dreamy island haven. Relax on warm sand by clear blue seas.",
       "passed": true,
-      "duration_ms": 10691,
-      "tokens": 1144,
-      "cost_usd": 0.01048
+      "duration_ms": 226472,
+      "tokens": 6462,
+      "cost_usd": 0.0204796
     },
     {
       "task_id": "lipogram-o-night",
@@ -435,11 +435,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^oO]+\\z"
       },
-      "output": "Stars twinkle amid velvety black darkness, sending silver light earthward. A pale crescent hangs high, ancient and eternal. Every distant flicker reveals stellar secrets unseen.",
+      "output": " The night sky is vast and clear. Stars gleam like silver pinpricks in velvet depths. Silent light blankets the vast expanse, stretching endlessly up high.",
       "passed": true,
-      "duration_ms": 7397,
-      "tokens": 605,
-      "cost_usd": 0.005138
+      "duration_ms": 169164,
+      "tokens": 5060,
+      "cost_usd": 0.01601632
     },
     {
       "task_id": "acrostic-crucible",
@@ -450,11 +450,11 @@
         "kind": "regex",
         "value": "\\A[Cc][^\\n]*\\n[Rr][^\\n]*\\n[Uu][^\\n]*\\n[Cc][^\\n]*\\n[Ii][^\\n]*\\n[Bb][^\\n]*\\n[Ll][^\\n]*\\n[Ee][^\\n]*\\n?\\z"
       },
-      "output": "Crushed beneath the weight of flame,\nRaw ore forgets its former name,\nUnder fire, it learns to bend,\nCracks reveal what shadows tend.\nIron will refines to light,\nBurning doubts dissolve in night,\nLonging shapes the molten core,\nEmerging stronger than before.",
+      "output": "Cinders fall like snow upon the anvil's face,\nRising flames consume the old and frail.\nUnder pressure, ore reveals its hidden worth,\nCrucible holds the metal, hot and pale.\nIron melts and merges, forged anew,\nBeating hammers shape the blade so true.\nLight gleams bright along the tempered steel,\nEdge is honed to cut, to serve, to heal.",
       "passed": true,
-      "duration_ms": 5107,
-      "tokens": 316,
-      "cost_usd": 0.002256
+      "duration_ms": 307832,
+      "tokens": 7908,
+      "cost_usd": 0.03141545
     },
     {
       "task_id": "acrostic-winter",
@@ -465,11 +465,11 @@
         "kind": "regex",
         "value": "\\A[Ww][^\\n]*\\n[Ii][^\\n]*\\n[Nn][^\\n]*\\n[Tt][^\\n]*\\n[Ee][^\\n]*\\n[Rr][^\\n]*\\n?\\z"
       },
-      "output": "White flakes drift down in silent grace,\nIcy winds sweep across the land,\nNights grow long in the cold embrace,\nTrees stand bare, a frozen band,\nEvery breath turns to misty air,\nRivers freeze, still and rare.",
+      "output": "Winds howl through barren trees,\nIcicles hang from frozen eaves,\nNight falls early, dark and deep,\nTemperatures plunge in icy sleep,\nEvery hearth glows warm and bright,\nRest comes softly in the night.",
       "passed": true,
-      "duration_ms": 4197,
-      "tokens": 209,
-      "cost_usd": 0.001234
+      "duration_ms": 5619,
+      "tokens": 285,
+      "cost_usd": 0.0009265
     },
     {
       "task_id": "lines-10-inventory",
@@ -480,11 +480,11 @@
         "kind": "regex",
         "value": "\\A(?:[ \\t]*\\S[^\\n]*\\n){9}[ \\t]*\\S[^\\n]*\\n?\\z"
       },
-      "output": "Enchanted Amethyst Wand\nBottle of Bottled Starlight\nCloak of Whispering Shadows\nVial of Phoenix Tears\nGrimoire of Forgotten Runes\nCrystal Orb of Farsight\nPouch of Everburning Coals\nRing of Silent Steps\nFeather Quill of Truth\nCauldron of Endless Brew",
+      "output": " Phoenix Feather Quill\nPotion of Midnight Silence\nCrystal Ball with Cracked Future\nBoots of Whispered Steps\nJar of Starlight Moths\nWand of Polymorphing Teaspoons\nMap to the Forgotten Library\nBottled Thunderstorm\nCloak of Borrowed Shadows\nEnchanted Compass that Points to Regret",
       "passed": true,
-      "duration_ms": 4055,
-      "tokens": 277,
-      "cost_usd": 0.001826
+      "duration_ms": 30710,
+      "tokens": 527,
+      "cost_usd": 0.00161937
     },
     {
       "task_id": "anaphora-if",
@@ -495,11 +495,11 @@
         "kind": "regex",
         "value": "\\A(?:If [^\\n]*\\n){6}If [^\\n]*\\n?\\z"
       },
-      "output": "If you plant kindness, you will harvest friendship.\nIf the well is deep, do not throw away the rope.\nIf a fool speaks, let silence be your answer.\nIf the wind changes, turn your sail with it.\nIf you owe a debt of gratitude, pay it before the sun sets.\nIf the path is crooked, walk it with a straight heart.\nIf winter is harsh, remember spring always returns.",
+      "output": "If at first you don't succeed, try, try again.\nIf the shoe fits, wear it.\nIf it ain't broke, don't fix it.\nIf you lie down with dogs, you'll get up with fleas.\nIf wishes were horses, beggars would ride.\nIf you can't beat them, join them.\nIf you play with fire, you'll get burned.",
       "passed": true,
-      "duration_ms": 4421,
-      "tokens": 269,
-      "cost_usd": 0.001738
+      "duration_ms": 44090,
+      "tokens": 1169,
+      "cost_usd": 0.00377729
     },
     {
       "task_id": "alliteration-m",
@@ -510,11 +510,11 @@
         "kind": "regex",
         "value": "\\A[Mm][a-z]*,?(?: [Mm][a-z]*,?){9,}\\.[ \\t]*\\z"
       },
-      "output": "Many mighty monkeys methodically munched multiple mangoes, making merry moments minute by minute.",
+      "output": " Many mighty men make marvelous music, moving millions, making memories.",
       "passed": false,
-      "duration_ms": 4129,
-      "tokens": 154,
-      "cost_usd": 0.000588
+      "duration_ms": 31464,
+      "tokens": 681,
+      "cost_usd": 0.00210496
     },
     {
       "task_id": "grid-4x5",
@@ -525,11 +525,11 @@
         "kind": "regex",
         "value": "\\A(?:[ \\t]*\\S+(?:[ \\t]+\\S+){4}[ \\t]*\\n){3}[ \\t]*\\S+(?:[ \\t]+\\S+){4}[ \\t]*\\n?\\z"
       },
-      "output": "The tide rolls in slowly.\nWaves crash against the shore.\nMoonlight pulls water toward land.\nSand shifts beneath the foam.",
+      "output": "The tide swells at midnight.\nSalt water covers the dunes.\nShells vanish under dark waves.\nBeaches shrink along the coast.",
       "passed": true,
-      "duration_ms": 4526,
-      "tokens": 389,
-      "cost_usd": 0.002994
+      "duration_ms": 9059,
+      "tokens": 1552,
+      "cost_usd": 0.00599145
     },
     {
       "task_id": "sentences-3-key",
@@ -540,11 +540,11 @@
         "kind": "regex",
         "value": "(?s)\\A[^.!?]+\\.[^.!?]+\\.[^.!?]+\\.\\s*\\z"
       },
-      "output": "The old key rested in the drawer, its brass surface dulled by decades of neglect. Its teeth were worn smooth from countless turns in a lock long since replaced. No one remembered which door it once opened, yet it was kept as a quiet piece of the past.",
+      "output": "The old key rested in the dusty drawer beneath layers of forgotten linen. Its iron surface bore the patina of centuries spent waiting in silence. No one remembered which door it once opened or why it had been saved.",
       "passed": true,
-      "duration_ms": 3435,
-      "tokens": 260,
-      "cost_usd": 0.001616
+      "duration_ms": 13940,
+      "tokens": 709,
+      "cost_usd": 0.00219757
     },
     {
       "task_id": "combo-acrostic-fog-noe",
@@ -555,11 +555,11 @@
         "kind": "regex",
         "value": "\\A[Ff][^eE\\n]*\\n[Oo][^eE\\n]*\\n[Gg][^eE\\n]*\\n?\\z"
       },
-      "output": "Fog drifts along calm dark roads\nOwls call out through misty night\nGround stays calm, still and dry",
+      "output": "Fast dogs run\nOn dark nights\nGo away now",
       "passed": true,
-      "duration_ms": 7540,
-      "tokens": 700,
-      "cost_usd": 0.006016
+      "duration_ms": 35009,
+      "tokens": 967,
+      "cost_usd": 0.0030876
     },
     {
       "task_id": "combo-anaphora-we-period",
@@ -570,11 +570,11 @@
         "kind": "regex",
         "value": "\\A(?:We [^\\n]*\\.[ \\t]*\\n){4}We [^\\n]*\\.[ \\t]*\\n?\\z"
       },
-      "output": "We walked through the quiet streets at dawn.\nWe shared stories that lingered in the cool air.\nWe watched the sun rise over distant hills.\nWe gathered strength from simple moments together.\nWe carried hope forward into the new day.",
-      "passed": true,
-      "duration_ms": 4760,
-      "tokens": 224,
-      "cost_usd": 0.001304
+      "output": " We went to the store.\nWe saw many people there.\nWe bought some groceries.\nWe walked home together.\nWe cooked a nice dinner.",
+      "passed": false,
+      "duration_ms": 14367,
+      "tokens": 380,
+      "cost_usd": 0.00111275
     },
     {
       "task_id": "combo-allcaps-words8",
@@ -585,11 +585,11 @@
         "kind": "regex",
         "value": "\\A[ \\t]*[^a-z\\s]+(?:[ \\t]+[^a-z\\s]+){7}[ \\t]*\\z"
       },
-      "output": "DANGER: HIGH VOLTAGE. KEEP AWAY OR DIE INSTANTLY.",
+      "output": "WARNING HIGH VOLTAGE DO NOT TOUCH ANY WIRES",
       "passed": true,
-      "duration_ms": 3835,
-      "tokens": 296,
-      "cost_usd": 0.001968
+      "duration_ms": 38888,
+      "tokens": 1416,
+      "cost_usd": 0.0046246
     }
   ]
 }

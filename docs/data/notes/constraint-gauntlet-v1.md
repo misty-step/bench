@@ -21,15 +21,21 @@ floor tightened accordingly.
 | grok-4.5 | 30/34 · 88.2% | [73.4, 95.3] | — |
 | glm-5.2 | 29/34 · 85.3% | [69.9, 93.6] | — |
 | gpt-5.4 | 29/34 · 85.3% | [69.9, 93.6] | — |
+| kimi-k2.6 | 29/34 · 85.3% | [69.9, 93.6] | — |
 | gemini-3.5-flash | 29/34 · 85.3% | [69.9, 93.6] | — |
 | minimax-m3 | 28/34 · 82.4% | [66.5, 91.7] | — |
 | deepseek-v4-flash | 27/34 · 79.4% | [63.2, 89.7] | — |
 | minimax-m2 | 25/34 · 73.5% | [56.9, 85.4] | — |
 | kimi-k2 | 23/34 · 67.6% | [50.8, 80.9] | — |
 
-kimi-k2.6 did not complete: its responses repeatedly exceeded the runner's
-HTTP client timeout (a measurement-infrastructure limit, not a verdict on
-the model — recorded as absent, not as zero).
+kimi-k2.6's seat was initially empty: its long reasoning traces exceeded
+the runner's old 60-second HTTP timeout eight straight times. We raised the
+default to 15 minutes (how long a model will go is data, not infrastructure
+residue — packets now carry per-task and total `duration_ms`), and it
+completed: **29/34 (85.3%, CI [69.9, 93.6])** — up 6 tasks on kimi-k2.
+Tempting headline, but the paired comparison says **inside the noise floor**
+(b=9 c=3, p=0.146; k2 beat k2.6 on three tasks): at n=34 we cannot claim
+the generational jump. v2's larger corpus can.
 
 ## Defensible claims (paired McNemar, noise-floor checked)
 

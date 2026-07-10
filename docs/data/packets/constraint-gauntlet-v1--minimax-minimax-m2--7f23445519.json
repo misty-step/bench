@@ -77,7 +77,8 @@
   ],
   "totals": {
     "tokens": 17736,
-    "cost_usd": 0.0172863
+    "cost_usd": 0.0172863,
+    "duration_ms": 185825
   },
   "tasks": [
     {
@@ -91,6 +92,7 @@
       },
       "output": "First light, keeper climbs tower, polishes lens, records weather, guides distant ships through morning mist.",
       "passed": true,
+      "duration_ms": 4738,
       "tokens": 424,
       "cost_usd": 0.0004431
     },
@@ -105,6 +107,7 @@
       },
       "output": "Simmer diced tomatoes, onion, and garlic in vegetable broth for twenty minutes, then blend until smooth and season well with salt and pepper to taste.",
       "passed": true,
+      "duration_ms": 4846,
       "tokens": 564,
       "cost_usd": 0.000517905
     },
@@ -119,6 +122,7 @@
       },
       "output": "Massive waves crashed against the trembling vessel as howling winds ripped through the sails. Thunder roared, lightning illuminated the churning black waters. Crew members struggled desperately, clinging to ropes, praying for survival amid the furious tempest and terrifying darkness forever.",
       "passed": true,
+      "duration_ms": 6421,
       "tokens": 658,
       "cost_usd": 0.00061608
     },
@@ -133,6 +137,7 @@
       },
       "output": "A burning sky with long, gold and ruby bands spans out from a sinking sun at its horizon. Dusk falls as warm, glowing light wraps around all.",
       "passed": true,
+      "duration_ms": 12007,
       "tokens": 885,
       "cost_usd": 0.0009927
     },
@@ -147,6 +152,7 @@
       },
       "output": "Coffee gives me the perfect boost to start my morning. The rich, smooth flavor of fresh brew makes every sip delicious.",
       "passed": false,
+      "duration_ms": 7257,
       "tokens": 740,
       "cost_usd": 0.000700485
     },
@@ -161,6 +167,7 @@
       },
       "output": "Evening fades and embers glow\nMemories dance in amber light\nEvery spark a story told\nBurning slow through night so cold\nRestless hearts still hold the flame",
       "passed": false,
+      "duration_ms": 3269,
       "tokens": 335,
       "cost_usd": 0.00027285
     },
@@ -175,6 +182,7 @@
       },
       "output": "Stars pierce the velvet darkness\nTrees stand as silent guardians\nOwls hoot in ancient warning\nNight wraps the world in peace\nEvery stone holds a memory",
       "passed": true,
+      "duration_ms": 5035,
       "tokens": 389,
       "cost_usd": 0.000340935
     },
@@ -189,6 +197,7 @@
       },
       "output": "Spring bursts forth with fresh blossoms.\nSummer shines brightly with golden sun.\nAutumn drapes the landscape in russet hues.\nWinter cloaks the earth in quiet snow.",
       "passed": true,
+      "duration_ms": 4711,
       "tokens": 369,
       "cost_usd": 0.000319005
     },
@@ -203,6 +212,7 @@
       },
       "output": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
       "passed": true,
+      "duration_ms": 2284,
       "tokens": 225,
       "cost_usd": 0.00016983
     },
@@ -217,6 +227,7 @@
       },
       "output": "Because the sun rose early today.\nBecause the birds sang loudly.\nBecause the coffee was strong.\nBecause the book was fascinating.\nBecause the rain stopped suddenly.\nBecause the night was clear.",
       "passed": true,
+      "duration_ms": 2991,
       "tokens": 237,
       "cost_usd": 0.000184365
     },
@@ -231,6 +242,7 @@
       },
       "output": "Never skip your morning coffee.\nNever forget to back up your files.\nNever ignore a thank-you note.\nNever underestimate the power of a good night's sleep.\nNever stop learning new things.",
       "passed": true,
+      "duration_ms": 3336,
       "tokens": 279,
       "cost_usd": 0.0002655
     },
@@ -245,6 +257,7 @@
       },
       "output": "Seven strange stories somehow seem secretly satisfying sincerely.",
       "passed": true,
+      "duration_ms": 6444,
       "tokens": 525,
       "cost_usd": 0.000475065
     },
@@ -259,6 +272,7 @@
       },
       "output": "Big brown bears briskly bounded beyond the blooming bushes.",
       "passed": false,
+      "duration_ms": 3843,
       "tokens": 212,
       "cost_usd": 0.0001833
     },
@@ -273,6 +287,7 @@
       },
       "output": "The old sailor had been telling his tale of the ghost ship for hours, and the young cabin boy sat frozen in fear, barely breathing. As the final word left the old man's lips, a cold wind swept through the room and extinguished every light. Then the lamp went out.",
       "passed": true,
+      "duration_ms": 2554,
       "tokens": 249,
       "cost_usd": 0.00019737
     },
@@ -287,6 +302,7 @@
       },
       "output": "\nThe door had been painted shut for years, sealed by layers of white paint that had bonded wood to frame in a sticky embrace. When the new owner finally pried it open, the musty air that escaped carried whispers of the family that had fled this house in 1987, leaving behind a child's drawing on the kitchen wall and a secret room that no one remembered existed.",
       "passed": false,
+      "duration_ms": 3518,
       "tokens": 287,
       "cost_usd": 0.0002751
     },
@@ -301,6 +317,7 @@
       },
       "output": "Morning light crept across skyscrapers as shutters opened, delivery trucks rumbled to life, and the city stretched awake with the sounds of commuters and coffee shops.",
       "passed": true,
+      "duration_ms": 4128,
       "tokens": 329,
       "cost_usd": 0.0003291
     },
@@ -315,6 +332,7 @@
       },
       "output": "DANGER: SLEEPING DRAGON AHEAD. DO NOT WAKE THE BEAST.",
       "passed": true,
+      "duration_ms": 2147,
       "tokens": 202,
       "cost_usd": 0.0001713
     },
@@ -329,6 +347,7 @@
       },
       "output": "Rain pours softly down from gray sky, wetting ground and rooftops today",
       "passed": false,
+      "duration_ms": 6728,
       "tokens": 726,
       "cost_usd": 0.00068391
     },
@@ -343,6 +362,7 @@
       },
       "output": "ROSE BLOOMS IN SPRING\nALWAYS LOOKS PRETTY\nIRIS GROWS BY THE POND\nNARCISSUS BLOOMS TOO",
       "passed": true,
+      "duration_ms": 3529,
       "tokens": 354,
       "cost_usd": 0.00030141
     },
@@ -357,6 +377,7 @@
       },
       "output": "Because the sky is blue?\nBecause love is a mystery?\nBecause time is fleeting?",
       "passed": true,
+      "duration_ms": 3338,
       "tokens": 356,
       "cost_usd": 0.00030039
     },
@@ -371,6 +392,7 @@
       },
       "output": "Fortune favors the bold, but patience ultimately rewards the wise.",
       "passed": true,
+      "duration_ms": 8746,
       "tokens": 908,
       "cost_usd": 0.000874905
     },
@@ -385,6 +407,7 @@
       },
       "output": "Beloved fern, you brought life to our home. Your green fronds lifted spirits through dark days. You asked only sunlight, water, patience. In your quiet growth, we learned stillness matters. Though leaves now yellow, your legacy stays. Rest softly, dear companion. You grew us too. Morning light will miss your silhouette. Seasons change, but memory remains.",
       "passed": false,
+      "duration_ms": 8434,
       "tokens": 807,
       "cost_usd": 0.000762705
     },
@@ -399,6 +422,7 @@
       },
       "output": "Discover a pristine island paradise where golden sands join sapphire blue seas and warm breezes lull you into pure relaxation. Reserve your dream getaway now and experience our exquisite seaside villas and fine dining for a stay in pure bliss.",
       "passed": false,
+      "duration_ms": 18660,
       "tokens": 1961,
       "cost_usd": 0.00194208
     },
@@ -413,6 +437,7 @@
       },
       "output": "The night sky gleams with stars scattered across the deep black expanse. Silver light from distant fires creates a serene and breathtaking view.",
       "passed": false,
+      "duration_ms": 8055,
       "tokens": 758,
       "cost_usd": 0.000843
     },
@@ -427,6 +452,7 @@
       },
       "output": "Clouds gather heavy with unspoken dread\nRivers of memory flow through the night\nUnder the weight of what we've become\nCrystallized dreams shatter like glass\nIn the fire we find what survives\nBurning away the lies we believed\nLessons learned in the heat remain\nEternal is the ash of who we were",
       "passed": true,
+      "duration_ms": 4773,
       "tokens": 353,
       "cost_usd": 0.000357
     },
@@ -441,6 +467,7 @@
       },
       "output": "Whispers of snow fill the silent air\nIn frozen gardens, the branches bare\nNight falls early with a pale moonlight\nThrough frosted windows, we glimpse the night\nEach flake descends like a whispered dream\nRemembering winters that softly gleam",
       "passed": true,
+      "duration_ms": 3760,
       "tokens": 307,
       "cost_usd": 0.0003027
     },
@@ -455,6 +482,7 @@
       },
       "output": "Crystal Orb of True Sight\nPhoenix Feather Wand\n bottled Moonlight Essence\nAncient Tome of Forgotten Spells\nScroll of Elemental Summoning\nSorcerer's Crystal Staff\nVial of Dragon's Breath\nEnchanted Raven Feather Quill\nAmulet of Shadow Walkin\nPotion of Eternal Youth",
       "passed": true,
+      "duration_ms": 2158,
       "tokens": 181,
       "cost_usd": 0.000125715
     },
@@ -469,6 +497,7 @@
       },
       "output": "If you want something done right, do it yourself.\nIf at first you don't succeed, try, try again.\nIf the shoe fits, wear it.\nIf you don't ask, you don't get.\nIf there's a will, there's a way.\nIf you lie down with dogs, you get up with fleas.\nIf you make your bed in the morning, you've done the day's first task.",
       "passed": true,
+      "duration_ms": 4334,
       "tokens": 363,
       "cost_usd": 0.0003654
     },
@@ -483,6 +512,7 @@
       },
       "output": "Many mice might make more mischief, mother must manage, moving much more, making many matters meaner, mister.",
       "passed": true,
+      "duration_ms": 6612,
       "tokens": 628,
       "cost_usd": 0.000578595
     },
@@ -497,6 +527,7 @@
       },
       "output": "Low tide reveals hidden shells.\nMoon pulls water toward shore.\nWaves crash, sand shifts slowly.\nEvening tide whispers ancient secrets.",
       "passed": true,
+      "duration_ms": 3436,
       "tokens": 637,
       "cost_usd": 0.0006969
     },
@@ -511,6 +542,7 @@
       },
       "output": "The old key lay forgotten in the dusty attic, its brass surface dulled by time. Its teeth were worn smooth, yet it still held the promise of unlocking a forgotten door. When the wind whispered through the cracked window, the key seemed to remember the stories it once guarded.",
       "passed": true,
+      "duration_ms": 5558,
       "tokens": 1081,
       "cost_usd": 0.0012216
     },
@@ -525,6 +557,7 @@
       },
       "output": "Fog rolls in\nOminous clouds\nGloomy dawn",
       "passed": true,
+      "duration_ms": 7500,
       "tokens": 540,
       "cost_usd": 0.000576
     },
@@ -539,6 +572,7 @@
       },
       "output": "\nWe enjoy the sunrise over the mountains.\nWe gather together to share stories.\nWe strive to protect our environment.\nWe celebrate each other's achievements.\nWe look forward to a brighter tomorrow.",
       "passed": false,
+      "duration_ms": 6161,
       "tokens": 485,
       "cost_usd": 0.0005091
     },
@@ -553,6 +587,7 @@
       },
       "output": "DANGER HIGH VOLTAGE KEEP OUT AUTHORIZED PERSONNEL ONLY",
       "passed": true,
+      "duration_ms": 4514,
       "tokens": 382,
       "cost_usd": 0.0003909
     }

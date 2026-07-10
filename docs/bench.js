@@ -3,6 +3,7 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const pct = (x) => (x * 100).toFixed(1) + '%';
+  const humanMs = (ms) => ms >= 60000 ? Math.floor(ms/60000) + 'm ' + Math.round((ms%60000)/1000) + 's' : (ms/1000).toFixed(1) + 's';
   const shortModel = (slug) => String(slug || '').split('/').pop();
 
   const manifest = await (await fetch('data/manifest.json')).json();
@@ -37,6 +38,7 @@
     const s = p.score;
     const when = new Date(p.executed_at_unix_ms).toISOString().slice(0, 10);
     const cost = p.totals && p.totals.cost_usd != null ? '$' + p.totals.cost_usd.toFixed(4) : '—';
+    const dur = p.totals && p.totals.duration_ms != null ? humanMs(p.totals.duration_ms) : null;
     return `<div class="lb-row">
       <div class="lb-model"><div class="name">${esc(shortModel(p.config.model))}</div>
         <div class="when num">${when} · ${esc(p.provenance?.repo || '?')}@${esc((p.provenance?.git_sha || '').slice(0, 7))}</div></div>
@@ -45,7 +47,7 @@
           <div class="lb-fill" style="width:${s.point * 100}%"></div>
           <div class="lb-ci" style="left:${s.lower * 100}%;width:${(s.upper - s.lower) * 100}%"></div>
         </div>
-        <div class="lb-nums num"><b>${pct(s.point)}</b><span>${s.successes}/${s.n}</span><span>95% CI [${pct(s.lower)}, ${pct(s.upper)}]</span><span>${cost}</span>${drift(p)}</div>
+        <div class="lb-nums num"><b>${pct(s.point)}</b><span>${s.successes}/${s.n}</span><span>95% CI [${pct(s.lower)}, ${pct(s.upper)}]</span><span>${cost}</span>${dur ? `<span>${dur} model-time</span>` : ''}${drift(p)}</div>
       </div>
     </div>`;
   }).join('');

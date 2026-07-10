@@ -77,7 +77,8 @@
   ],
   "totals": {
     "tokens": 3931,
-    "cost_usd": 0.0
+    "cost_usd": 0.0,
+    "duration_ms": 64182
   },
   "tasks": [
     {
@@ -91,6 +92,7 @@
       },
       "output": "Dawn spills quietly; keeper climbs spiraling stairs, trims lamp, scans gray waves, greets gulls, brews tea.",
       "passed": false,
+      "duration_ms": 2474,
       "tokens": 101,
       "cost_usd": 0.0
     },
@@ -105,6 +107,7 @@
       },
       "output": "Sauté onions and garlic in olive oil, add tomatoes and broth, simmer twenty minutes, blend until smooth, season with salt, pepper, and basil, then serve hot.",
       "passed": false,
+      "duration_ms": 3017,
       "tokens": 111,
       "cost_usd": 0.0
     },
@@ -119,6 +122,7 @@
       },
       "output": "Black waves heaved beneath a bruised sky, while lightning stitched horizons and thunder battered masts. Salt spray blinded sailors, ropes screamed, and the hull groaned like a wounded beast. Then a towering breaker rose, swallowing compass, courage, and prayer alike.",
       "passed": true,
+      "duration_ms": 4616,
       "tokens": 126,
       "cost_usd": 0.0
     },
@@ -133,6 +137,7 @@
       },
       "output": "Warm sun dips low, painting sky with gold and crimson. Calm dusk hugs hills as soft night drifts in.",
       "passed": true,
+      "duration_ms": 2773,
       "tokens": 101,
       "cost_usd": 0.0
     },
@@ -147,6 +152,7 @@
       },
       "output": "Coffee fuels minds with rich, bold notes.\nI cherish its deep, smooth scent each sunrise.",
       "passed": false,
+      "duration_ms": 1684,
       "tokens": 91,
       "cost_usd": 0.0
     },
@@ -161,6 +167,7 @@
       },
       "output": "Evening gathers the last gold from the leaves\nMemory glows softly where the daylight thins\nBeneath the hush, a small red heart remains\nEmbers breathe low, refusing dark entirely\nRising in ash, the warm light learns to stay",
       "passed": true,
+      "duration_ms": 1796,
       "tokens": 143,
       "cost_usd": 0.0
     },
@@ -175,6 +182,7 @@
       },
       "output": "Silent hills remember footsteps under rain\nThrough the dusk, a river carries names\nOld roots clutch secrets deep below the frost\nNight gathers softly around the patient earth\nEmbers fade, yet warmth remains in stone",
       "passed": true,
+      "duration_ms": 1775,
       "tokens": 116,
       "cost_usd": 0.0
     },
@@ -189,6 +197,7 @@
       },
       "output": "spring\nsummer\nautumn\nwinter",
       "passed": true,
+      "duration_ms": 965,
       "tokens": 84,
       "cost_usd": 0.0
     },
@@ -203,6 +212,7 @@
       },
       "output": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
       "passed": true,
+      "duration_ms": 940,
       "tokens": 92,
       "cost_usd": 0.0
     },
@@ -217,6 +227,7 @@
       },
       "output": "Because time keeps moving, we learn to move with it.\nBecause small habits grow, daily effort changes us.\nBecause questions persist, curiosity opens new doors.\nBecause kindness echoes, one gesture can travel far.\nBecause failure teaches, mistakes become instruction.\nBecause hope remains, tomorrow can be different.",
       "passed": true,
+      "duration_ms": 1820,
       "tokens": 134,
       "cost_usd": 0.0
     },
@@ -231,6 +242,7 @@
       },
       "output": "Never ignore clear evidence when making a decision.\nNever promise more than you can realistically deliver.\nNever assume silence means agreement or understanding.\nNever stop learning from mistakes and feedback.\nNever sacrifice long-term trust for short-term gain.",
       "passed": true,
+      "duration_ms": 2081,
       "tokens": 122,
       "cost_usd": 0.0
     },
@@ -245,6 +257,7 @@
       },
       "output": "Silent sailors steadily steer silver ships south seeking safer seas.",
       "passed": true,
+      "duration_ms": 1087,
       "tokens": 91,
       "cost_usd": 0.0
     },
@@ -259,6 +272,7 @@
       },
       "output": "Brave bears briskly build bright bridges beside blue bays.",
       "passed": true,
+      "duration_ms": 1014,
       "tokens": 92,
       "cost_usd": 0.0
     },
@@ -273,6 +287,7 @@
       },
       "output": "On the last night in my grandmother's house, I found her sewing room exactly as she had left it, except for a single blue thread leading beneath the locked closet door. When I tugged it, the thread came away warm in my hand, and from the other side of the door I heard the slow, patient snip of scissors opening and closing in the dark. Then the lamp went out.",
       "passed": true,
+      "duration_ms": 1796,
       "tokens": 156,
       "cost_usd": 0.0
     },
@@ -287,6 +302,7 @@
       },
       "output": "The door had been painted shut for years, gathering dust and family legends in equal measure. On the morning Mara pressed her shoulder against it, the seal cracked with a sound like ice breaking on a pond, and the room beyond exhaled a cold breath scented with lilacs. Inside waited a chair still rocking gently and a window thrown open to a garden that had vanished before she was born.",
       "passed": true,
+      "duration_ms": 1945,
       "tokens": 157,
       "cost_usd": 0.0
     },
@@ -301,6 +317,7 @@
       },
       "output": "The city yawns awake as bakery lights bloom, buses sigh at curbs, and windows brighten one by one beneath a paling sky.",
       "passed": true,
+      "duration_ms": 1188,
       "tokens": 101,
       "cost_usd": 0.0
     },
@@ -315,6 +332,7 @@
       },
       "output": "WARNING SLEEPING DRAGON DO NOT WAKE.\nENTER QUIETLY OR BE ROASTED.",
       "passed": true,
+      "duration_ms": 921,
       "tokens": 102,
       "cost_usd": 0.0
     },
@@ -329,6 +347,7 @@
       },
       "output": "Soft rain taps rooftops, cool mist drifts, dusk sings, soil drinks calmly.",
       "passed": true,
+      "duration_ms": 1175,
       "tokens": 93,
       "cost_usd": 0.0
     },
@@ -343,6 +362,7 @@
       },
       "output": "RIVERS FALL SOFTLY\nAMBER CLOUDS DRIFT\nINTO SILENT FIELDS\nNIGHT WAITS BELOW",
       "passed": true,
+      "duration_ms": 1448,
       "tokens": 106,
       "cost_usd": 0.0
     },
@@ -357,6 +377,7 @@
       },
       "output": "Because the stars look closer tonight?\nBecause every road seems to bend toward home?\nBecause you asked me to wonder?",
       "passed": true,
+      "duration_ms": 1105,
       "tokens": 106,
       "cost_usd": 0.0
     },
@@ -371,6 +392,7 @@
       },
       "output": "Patience plants deep roots; hurried hands harvest only fleeting shadows.",
       "passed": true,
+      "duration_ms": 1121,
       "tokens": 81,
       "cost_usd": 0.0
     },
@@ -385,6 +407,7 @@
       },
       "output": "Today we gather for Fern, faithful green companion, who brightened windowsills and forgave irregular watering. You unfurled hope in quiet corners, teaching patience, resilience, and the art of reaching gently toward light. Though your pot stands still, your spirit leafs through memory, rustling in our hearts. Rest in rich soil, dear friend; grow forever beyond our sight.",
       "passed": false,
+      "duration_ms": 2315,
       "tokens": 157,
       "cost_usd": 0.0
     },
@@ -399,6 +422,7 @@
       },
       "output": "Sunny island bliss awaits: warm aqua bays, calm palms, coral reefs, and vivid bazaars by dawn and dusk.\nSail in, bask all day, savor mango, guava, and rich local curry, and carry away magic in your soul.",
       "passed": false,
+      "duration_ms": 2313,
       "tokens": 128,
       "cost_usd": 0.0
     },
@@ -413,6 +437,7 @@
       },
       "output": "Dark stars spill amid a vast ink sea; pale lunar light drifts amid thin mist.\nStill air wraps the earth as faint sparks glitter in silent array.",
       "passed": true,
+      "duration_ms": 1636,
       "tokens": 106,
       "cost_usd": 0.0
     },
@@ -427,6 +452,7 @@
       },
       "output": "Crimson sparks remember the shape of night\nRivered metal learns to sing in flame\nUnder the hammer, doubt gives way to form\nCoal-breathed fire makes frailty speak its name\nIn the bright vessel, broken things grow clear\nBlood of the earth turns patient, fierce, and slow\nLabor and heat refine what we most fear\nEmbers keep the secret of what we know",
       "passed": true,
+      "duration_ms": 2595,
       "tokens": 155,
       "cost_usd": 0.0
     },
@@ -441,6 +467,7 @@
       },
       "output": "Whispers drift across the sleeping field\nIcicles glimmer where the moonlight healed\nNightingales hush in the cedar boughs\nTwilight settles on the silent plows\nEmbers breathe softly in hearthside light\nRivers dream under a quilt of white",
       "passed": true,
+      "duration_ms": 1920,
       "tokens": 129,
       "cost_usd": 0.0
     },
@@ -455,6 +482,7 @@
       },
       "output": "Phoenix Feather Quills\nMoonstone Pendants\nDragon Scale Shields\nEnchanted Broomsticks\nCrystal Ball Orbs\nMermaid Tear Vials\nGoblin-Forged Daggers\nUnicorn Hair Wands\nSpellbound Candles\nInvisibility Cloaks",
       "passed": true,
+      "duration_ms": 3918,
       "tokens": 133,
       "cost_usd": 0.0
     },
@@ -469,6 +497,7 @@
       },
       "output": "If you mend the roof in sunshine, the rain will pass you by.\nIf a slow creek runs clear, it still reaches the river.\nIf you share your bread, your table never feels empty.\nIf the boots pinch at dawn, the road will feel longer by noon.\nIf you listen to old trees, they will teach you patience.\nIf pride rides shotgun, trouble often takes the wheel.\nIf the lantern is trimmed at dusk, the night seems less wild.",
       "passed": true,
+      "duration_ms": 3353,
       "tokens": 172,
       "cost_usd": 0.0
     },
@@ -483,6 +512,7 @@
       },
       "output": "Merry musicians make magnificent melodies, mesmerizing many minds, mending melancholy, motivating mindful moments.",
       "passed": true,
+      "duration_ms": 1068,
       "tokens": 101,
       "cost_usd": 0.0
     },
@@ -497,6 +527,7 @@
       },
       "output": "Tides whisper beneath the moonlight\nShorebirds follow silver water home\nFoam curls around patient stones\nNight oceans breathe in rhythm",
       "passed": true,
+      "duration_ms": 1243,
       "tokens": 102,
       "cost_usd": 0.0
     },
@@ -511,6 +542,7 @@
       },
       "output": "The old key slept in a velvet drawer, its brass worn smooth by forgotten hands.\nWhen I turned it in the lock, the house seemed to inhale, remembering a door no one had opened for years.\nIt kept no treasure but memory, and that was heavier than iron.",
       "passed": true,
+      "duration_ms": 1554,
       "tokens": 139,
       "cost_usd": 0.0
     },
@@ -525,6 +557,7 @@
       },
       "output": "Fog rolls in\nOld moon dim\nGray dusk falls",
       "passed": true,
+      "duration_ms": 1247,
       "tokens": 92,
       "cost_usd": 0.0
     },
@@ -539,6 +572,7 @@
       },
       "output": "We gather facts and test ideas carefully.\nWe revise plans when evidence changes.\nWe speak clearly and listen with patience.\nWe solve problems step by step together.\nWe finish what we start with care.",
       "passed": true,
+      "duration_ms": 1382,
       "tokens": 121,
       "cost_usd": 0.0
     },
@@ -553,6 +587,7 @@
       },
       "output": "DANGER KEEP OUT HIGH VOLTAGE AREA AUTHORIZED PERSONNEL",
       "passed": true,
+      "duration_ms": 2897,
       "tokens": 90,
       "cost_usd": 0.0
     }

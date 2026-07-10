@@ -77,7 +77,8 @@
   ],
   "totals": {
     "tokens": 10604,
-    "cost_usd": 0.0022079824
+    "cost_usd": 0.0022079824,
+    "duration_ms": 221848
   },
   "tasks": [
     {
@@ -91,6 +92,7 @@
       },
       "output": "Fog lifts. He climbs spiral stairs. Brass gleams. Sun ignites the sea.",
       "passed": false,
+      "duration_ms": 1578,
       "tokens": 84,
       "cost_usd": 0.00001456
     },
@@ -105,6 +107,7 @@
       },
       "output": "Sauté diced onion and garlic in butter, add canned tomatoes and broth, simmer, then blend until smooth. Season with salt and pepper.",
       "passed": false,
+      "duration_ms": 2326,
       "tokens": 98,
       "cost_usd": 9.126e-6
     },
@@ -119,6 +122,7 @@
       },
       "output": "The sky vomited blackness. Waves, mountains of furious green, clawed at the groaning ship. Wind shrieked through rigging like a damned soul. Rain lashed sideways, a billion needles of ice.",
       "passed": false,
+      "duration_ms": 4076,
       "tokens": 112,
       "cost_usd": 0.00002212
     },
@@ -133,6 +137,7 @@
       },
       "output": "A big, hot sun sinks low. Its light turns a vast sky to gold, pink, and dark. A cool night follows.",
       "passed": true,
+      "duration_ms": 12652,
       "tokens": 95,
       "cost_usd": 0.0000164
     },
@@ -147,6 +152,7 @@
       },
       "output": "Coffee is delicious. It gives me energy.",
       "passed": true,
+      "duration_ms": 7132,
       "tokens": 712,
       "cost_usd": 0.000114408
     },
@@ -161,6 +167,7 @@
       },
       "output": "Eternal glow of dying fire\nMemories of warmth aspire\nBeneath the ash, a spark remains\nEmbers glow through winter pains\nRemnant of a past desire",
       "passed": true,
+      "duration_ms": 2910,
       "tokens": 278,
       "cost_usd": 0.0000466925
     },
@@ -175,6 +182,7 @@
       },
       "output": "Silent under moonlit sky,\nThrough the ancient woods I roam.\nOld and worn, the path goes by,\nNever knowing where I'm from,\nEchoes of a distant home.",
       "passed": true,
+      "duration_ms": 2452,
       "tokens": 103,
       "cost_usd": 0.000010476
     },
@@ -189,6 +197,7 @@
       },
       "output": "Spring blossoms burst into colorful life.\nSummer sun bakes the long, lazy days.\nAutumn leaves drift in crisp, golden air.\nWinter snow blankets the silent world.",
       "passed": true,
+      "duration_ms": 2505,
       "tokens": 172,
       "cost_usd": 0.000027244
     },
@@ -203,6 +212,7 @@
       },
       "output": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
       "passed": true,
+      "duration_ms": 11801,
       "tokens": 83,
       "cost_usd": 6.426e-6
     },
@@ -217,6 +227,7 @@
       },
       "output": "Because the sun rises in the east.\nBecause the tide follows the moon.\nBecause the heart beats without command.\nBecause the wind carries the seeds.\nBecause the river finds the sea.\nBecause all things move in cycles.",
       "passed": true,
+      "duration_ms": 3982,
       "tokens": 167,
       "cost_usd": 0.000036883
     },
@@ -231,6 +242,7 @@
       },
       "output": "Never give up on your dreams.\nNever underestimate the power of kindness.\nNever let fear dictate your choices.\nNever forget to learn from your mistakes.\nNever compromise your integrity for convenience.",
       "passed": true,
+      "duration_ms": 2956,
       "tokens": 151,
       "cost_usd": 0.00003276
     },
@@ -245,6 +257,7 @@
       },
       "output": "Seven silly snakes silently slithering slowly south stopped suddenly.",
       "passed": true,
+      "duration_ms": 1546,
       "tokens": 83,
       "cost_usd": 6.336e-6
     },
@@ -259,6 +272,7 @@
       },
       "output": "Big brown bears bring bright blue berries by bushes.",
       "passed": true,
+      "duration_ms": 3318,
       "tokens": 137,
       "cost_usd": 0.000019992
     },
@@ -273,6 +287,7 @@
       },
       "output": "The wind howled, rattling the windows. The lamp flickered once, twice. Then the lamp went out.",
       "passed": true,
+      "duration_ms": 10939,
       "tokens": 538,
       "cost_usd": 0.00014089
     },
@@ -287,6 +302,7 @@
       },
       "output": "The door had been painted shut for years, its frame sealed by countless layers of old enamel. One afternoon, a child pressed her ear to the wood and heard the ocean inside. She fetched a crowbar and pried it open, releasing a salt breeze and the distant cry of gulls.",
       "passed": true,
+      "duration_ms": 8961,
       "tokens": 161,
       "cost_usd": 0.000021336
     },
@@ -301,6 +317,7 @@
       },
       "output": "The first rays of dawn crept over the sleeping city, painting the sky in soft pinks and oranges as the distant hum of traffic began to stir and the scent of fresh coffee wafted from a corner café.",
       "passed": true,
+      "duration_ms": 1884,
       "tokens": 108,
       "cost_usd": 0.000011376
     },
@@ -315,6 +332,7 @@
       },
       "output": "WARNING: SLEEPING DRAGON. DO NOT DISTURB OR APPROACH.",
       "passed": true,
+      "duration_ms": 1496,
       "tokens": 90,
       "cost_usd": 7.596e-6
     },
@@ -329,6 +347,7 @@
       },
       "output": "Cool drops fall from dark clouds, washing dusty ground.",
       "passed": false,
+      "duration_ms": 1358,
       "tokens": 80,
       "cost_usd": 5.976e-6
     },
@@ -343,6 +362,7 @@
       },
       "output": "R\nA\nI\nN",
       "passed": true,
+      "duration_ms": 474,
       "tokens": 77,
       "cost_usd": 0.000011815
     },
@@ -357,6 +377,7 @@
       },
       "output": "Because the earth rotates?\nBecause gravity pulls?\nBecause light travels?",
       "passed": true,
+      "duration_ms": 29133,
       "tokens": 914,
       "cost_usd": 0.00023312
     },
@@ -371,6 +392,7 @@
       },
       "output": "A still pond hides the deepest currents.",
       "passed": false,
+      "duration_ms": 540,
       "tokens": 70,
       "cost_usd": 0.000010981
     },
@@ -385,6 +407,7 @@
       },
       "output": "Dear beloved Ficus, you graced our home with quiet green. Your leaves unfurled hope each morning. We watered, talked, watched you grow. Now you rest in soil's embrace. Thank you for teaching patience, breathing life into still air. Your memory roots deep within our hearts. Though gone, your spirit lives in new sprouts. Farewell, gentle friend. You will be missed.",
       "passed": true,
+      "duration_ms": 11213,
       "tokens": 1345,
       "cost_usd": 0.000219828
     },
@@ -399,6 +422,7 @@
       },
       "output": "Enjoy sunny shores and cool sea waves. Find peace in our island's calm, blue waters.",
       "passed": false,
+      "duration_ms": 3762,
       "tokens": 418,
       "cost_usd": 0.00010766
     },
@@ -413,6 +437,7 @@
       },
       "output": "The dark sky glitters with tiny lights. A crescent hangs, a silver sliver. Stars twinkle, a quiet display.",
       "passed": true,
+      "duration_ms": 10537,
       "tokens": 704,
       "cost_usd": 0.00018802
     },
@@ -427,6 +452,7 @@
       },
       "output": "Candles flicker in the darkened hall,\nRumors spread like wildfire through the town.\nUnderneath the surface, fear takes hold,\nCries of witchcraft tear the peace apart.\nInnocent blood stains the accusing hand,\nBurning stakes ignite the guilty land.\nLies and truth are twisted in the flame,\nEchoes of the past still call our name.",
       "passed": true,
+      "duration_ms": 2278,
       "tokens": 209,
       "cost_usd": 0.000029568
     },
@@ -441,6 +467,7 @@
       },
       "output": "When icicles hang from the eaves,\nIn the quiet of the frozen trees,\nNight falls early, dark and deep,\nThe world has fallen fast asleep.\nEach breath a cloud of silver steam,\nResting in a crystal dream.",
       "passed": true,
+      "duration_ms": 2949,
       "tokens": 111,
       "cost_usd": 0.000011916
     },
@@ -455,6 +482,7 @@
       },
       "output": "Crystal ball, slightly cracked\nWand of fireballs, requires attunement\nPotion of invisibility, three doses remaining\nSpellbook: \"Advanced Transmutation\" by M. Merlin\nEnchanted cloak, grants +1 to stealth\nBag of holding, capacity 500 lbs\nBroom of flying, model 2024\nRing of water breathing, worn\nScroll of teleportation, single use\nCauldron, self-stirring, cast iron",
       "passed": true,
+      "duration_ms": 4744,
       "tokens": 210,
       "cost_usd": 0.0000486
     },
@@ -469,6 +497,7 @@
       },
       "output": "If you want peace, prepare for war.\nIf you can't stand the heat, get out of the kitchen.\nIf you chase two rabbits, you will catch neither.\nIf a job is worth doing, it is worth doing well.\nIf you lie down with dogs, you get up with fleas.\nIf the shoe fits, wear it.\nIf you give a man a fish, you feed him for a day; if you teach him to fish, you feed him for a lifetime.",
       "passed": true,
+      "duration_ms": 2392,
       "tokens": 216,
       "cost_usd": 0.0000356829
     },
@@ -483,6 +512,7 @@
       },
       "output": "Many magnificent monkeys might make many more marvelous melodies, maybe.",
       "passed": true,
+      "duration_ms": 18922,
       "tokens": 369,
       "cost_usd": 0.00009324
     },
@@ -497,6 +527,7 @@
       },
       "output": "The ocean tide ebbs and flows  \nMoon pulls water across the shore  \nSand receives the salty embrace  \nTime marks the endless rhythmic dance",
       "passed": false,
+      "duration_ms": 6069,
       "tokens": 233,
       "cost_usd": 0.00005586
     },
@@ -511,6 +542,7 @@
       },
       "output": "The old key was tarnished and heavy.\nIt unlocked a forgotten chest in the attic.\nThe key turned with a stubborn, grating sound.",
       "passed": true,
+      "duration_ms": 2302,
       "tokens": 217,
       "cost_usd": 0.000035388
     },
@@ -525,6 +557,7 @@
       },
       "output": "Fox runs fast.\nOwl sits on a log.\nGoat jumps high.",
       "passed": true,
+      "duration_ms": 26846,
       "tokens": 1913,
       "cost_usd": 0.00051314
     },
@@ -539,6 +572,7 @@
       },
       "output": "We are here to begin our journey.\nWe strive to learn every day.\nWe help each other grow strong.\nWe face challenges with courage.\nWe celebrate our shared success.",
       "passed": true,
+      "duration_ms": 2676,
       "tokens": 144,
       "cost_usd": 0.000029736
     },
@@ -553,6 +587,7 @@
       },
       "output": "DANGER HIGH VOLTAGE KEEP OUT AUTHORIZED PERSONNEL ONLY",
       "passed": true,
+      "duration_ms": 13139,
       "tokens": 202,
       "cost_usd": 0.00003283
     }

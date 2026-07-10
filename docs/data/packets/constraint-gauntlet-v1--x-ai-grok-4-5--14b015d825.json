@@ -77,7 +77,8 @@
   ],
   "totals": {
     "tokens": 35775,
-    "cost_usd": 0.0
+    "cost_usd": 0.0,
+    "duration_ms": 240358
   },
   "tasks": [
     {
@@ -91,6 +92,7 @@
       },
       "output": "The lighthouse keeper rises early checks the light and watches the sunrise over the ocean\n",
       "passed": true,
+      "duration_ms": 10135,
       "tokens": 1809,
       "cost_usd": 0.0
     },
@@ -105,6 +107,7 @@
       },
       "output": "Saute diced onions and garlic in oil then add tomatoes stock basil salt and pepper simmer twenty minutes blend until creamy and serve immediately hot.\n",
       "passed": true,
+      "duration_ms": 8649,
       "tokens": 1415,
       "cost_usd": 0.0
     },
@@ -119,6 +122,7 @@
       },
       "output": "Fierce winds howled across the turbulent sea as massive waves rose high and smashed into the struggling ship under a sky filled with flashing lightning and roaring thunder that shook the very air around the terrified sailors battling the elements\n",
       "passed": true,
+      "duration_ms": 25906,
       "tokens": 2329,
       "cost_usd": 0.0
     },
@@ -133,6 +137,7 @@
       },
       "output": "A gold sun sinks low. Clouds glow pink and gold. Sky turns dark.",
       "passed": true,
+      "duration_ms": 9279,
       "tokens": 1468,
       "cost_usd": 0.0
     },
@@ -147,6 +152,7 @@
       },
       "output": "Coffee is delicious. Coffee is the best drink.\n",
       "passed": true,
+      "duration_ms": 11764,
       "tokens": 1795,
       "cost_usd": 0.0
     },
@@ -161,6 +167,7 @@
       },
       "output": "Embers glow softly now\nMemories of the blaze\nBurning through the dark\nEternal warmth remains\nRadiating hope still",
       "passed": true,
+      "duration_ms": 4573,
       "tokens": 764,
       "cost_usd": 0.0
     },
@@ -175,6 +182,7 @@
       },
       "output": "Stones of ancient lore\nTell tales of yore\nOn hills they rest\nNever to be moved\nEternal guardians",
       "passed": true,
+      "duration_ms": 3362,
       "tokens": 619,
       "cost_usd": 0.0
     },
@@ -189,6 +197,7 @@
       },
       "output": "Spring\nSummer\nAutumn\nWinter",
       "passed": true,
+      "duration_ms": 4599,
       "tokens": 731,
       "cost_usd": 0.0
     },
@@ -203,6 +212,7 @@
       },
       "output": "Monday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday",
       "passed": true,
+      "duration_ms": 1612,
       "tokens": 401,
       "cost_usd": 0.0
     },
@@ -217,6 +227,7 @@
       },
       "output": "Because the sky is blue.\nBecause birds can fly.\nBecause water is wet.\nBecause fire is hot.\nBecause ice is cold.\nBecause grass is green.",
       "passed": true,
+      "duration_ms": 3384,
       "tokens": 591,
       "cost_usd": 0.0
     },
@@ -231,6 +242,7 @@
       },
       "output": "Never give up on your dreams.\nNever stop learning new things.\nNever be afraid to ask for help.\nNever judge a book by its cover.\nNever forget to be kind to others.",
       "passed": true,
+      "duration_ms": 2297,
       "tokens": 484,
       "cost_usd": 0.0
     },
@@ -245,6 +257,7 @@
       },
       "output": "Silly snakes slither silently seeking sunny spots somewhere south.\n",
       "passed": false,
+      "duration_ms": 7494,
       "tokens": 1051,
       "cost_usd": 0.0
     },
@@ -259,6 +272,7 @@
       },
       "output": "Big brown bears buy bananas before breakfast but better beware.\n",
       "passed": false,
+      "duration_ms": 6559,
       "tokens": 1108,
       "cost_usd": 0.0
     },
@@ -273,6 +287,7 @@
       },
       "output": "The detective sat alone in the dusty study, carefully examining the cryptic map under the warm glow of an antique oil lamp. Outside, thunder rumbled as shadows lengthened across the walls. A floorboard creaked somewhere nearby. Then the lamp went out.",
       "passed": true,
+      "duration_ms": 4507,
       "tokens": 626,
       "cost_usd": 0.0
     },
@@ -287,6 +302,7 @@
       },
       "output": "The door had been painted shut for years. Dust covered every edge and no one in the family dared approach it. One rainy afternoon a child forced it open with a crowbar and discovered a hidden attic full of forgotten letters. The secrets inside changed everything they thought they knew about their ancestors.",
       "passed": true,
+      "duration_ms": 4672,
       "tokens": 644,
       "cost_usd": 0.0
     },
@@ -301,6 +317,7 @@
       },
       "output": "As dawn breaks over the skyline the city stirs with the first rumble of traffic the scent of coffee from opening cafes and the soft glow of lights flickering on in apartment windows.\n",
       "passed": true,
+      "duration_ms": 3403,
       "tokens": 551,
       "cost_usd": 0.0
     },
@@ -315,6 +332,7 @@
       },
       "output": "WARNING: A SLEEPING DRAGON LIES AHEAD. DO NOT APPROACH OR YOU WILL BE BURNED TO ASHES.",
       "passed": true,
+      "duration_ms": 2715,
       "tokens": 434,
       "cost_usd": 0.0
     },
@@ -329,6 +347,7 @@
       },
       "output": "Rain falls from sky to ground in soft drops all day long\n",
       "passed": true,
+      "duration_ms": 9226,
       "tokens": 1369,
       "cost_usd": 0.0
     },
@@ -343,6 +362,7 @@
       },
       "output": "RIVERS OVERFLOWING NOW\nAND FLOODS ARE RISING FAST\nIT IS A TOTAL DISASTER\nNOW HELP IS NEEDED HERE",
       "passed": true,
+      "duration_ms": 5331,
       "tokens": 849,
       "cost_usd": 0.0
     },
@@ -357,6 +377,7 @@
       },
       "output": "Because the sky is blue?\nBecause cats are cute?\nBecause time flies?",
       "passed": true,
+      "duration_ms": 2581,
       "tokens": 486,
       "cost_usd": 0.0
     },
@@ -371,6 +392,7 @@
       },
       "output": "Where there is a will there is always a way",
       "passed": true,
+      "duration_ms": 8174,
       "tokens": 1202,
       "cost_usd": 0.0
     },
@@ -385,6 +407,7 @@
       },
       "output": "Dear friends we gather today to bid farewell to our beloved houseplant Greenie who filled our lives with beauty and oxygen for years. Your vibrant leaves whispered secrets of nature in our quiet rooms. You thrived under our care and gave back so much joy. Though you have left us your spirit remains in every pot and window sill forever.\n",
       "passed": true,
+      "duration_ms": 17745,
       "tokens": 2810,
       "cost_usd": 0.0
     },
@@ -399,6 +422,7 @@
       },
       "output": "Discover a calm isle oasis. Enjoy sunny days by sea and sand.\n",
       "passed": true,
+      "duration_ms": 15097,
       "tokens": 1986,
       "cost_usd": 0.0
     },
@@ -413,6 +437,7 @@
       },
       "output": "The night sky is dark and filled with bright stars. Planets and galaxies glitter in its vast black expanse.\n",
       "passed": true,
+      "duration_ms": 15266,
       "tokens": 2175,
       "cost_usd": 0.0
     },
@@ -427,6 +452,7 @@
       },
       "output": "Crimson leaves fall gently down\nRustling in the autumn breeze\nUnderneath the ancient oak\nChildren play with carefree ease\nIn the golden afternoon\nBirds sing songs of pure delight\nLaughing streams flow merrily\nEchoing through the fading light",
       "passed": true,
+      "duration_ms": 5595,
       "tokens": 860,
       "cost_usd": 0.0
     },
@@ -441,6 +467,7 @@
       },
       "output": "Winter winds whisper soft and low\nIcy flakes begin to fall\nNighttime blankets all in white\nTrees stand bare against the sky\nEvery breath a frosty cloud\nResting earth awaits the spring",
       "passed": true,
+      "duration_ms": 3352,
       "tokens": 606,
       "cost_usd": 0.0
     },
@@ -455,6 +482,7 @@
       },
       "output": "Magic wand\nPotion of healing\nSpellbook of arcane secrets\nCrystal ball\nWizard's pointed hat\nFlying broomstick\nCloak of invisibility\nDragon scale armor\nEnchanted amulet\nPhoenix feather quill",
       "passed": true,
+      "duration_ms": 2215,
       "tokens": 469,
       "cost_usd": 0.0
     },
@@ -469,6 +497,7 @@
       },
       "output": "If you want something done right, do it yourself.\nIf the shoe fits, wear it.\nIf at first you don't succeed, try try again.\nIf it sounds too good to be true, it probably is.\nIf you can't stand the heat, get out of the kitchen.\nIf you lie down with dogs, you'll get up with fleas.\nIf you don't have anything nice to say, don't say anything at all.",
       "passed": true,
+      "duration_ms": 3707,
       "tokens": 634,
       "cost_usd": 0.0
     },
@@ -483,6 +512,7 @@
       },
       "output": "Many modern men make more money managing multiple massive manufacturing machines monthly.\n",
       "passed": false,
+      "duration_ms": 10150,
       "tokens": 1322,
       "cost_usd": 0.0
     },
@@ -497,6 +527,7 @@
       },
       "output": "The tide rises every day\nMoon gravity pulls the water\nHigh tides flood coastal areas\nLow tides expose sandy beaches",
       "passed": true,
+      "duration_ms": 5036,
       "tokens": 854,
       "cost_usd": 0.0
     },
@@ -511,6 +542,7 @@
       },
       "output": "The ancient key rusted quietly in the attic corner. Its intricate design hinted at a forgotten era of craftsmanship. Generations had passed without anyone unlocking its secrets.",
       "passed": true,
+      "duration_ms": 5685,
       "tokens": 734,
       "cost_usd": 0.0
     },
@@ -525,6 +557,7 @@
       },
       "output": "Funny animals\nOnly dogs\nGood boys",
       "passed": true,
+      "duration_ms": 8893,
       "tokens": 1155,
       "cost_usd": 0.0
     },
@@ -539,6 +572,7 @@
       },
       "output": "We begin the sequence.\nWe proceed with care.\nWe note every detail.\nWe refine the approach.\nWe reach the conclusion.",
       "passed": true,
+      "duration_ms": 2420,
       "tokens": 512,
       "cost_usd": 0.0
     },
@@ -553,6 +587,7 @@
       },
       "output": "WARNING DO NOT TOUCH THESE LIVE ELECTRICAL WIRES\n",
       "passed": false,
+      "duration_ms": 4975,
       "tokens": 932,
       "cost_usd": 0.0
     }
