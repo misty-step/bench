@@ -1,0 +1,31 @@
+{
+ "benchmarks": [
+  {
+   "id": "constraint-gauntlet-v0",
+   "title": "The Constraint Gauntlet",
+   "edition": "v0",
+   "tagline": "Counting is not writing: exact word counts, lipograms, acrostics, and other mechanically checkable constraints.",
+   "thesis": "Can a model actually obey a hard countable constraint \u2014 count its own words, ban a letter, hold an acrostic \u2014 or does it merely gesture at the instruction? The grader is mechanical; the score is pure obedience. Content quality is deliberately unscored: read the outputs.",
+   "tasks": 20,
+   "grader": "deterministic regex",
+   "families": [
+    "word_count",
+    "lipogram",
+    "acrostic",
+    "line_count",
+    "anaphora",
+    "alliteration",
+    "ending",
+    "structure",
+    "combination"
+   ],
+   "spec_url": "https://github.com/misty-step/bench/blob/master/benchmarks/constraint-gauntlet-v0.json",
+   "packets": [
+    "packets/constraint-gauntlet-v0--deepseek-deepseek-v4-flash--9e96520326.json",
+    "packets/constraint-gauntlet-v0--minimax-minimax-m2--f324892766.json",
+    "packets/constraint-gauntlet-v0--moonshotai-kimi-k2--cb656bb6ca.json",
+    "packets/constraint-gauntlet-v0--z-ai-glm-5-2--dec89a9c84.json"
+   ]
+  }
+ ]
+}
