@@ -5,6 +5,10 @@ frontier and open language models — every score published with its full
 method: exact prompts, model and provider configuration, confidence
 intervals, per-task outputs, and cost.
 
+For the product boundary, publication standard, and relationship with Crucible,
+read [`VISION.md`](VISION.md). Bench is a strict consumer of Crucible’s public
+contracts; it has no privileged engine path.
+
 **Site:** rendered from `docs/` (GitHub Pages). Self-contained editorial
 design (`docs/bench.css`), light/dark following the system.
 
