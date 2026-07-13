@@ -35,6 +35,19 @@ def validate_manifest() -> list[dict]:
         fail("unexpected qualification schema")
     if manifest.get("owner") != "bench":
         fail("Bench must be the benchmark owner")
+    capability = manifest.get("runtime_capability", {})
+    expected_capability = {
+        "manifest_schema": "bench.runtime_capabilities.v1",
+        "capability_id": "semantic.generate.v1",
+        "transport": "json_stdio_once",
+        "command": "crucible-semantic",
+        "request_schema": "bench.semantic_generate.request.v1",
+        "result_schema": "bench.semantic_generate.result.v1",
+        "content_trust": "untrusted",
+        "identical_for_materialized_pair": True,
+    }
+    if any(capability.get(key) != value for key, value in expected_capability.items()):
+        fail("qualification manifest has an invalid shared runtime capability")
     reporting = manifest.get("reporting", {})
     if reporting.get("forbid_pooled_mode_score") is not True:
         fail("manifest must forbid a pooled mode score")
@@ -76,6 +89,16 @@ def validate_manifest() -> list[dict]:
             task_dir = PACKAGE / task.get("task_dir", "")
             if not task_dir.is_dir():
                 fail(f"{task['id']} materialized task directory is missing")
+            if task.get("reference_dirs") != ["solution", "solution-alt"]:
+                fail(f"{task['id']} must declare both structurally distinct references")
+            if any(not (task_dir / name).is_dir() for name in task["reference_dirs"]):
+                fail(f"{task['id']} has a missing reference directory")
+            references = load_json(task_dir / "references.json").get("references", [])
+            if [reference.get("path") for reference in references] != task["reference_dirs"]:
+                fail(f"{task['id']} reference structure manifest drifted")
+            structures = [reference.get("structure") for reference in references]
+            if any(not structure for structure in structures) or len(set(structures)) != 2:
+                fail(f"{task['id']} must declare two distinct reference structures")
     materialized = [task for task in tasks if task["materialized"]]
     if {(task["mode"], task["ai_necessity"]) for task in materialized} != {
         ("build", "mixed"),
@@ -83,6 +106,55 @@ def validate_manifest() -> list[dict]:
     }:
         fail("materialized pair must be matched Build mixed/control tasks")
     return materialized
+
+
+def validate_shared_capability(materialized: list[dict]) -> None:
+    task_dirs = [PACKAGE / task["task_dir"] for task in materialized]
+    for relative in (
+        Path("environment/capabilities.json"),
+        Path("environment/crucible-semantic"),
+        Path("tests/crucible-semantic"),
+        Path("tests/semantic_fixture.py"),
+    ):
+        contents = [(task_dir / relative).read_bytes() for task_dir in task_dirs]
+        if len(set(contents)) != 1:
+            fail(f"shared capability file differs across the matched pair: {relative}")
+    capability = load_json(task_dirs[0] / "environment" / "capabilities.json")
+    if capability.get("schema_version") != "bench.runtime_capabilities.v1":
+        fail("candidate-visible capability manifest has an invalid schema")
+    entries = capability.get("capabilities", [])
+    if len(entries) != 1:
+        fail("candidate-visible manifest must expose exactly the shared semantic capability")
+    semantic = entries[0]
+    if (
+        semantic.get("id") != "semantic.generate.v1"
+        or semantic.get("transport") != "json_stdio_once"
+        or semantic.get("command") != "crucible-semantic"
+        or semantic.get("content_trust") != "untrusted"
+        or set(semantic.get("statuses", []))
+        != {"ok", "refused", "timeout", "malformed_output", "execution_error"}
+    ):
+        fail("candidate-visible semantic capability contract drifted")
+    for task_dir in task_dirs:
+        for relative in ("environment/crucible-semantic", "tests/crucible-semantic"):
+            if (task_dir / relative).stat().st_mode & 0o111 == 0:
+                fail(f"shared capability command is not executable: {task_dir / relative}")
+        instruction = (task_dir / "instruction.md").read_text()
+        if "BENCH_CAPABILITIES_MANIFEST" not in instruction:
+            fail(f"{task_dir.name} does not disclose the neutral capability manifest")
+    publication = next(task for task in materialized if task["id"] == "build-publication-assistant")
+    publication_dir = PACKAGE / publication["task_dir"]
+    prompted_surface = (
+        (publication_dir / "instruction.md").read_text()
+        + (publication_dir / "environment" / "repo" / "packetizer.py").read_text()
+    )
+    if "ReviewBoundary" in prompted_surface or "reviewer" in prompted_surface.lower():
+        fail("publication task still prompts the candidate with the former review boundary")
+    for task_dir in task_dirs:
+        verifier = (task_dir / "tests" / "verify.py").read_text()
+        if "inspect.getsource" in verifier or "ast.parse" in verifier:
+            fail(f"{task_dir.name} verifier must not grade candidate source shape")
+    print("semantic-capability: identical manifest/command and verifier-owned receipt harness PASS")
 
 
 def validate_crucible_spec(materialized: list[dict]) -> None:
@@ -288,11 +360,12 @@ def qualify_task(task: dict) -> None:
     if len(mutants) < 2:
         fail(f"{task['id']} needs at least two named mutants")
 
-    reference = task_dir / "solution"
-    code, output = run_candidate(task_dir, reference)
-    if code != 0:
-        fail(f"{task['id']} reference failed: {output}")
-    print(f"{task['id']}: reference PASS")
+    for reference_name in task["reference_dirs"]:
+        reference = task_dir / reference_name
+        code, output = run_candidate(task_dir, reference)
+        if code != 0:
+            fail(f"{task['id']} reference {reference_name} failed: {output}")
+        print(f"{task['id']}: reference {reference_name} PASS")
 
     for mutant in mutants:
         candidate = task_dir / "mutants" / mutant["path"]
@@ -324,12 +397,13 @@ def scan_public_package() -> None:
 
 def main() -> None:
     materialized = validate_manifest()
+    validate_shared_capability(materialized)
     validate_crucible_spec(materialized)
     validate_review_surface(materialized)
     scan_public_package()
     for task in materialized:
         qualify_task(task)
-    print("seam-agency-v0: package qualification PASS (2 references, 6 mutants)")
+    print("seam-agency-v0: package qualification PASS (4 references, 6 mutants)")
 
 
 if __name__ == "__main__":

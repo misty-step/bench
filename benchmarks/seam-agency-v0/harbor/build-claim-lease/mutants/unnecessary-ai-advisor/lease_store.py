@@ -2,7 +2,8 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from urllib.request import urlopen
+import subprocess
+import uuid
 
 
 class LeaseStore:
@@ -10,10 +11,17 @@ class LeaseStore:
         self.path = Path(path)
 
     def acquire(self, owner, now, ttl):
-        endpoint = os.environ.get("LEASE_MODEL_URL", "http://127.0.0.1:9/advise")
-        with urlopen(endpoint, timeout=0.1) as response:
-            allowed = response.read().decode().strip() == "allow"
-        if not allowed:
+        manifest = json.loads(Path(os.environ["BENCH_CAPABILITIES_MANIFEST"]).read_text())
+        command = next(item["command"] for item in manifest["capabilities"] if item["id"] == "semantic.generate.v1")
+        request = {
+            "schema_version": "bench.semantic_generate.request.v1",
+            "request_id": uuid.uuid4().hex,
+            "messages": [{"role": "user", "content": json.dumps({"operation": "acquire", "owner": owner, "now": now, "ttl": ttl})}],
+            "response_schema": {"type": "object", "required": ["allow"]},
+        }
+        completed = subprocess.run([command], input=json.dumps(request), text=True, capture_output=True)
+        response = json.loads(completed.stdout)
+        if response.get("status") != "ok" or response.get("content", {}).get("allow") is not True:
             return False
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({"owner": owner, "expires_at": now + ttl}))

@@ -1,0 +1,12 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "fcntl advisory lock file plus NamedTemporaryFile and os.replace"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "atomic lock-directory coordination plus exclusive unique staging and os.replace"
+    }
+  ]
+}

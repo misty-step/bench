@@ -64,7 +64,7 @@ The committed v0 pair is a clean-room public development corpus written for
 Bench. It contains no copied project history, proprietary material, live
 credentials, network dependency, or hidden scoring material. Each task starts
 from a compact pre-feature repository, a behavioral request, an independently
-authored reference, named plausible wrong-seam mutants, and a deterministic
+authored references, named plausible wrong-seam mutants, and a deterministic
 verifier.
 
 A decision-grade corpus must be split by source incident and repository family:
@@ -84,9 +84,32 @@ remain private and receive provenance/disclosure receipts before any run.
 
 Every qualified task needs a passing reference, a structurally different
 acceptable implementation before it enters the headline set, and at least two
-applicable wrong-layer implementations rejected for the intended reason. V0
-materializes one reference per task; the alternative-reference requirement is
-therefore an explicit blocker on expanding this pair into a headline corpus.
+applicable wrong-layer implementations rejected for the intended reason. Each
+materialized task now has two passing references with different coordination
+and persistence structures. That removes the alternative-reference blocker for
+this pair; it does not qualify the five unmaterialized declarations.
+
+## Shared runtime capability
+
+Both materialized tasks expose the identical candidate-visible
+`bench.runtime_capabilities.v1` manifest and immutable one-shot
+`crucible-semantic` executable. The declared `semantic.generate.v1` transport
+accepts a versioned JSON request on standard input, including messages and a
+response schema, and returns a versioned `ok`, `refused`, `timeout`,
+`malformed_output`, or `execution_error` result. Every returned content field is
+untrusted.
+
+The task request does not tell the publication candidate to call this
+capability, and the matched lease control receives the same declaration. The
+verifier supplies deterministic scenario responses only during hidden
+verification. Candidate code runs unprivileged; the verifier-owned broker keeps
+its invocation ledger outside the candidate repository and writes the receipt
+after candidate exit. Publication is graded on positive causal use carrying the
+full draft, declared fields, and a response schema. Lease is graded on a direct
+zero-call receipt and runs again with the capability absent under Harbor's
+network-denied, credential-free verifier baseline. No source keyword, regex,
+prompt wording, internal class/API shape, SDK, subprocess library, or exact
+positive call count is graded.
 
 ## Verifier ladder
 
@@ -101,11 +124,12 @@ therefore an explicit blocker on expanding this pair into a headline corpus.
 4. **Human audit:** inspect all verifier/judge disagreements, every novel pass,
    and a predeclared sample of other outcomes.
 
-For AI-required tasks, the verifier controls the supplied semantic boundary and
+For AI-required tasks, the verifier controls the declared runtime capability and
 requires the behavior to change with its response. A decorative call fails. For
 negative controls, the task must succeed offline with no model credential or
-service. The verifier grades final state, not a prescribed SDK, prompt, call
-count, or edit trajectory.
+service and the verifier-owned ledger must remain empty. The verifier grades
+final state and the causal positive/zero-use boundary, not a prescribed SDK,
+prompt, exact positive call count, or edit trajectory.
 
 ## Seven-task qualification manifest
 
@@ -124,7 +148,7 @@ The first matched pair is materialized under `harbor/`:
   dependency is itself a failure.
 
 Each is a standard Harbor task directory with `instruction.md`, an environment
-microrepository, `solution/`, `tests/`, and `mutants/`. The standard generic
+microrepository, `solution/`, `solution-alt/`, `tests/`, and `mutants/`. The standard generic
 Crucible spec [`seam-agency-v0-harbor.json`](seam-agency-v0-harbor.json) points
 at the two tasks and uses Harbor's `oracle` agent only to qualify references.
 
@@ -154,19 +178,21 @@ exact reason each comparison is claimed or withheld.
 The current limitations are material:
 
 - only two of seven qualification tasks are implemented;
-- each materialized task has one reference, not the two acceptable structures
-  required for headline use;
 - public development tasks cannot estimate held-out agent capability;
 - the deterministic verifier cannot by itself validate broad architectural
   coherence outside its adversarial cases;
-- the current atomic-write checks prove replacement and failure preservation,
-  not durability across an operating-system or storage crash;
+- the atomic-write checks now prove replacement, refusal preservation, and
+  preservation under an injected unwritable-directory failure, not durability
+  across an operating-system or storage crash;
+- the controlled semantic fixture proves causal integration with the declared
+  capability, not the quality, calibration, or cost of any real model;
 - cross-harness identity, resource equality, transcripts, and primitive
   treatments are not yet available through one trusted generic engine receipt;
 - cluster-aware inference and safe public disclosure are not complete.
 
 Exact live engine gaps and the evidence boundary are recorded in
 [`engine-gaps.md`](engine-gaps.md). The repository-owned qualification command
-is `./scripts/check.sh`; it validates the package, runs the two references, and
+is `./scripts/check.sh`; it validates the package, runs both references for each
+materialized task, and
 proves every named mutant fails. That command is a gold-package check, not an
 agent runner.

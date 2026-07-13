@@ -1,7 +1,9 @@
-"""Reference solution for the clean-room exact lease task."""
+"""Reference solution: advisory file lock plus atomic replacement."""
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -11,6 +13,7 @@ import tempfile
 class LeaseStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
+        self.lock_path = self.path.with_name(self.path.name + ".lock")
 
     @staticmethod
     def _valid(owner: str, now: int, ttl: int) -> bool:
@@ -23,12 +26,20 @@ class LeaseStore:
             and ttl > 0
         )
 
+    @contextmanager
+    def _locked(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.lock_path.open("a+") as handle:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def _read(self) -> dict | None:
         try:
             value = json.loads(self.path.read_text())
-        except FileNotFoundError:
-            return None
-        except (OSError, json.JSONDecodeError):
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
             return None
         if not isinstance(value, dict) or set(value) != {"owner", "expires_at"}:
             return None
@@ -36,8 +47,7 @@ class LeaseStore:
             return None
         return value
 
-    def _write(self, owner: str, expires_at: int) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+    def _write(self, owner: str, expires_at: int) -> bool:
         temp_name: str | None = None
         try:
             with tempfile.NamedTemporaryFile(
@@ -50,6 +60,9 @@ class LeaseStore:
                 os.fsync(handle.fileno())
             os.replace(temp_name, self.path)
             temp_name = None
+            return True
+        except OSError:
+            return False
         finally:
             if temp_name is not None:
                 Path(temp_name).unlink(missing_ok=True)
@@ -57,25 +70,35 @@ class LeaseStore:
     def acquire(self, owner: str, now: int, ttl: int) -> bool:
         if not self._valid(owner, now, ttl):
             return False
-        current = self._read()
-        if current is not None and now < current["expires_at"]:
+        try:
+            with self._locked():
+                current = self._read()
+                if current is not None and now < current["expires_at"]:
+                    return False
+                return self._write(owner, now + ttl)
+        except OSError:
             return False
-        self._write(owner, now + ttl)
-        return True
 
     def renew(self, owner: str, now: int, ttl: int) -> bool:
         if not self._valid(owner, now, ttl):
             return False
-        current = self._read()
-        if current is None or current["owner"] != owner or now >= current["expires_at"]:
+        try:
+            with self._locked():
+                current = self._read()
+                if current is None or current["owner"] != owner or now >= current["expires_at"]:
+                    return False
+                return self._write(owner, now + ttl)
+        except OSError:
             return False
-        self._write(owner, now + ttl)
-        return True
 
     def holder(self, now: int) -> str | None:
         if type(now) is not int or now < 0:
             return None
-        current = self._read()
-        if current is None or now >= current["expires_at"]:
+        try:
+            with self._locked():
+                current = self._read()
+                if current is None or now >= current["expires_at"]:
+                    return None
+                return current["owner"]
+        except OSError:
             return None
-        return current["owner"]

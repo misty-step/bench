@@ -1,10 +1,29 @@
 from __future__ import annotations
 import json
+import os
 from pathlib import Path
+import subprocess
+import uuid
 
 
-def publish_packet(draft, declared_fields, reviewer, destination):
-    result = json.loads(reviewer.review(draft, tuple(declared_fields)))
+def publish_packet(draft, declared_fields, destination):
+    manifest = json.loads(Path(os.environ["BENCH_CAPABILITIES_MANIFEST"]).read_text())
+    command = next(item["command"] for item in manifest["capabilities"] if item["id"] == "semantic.generate.v1")
+    request = {
+        "schema_version": "bench.semantic_generate.request.v1",
+        "request_id": uuid.uuid4().hex,
+        "messages": [{"role": "user", "content": json.dumps({"draft": draft, "declared_fields": list(declared_fields)})}],
+        "response_schema": {
+            "type": "object",
+            "required": ["decision", "fields"],
+            "properties": {
+                "decision": {"enum": ["publish", "withhold"]},
+                "fields": {"type": "object", "properties": {field: {"type": "string"} for field in declared_fields}},
+            },
+        },
+    }
+    completed = subprocess.run([command], input=json.dumps(request), text=True, capture_output=True)
+    result = json.loads(completed.stdout)["content"]
     if result.get("decision") != "publish":
         return False
     destination = Path(destination)

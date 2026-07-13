@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 
-def publish_packet(draft, declared_fields, reviewer, destination):
+def publish_packet(draft, declared_fields, destination):
     if "private" in draft.lower() or "secret" in draft.lower():
         return False
     destination = Path(destination)

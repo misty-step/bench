@@ -1,0 +1,12 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "functional manifest adapter using subprocess.run plus NamedTemporaryFile and os.replace"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "object semantic adapter using subprocess.Popen plus directory-relative exclusive creation and os.replace"
+    }
+  ]
+}

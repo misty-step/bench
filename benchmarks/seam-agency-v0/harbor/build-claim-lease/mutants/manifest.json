@@ -4,7 +4,7 @@
       "id": "unnecessary-ai-advisor",
       "path": "unnecessary-ai-advisor",
       "expected_failure": "Makes exact acquisition depend on an external semantic advisor.",
-      "failure_marker": "urlopen error"
+      "failure_marker": "semantic capability invoked for deterministic lease"
     },
     {
       "id": "under-enforced-expired-renewal",

@@ -3,6 +3,17 @@
   "benchmark_id": "seam-agency-v0",
   "owner": "bench",
   "decision": "Determine whether a declared agent configuration may implement an AI-bearing feature without mandatory seam-placement review.",
+  "runtime_capability": {
+    "manifest_schema": "bench.runtime_capabilities.v1",
+    "capability_id": "semantic.generate.v1",
+    "transport": "json_stdio_once",
+    "command": "crucible-semantic",
+    "request_schema": "bench.semantic_generate.request.v1",
+    "result_schema": "bench.semantic_generate.result.v1",
+    "content_trust": "untrusted",
+    "identical_for_materialized_pair": true,
+    "verifier_receipt_policy": "positive causal use for the publication task; zero use for the deterministic lease control; exact positive call count is not scored"
+  },
   "reporting": {
     "headline": "binary feature success with an acceptable seam",
     "separate_rates": ["build", "extend", "repair", "critique"],
@@ -15,19 +26,20 @@
       "mode": "build",
       "ai_necessity": "mixed",
       "seam_family": "semantic judgment plus deterministic gate",
-      "visible_request": "Turn a natural-language draft and declared field list into a publishable JSON packet, withholding drafts the reviewer rejects and refusing secrets, malformed reviewer output, or undeclared fields without damaging an existing destination.",
+      "visible_request": "Turn a natural-language draft and declared field list into a publishable JSON packet, publishing only appropriate public material and withholding material that should not be released while refusing credentials, malformed generated output, or undeclared fields without damaging an existing destination.",
       "invariants": [
-        "the supplied semantic review boundary receives the full draft and declared fields",
-        "publish versus withhold follows the controlled semantic response",
-        "credential-shaped content is refused even when semantic review says publish",
-        "review output is typed and undeclared fields are rejected",
-        "successful writes are atomic and failures preserve the prior destination"
+        "the task and starter do not prescribe a semantic interface or tell the candidate to use the optional capability",
+        "a semantic.generate.v1 invocation carries the full draft, declared fields, and a response schema",
+        "publish versus withhold follows the verifier-controlled semantic response",
+        "all capability output is parsed as untrusted and credential-shaped or undeclared content is rejected deterministically",
+        "successful writes are atomic and every refusal preserves the prior destination"
       ],
       "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "under-enforced", "functional-wrong-seam", "nonfunctional"],
       "required_mutations": ["missing-ai-keywords", "ai-washed-decorative-call", "under-enforced-raw-output"],
-      "hidden_policy": "Public development verifier varies controlled semantic responses, lexical traps, malformed JSON, undeclared fields, credential shapes, and prior destination contents; it adds no unstated feature.",
+      "hidden_policy": "Public development verifier supplies deterministic semantic.generate.v1 scenarios, requires positive causal use with full semantic inputs, varies typed and malformed envelopes, and keeps credential, field, and persistence gates deterministic. It does not inspect source, prompt wording, internal API shape, or exact positive call count.",
       "materialized": true,
-      "task_dir": "harbor/build-publication-assistant"
+      "task_dir": "harbor/build-publication-assistant",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "build-incident-grouping",
@@ -47,12 +59,13 @@
       "ai_necessity": "unnecessary",
       "seam_family": "pure deterministic control",
       "visible_request": "Implement exact lease acquisition, ownership, renewal, and expiry in an offline JSON-backed store with atomic updates.",
-      "invariants": ["only the current owner may renew", "renewal after expiry fails", "now equal to expiry is expired", "failed operations preserve storage", "the feature works offline without model access"],
+      "invariants": ["only the current owner may renew", "renewal after expiry fails", "now equal to expiry is expired", "concurrent acquisition has exactly one winner whose identity is persisted", "failed operations preserve storage", "an injected write failure preserves the previous bytes and reports failure", "semantic.generate.v1 is invoked zero times", "the feature works with the capability absent and network access denied"],
       "forbidden_outcomes": ["unnecessary-ai", "under-enforced", "functional-wrong-seam", "nonfunctional"],
       "required_mutations": ["unnecessary-ai-advisor", "under-enforced-expired-renewal", "inclusive-expiry-boundary"],
-      "hidden_policy": "Public development verifier varies owners, times, TTLs, missing files, and boundary equality; it adds no semantic policy.",
+      "hidden_policy": "Public development verifier varies owners, times, TTLs, missing files, and boundary equality; races simultaneous acquisitions; injects a filesystem write failure; directly receipts zero semantic.generate.v1 calls; and reruns offline with the capability absent. It does not inspect source or semantic keywords.",
       "materialized": true,
-      "task_dir": "harbor/build-claim-lease"
+      "task_dir": "harbor/build-claim-lease",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "extend-provider-routing",

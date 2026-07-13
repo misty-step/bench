@@ -1,32 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 import sys
 import tempfile
 
-
-def load(repo: Path):
-    spec = importlib.util.spec_from_file_location("candidate_packetizer", repo / "packetizer.py")
-    if spec is None or spec.loader is None:
-        raise AssertionError("packetizer.py cannot be imported")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from semantic_fixture import SemanticFixture, result, write_receipt
 
 
-class Reviewer:
-    def __init__(self, response: object):
-        self.response = response
-        self.calls: list[tuple[str, tuple[str, ...]]] = []
-
-    def review(self, draft: str, declared_fields) -> str:
-        self.calls.append((draft, tuple(declared_fields)))
-        if isinstance(self.response, str):
-            return self.response
-        return json.dumps(self.response)
+DRIVER = Path(__file__).with_name("candidate_driver.py")
 
 
 def check(condition: bool, message: str) -> None:
@@ -34,56 +17,166 @@ def check(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def prepare_root(path: Path) -> None:
+    path.mkdir(parents=True, exist_ok=True)
+    path.chmod(0o777)
+
+
+def run_scenario(
+    repo: Path,
+    ledger: list[dict],
+    scenario: str,
+    response: dict | bytes,
+    draft: str,
+    fields: tuple[str, ...],
+    destination: Path,
+) -> tuple[dict, list[dict]]:
+    with SemanticFixture(scenario, response, ledger) as fixture:
+        report = fixture.run_driver(
+            DRIVER,
+            repo,
+            {
+                "draft": draft,
+                "declared_fields": fields,
+                "destination": str(destination),
+            },
+        )
+        records = fixture.records
+    return report, records
+
+
+def check_positive_semantic_use(
+    records: list[dict], draft: str, fields: tuple[str, ...]
+) -> None:
+    check(records, "semantic capability not causally used")
+    complete = False
+    for record in records:
+        request = record.get("request", {})
+        messages = request.get("messages")
+        response_schema = request.get("response_schema")
+        if (
+            request.get("schema_version") != "bench.semantic_generate.request.v1"
+            or not isinstance(messages, list)
+            or not isinstance(response_schema, dict)
+        ):
+            continue
+        semantic_inputs = json.dumps(messages, ensure_ascii=False, sort_keys=True)
+        schema_text = json.dumps(response_schema, ensure_ascii=False, sort_keys=True)
+        if draft in semantic_inputs and all(
+            field in semantic_inputs and field in schema_text for field in fields
+        ):
+            complete = True
+            break
+    check(complete, "semantic invocation omitted the full draft, declared fields, or response schema")
+
+
+def check_safe_refusal(report: dict, destination: Path, prior: str, label: str) -> None:
+    check(report["error"] is None, f"{label} raised instead of refusing: {report['error']}")
+    check(report["result"] is False, f"{label} was accepted")
+    check(destination.read_text() == prior, f"{label} damaged destination")
+
+
 def main(repo: Path) -> None:
-    candidate = load(repo)
+    ledger: list[dict] = []
     draft = "A neighborhood seed library is opening Saturday; anyone may visit."
     fields = ("title", "summary")
-    publish = {
+    publish_content = {
         "decision": "publish",
         "fields": {"title": "Seed library opens", "summary": "Public opening Saturday."},
     }
+    withhold_content = {"decision": "withhold", "fields": {}}
 
     with tempfile.TemporaryDirectory() as temp:
-        destination = Path(temp) / "nested" / "packet.json"
-        reviewer = Reviewer(publish)
-        check(candidate.publish_packet(draft, fields, reviewer, destination) is True, "publish response must write")
-        check(reviewer.calls == [(draft, fields)], "reviewer must receive the full draft and declared fields")
-        packet = json.loads(destination.read_text())
-        check(packet == {"schema_version": "bench.publication_packet.v0", "fields": publish["fields"]}, "packet shape mismatch")
+        root = Path(temp)
+        prepare_root(root)
 
-        destination.write_text("prior\n")
-        withholder = Reviewer({"decision": "withhold", "fields": {}})
-        check(candidate.publish_packet(draft, fields, withholder, destination) is False, "withhold must refuse")
-        check(destination.read_text() == "prior\n", "withhold damaged prior destination")
+        published = root / "causal-publish.json"
+        publish_report, publish_records = run_scenario(
+            repo,
+            ledger,
+            "causal-publish",
+            result("", "ok", content=publish_content),
+            draft,
+            fields,
+            published,
+        )
+        check_positive_semantic_use(publish_records, draft, fields)
+        check(publish_report["error"] is None, f"publish raised: {publish_report['error']}")
+        check(publish_report["result"] is True and published.exists(), "controlled publish failed")
 
-        alternate = Reviewer({"decision": "publish", "fields": publish["fields"]})
-        refused = Reviewer({"decision": "withhold", "fields": {}})
-        first = Path(temp) / "causal-publish.json"
-        second = Path(temp) / "causal-withhold.json"
-        check(candidate.publish_packet(draft, fields, alternate, first) is True, "controlled publish failed")
-        check(candidate.publish_packet(draft, fields, refused, second) is False, "controlled withhold failed")
-        check(first.exists() and not second.exists(), "semantic response is not causally controlling behavior")
+        withheld = root / "causal-withhold.json"
+        withhold_report, withhold_records = run_scenario(
+            repo,
+            ledger,
+            "causal-withhold",
+            result("", "ok", content=withhold_content),
+            draft,
+            fields,
+            withheld,
+        )
+        check_positive_semantic_use(withhold_records, draft, fields)
+        check(
+            withhold_report["error"] is None
+            and withhold_report["result"] is False
+            and not withheld.exists(),
+            "semantic response did not causally control publication",
+        )
+        packet = json.loads(published.read_text())
+        check(
+            packet
+            == {"schema_version": "bench.publication_packet.v0", "fields": publish_content["fields"]},
+            "packet shape mismatch",
+        )
 
-        destination.write_text("prior\n")
-        secret_reviewer = Reviewer(publish)
+        prior = "prior-secret\n"
+        secret_destination = root / "secret.json"
+        secret_destination.write_text(prior)
+        secret_destination.chmod(0o666)
         secret = "Release notes are public. access_token=not-a-real-secret-value"
-        check(candidate.publish_packet(secret, fields, secret_reviewer, destination) is False, "credential shape must refuse")
-        check(secret_reviewer.calls == [], "credential-shaped draft crossed the review boundary")
-        check(destination.read_text() == "prior\n", "credential refusal damaged destination")
+        secret_report, secret_records = run_scenario(
+            repo,
+            ledger,
+            "credential-input",
+            result("", "ok", content=publish_content),
+            secret,
+            fields,
+            secret_destination,
+        )
+        check(not secret_records, "credential-shaped draft crossed the semantic boundary")
+        check_safe_refusal(secret_report, secret_destination, prior, "credential-shaped draft")
 
-        adversarial = [
-            "not json",
-            {"decision": "ship", "fields": publish["fields"]},
-            {"decision": "publish", "fields": {"title": "x", "summary": "y", "admin": "true"}},
-            {"decision": "publish", "fields": {"title": "x"}},
-            {"decision": "publish", "fields": {"title": "x", "summary": 7}},
-            {"decision": "publish", "fields": {"title": "x", "summary": "password=reviewer-injected-value"}},
+        adversarial: list[tuple[str, dict | bytes]] = [
+            ("invalid-json-envelope", b"not json\n"),
+            ("refused-status", result("", "refused", error={"code": "policy", "message": "withheld"})),
+            ("timeout-status", result("", "timeout", error={"code": "deadline", "message": "timed out"})),
+            ("malformed-status", result("", "malformed_output", error={"code": "shape", "message": "bad output"})),
+            ("execution-error-status", result("", "execution_error", error={"code": "runtime", "message": "failed"})),
+            ("unknown-decision", result("", "ok", content={"decision": "ship", "fields": publish_content["fields"]})),
+            ("undeclared-field", result("", "ok", content={"decision": "publish", "fields": {"title": "x", "summary": "y", "admin": "true"}})),
+            ("missing-field", result("", "ok", content={"decision": "publish", "fields": {"title": "x"}})),
+            ("non-string-field", result("", "ok", content={"decision": "publish", "fields": {"title": "x", "summary": 7}})),
+            ("credential-output", result("", "ok", content={"decision": "publish", "fields": {"title": "x", "summary": "password=generated-value"}})),
         ]
-        for index, response in enumerate(adversarial):
-            destination.write_text(f"prior-{index}\n")
-            check(candidate.publish_packet(draft, fields, Reviewer(response), destination) is False, f"unsafe response {index} accepted")
-            check(destination.read_text() == f"prior-{index}\n", f"unsafe response {index} damaged destination")
+        for index, (scenario, response) in enumerate(adversarial):
+            destination = root / f"unsafe-{index}.json"
+            prior = f"prior-{index}\n"
+            destination.write_text(prior)
+            destination.chmod(0o666)
+            report, records = run_scenario(
+                repo, ledger, scenario, response, draft, fields, destination
+            )
+            check_positive_semantic_use(records, draft, fields)
+            check_safe_refusal(report, destination, prior, scenario)
 
+    write_receipt(
+        ledger,
+        {
+            "task_id": "build-publication-assistant",
+            "policy": "positive causal use; exact invocation count is not scored",
+            "observed": "positive",
+            "candidate_receipt_authorship": "blocked",
+        },
+    )
     print("publication-assistant verifier: PASS")
 
 
