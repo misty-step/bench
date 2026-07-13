@@ -98,6 +98,16 @@ incompatibility is isolated to the installed import/preflight path. Finally,
 `harbor tasks check` is removed and `harbor check` refused without an
 `ANTHROPIC_API_KEY`; no credential or paid quality check was supplied.
 
+### Source reconciliation — 2026-07-13
+
+The negative receipts above remain the observed behavior of the installed
+`crucible 0.0.0`; they must not be read as current Crucible source truth.
+Concurrent, unpushed Crucible commit `baa92e2` now handles current Harbor task
+imports and portable task-path rebasing, with its oracle/nop consumer proof
+green. Commit `10044b5` now preflights Harbor output paths outside `$HOME`.
+Together they close the source defects behind the importer and `/tmp` receipts;
+the installed binary used by this Bench run has not yet incorporated them.
+
 ## Fresh post-implementation review
 
 Review scope: methodology completeness, request solvability, mutation kill

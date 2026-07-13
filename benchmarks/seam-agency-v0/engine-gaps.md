@@ -66,6 +66,16 @@ The following gaps prevent a trusted cross-harness or public benchmark run:
     replacement `harbor check` requires `ANTHROPIC_API_KEY`; there is no
     credential-free deterministic task-definition preflight in that surface.
 
+## Reconciliation — 2026-07-13
+
+Items 9 and 10 remain valid receipts for the installed `crucible 0.0.0` used
+by this qualification run; they are no longer current Crucible source gaps.
+Concurrent, unpushed Crucible commits `baa92e2` (current Harbor import plus
+portable task-path rebasing, with green oracle/nop proof) and `10044b5`
+(outside-`$HOME` Harbor output preflight) close those two failures in source.
+Readers should distinguish the reproducible installed-binary baseline above
+from this newer local source truth until those commits are published.
+
 Therefore this package claims only local gold qualification: its references
 pass and its named wrong-seam mutants fail under deterministic verifiers. It
 does not claim a real agent run, cross-harness comparability, calibrated model
