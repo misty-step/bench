@@ -1,0 +1,48 @@
+{
+  "schema_version": "crucible.eval_spec.v1",
+  "id": "seam-agency-v0-harbor-qualification",
+  "title": "Seam Agency v0 matched Build pair qualification",
+  "context": "Bench-owned public development tasks. Oracle execution qualifies references only and is not agent performance evidence.",
+  "task": "seam-agency-v0",
+  "inputs": "Two clean-room Harbor microrepositories: one AI-required mixed-seam Build task and one pure deterministic Build control.",
+  "outputs": "Harbor verifier rewards for reference qualification; agent attempts require a separately declared real agent configuration.",
+  "graders": {
+    "graders": [
+      {
+        "id": "harbor_verifier",
+        "kind": "deterministic"
+      }
+    ]
+  },
+  "aggregation": "proportion",
+  "uncertainty": {
+    "method": "wilson",
+    "confidence": 0.95
+  },
+  "decision": "Qualify the matched Build task shape before any cross-harness Seam Agency experiment.",
+  "runner": {
+    "kind": "harbor_task",
+    "corpus": {
+      "source": "harbor_tasks",
+      "config": {
+        "agent": "oracle",
+        "job_timeout_ms": 180000,
+        "resource_envelope": {
+          "cpu_millicores": 1000,
+          "memory_mb": 512,
+          "headroom_percent": 50
+        }
+      },
+      "tasks": [
+        {
+          "task_id": "build-publication-assistant",
+          "task_dir": "harbor/build-publication-assistant"
+        },
+        {
+          "task_id": "build-claim-lease",
+          "task_dir": "harbor/build-claim-lease"
+        }
+      ]
+    }
+  }
+}

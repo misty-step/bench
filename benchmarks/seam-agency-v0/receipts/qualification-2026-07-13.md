@@ -1,0 +1,127 @@
+# Seam Agency v0 qualification receipt
+
+Date: 2026-07-13
+
+Host scope: local macOS/Colima checkout; no paid inference and no credentialed
+model judge.
+
+Repository branch: `codex/bench-seam-agency-v0-package`
+
+## Repository-owned gold check
+
+Command:
+
+```sh
+./scripts/check.sh
+```
+
+Result:
+
+```text
+crucible-spec: valid=true runnable=true
+build-publication-assistant: reference PASS
+build-publication-assistant: mutant missing-ai-keywords FAIL expected reason=reviewer must receive the full draft and declared fields
+build-publication-assistant: mutant ai-washed-decorative-call FAIL expected reason=packet shape mismatch
+build-publication-assistant: mutant under-enforced-raw-output FAIL expected reason=credential shape must refuse
+build-claim-lease: reference PASS
+build-claim-lease: mutant unnecessary-ai-advisor FAIL expected reason=urlopen error
+build-claim-lease: mutant under-enforced-expired-renewal FAIL expected reason=expired lease renewed
+build-claim-lease: mutant inclusive-expiry-boundary FAIL expected reason=expiry equality must be expired
+seam-agency-v0: package qualification PASS (2 references, 6 mutants)
+```
+
+This checks gold and mutation coverage. It does not execute an agent.
+
+## Generic Crucible and Harbor oracle proof
+
+Versions observed:
+
+```text
+crucible 0.0.0
+harbor 0.13.1
+Docker 29.2.1
+```
+
+Command (the output and ledger deliberately live under `$HOME` for Colima):
+
+```sh
+crucible run benchmarks/seam-agency-v0/seam-agency-v0-harbor.json \
+  --out "$HOME/.cache/bench-seam-agency-v0-run" \
+  --db "$HOME/.cache/bench-seam-agency-v0.sqlite" \
+  --json
+```
+
+Relevant stable report fields:
+
+```json
+{
+  "schema_version": "crucible.run_report.v1",
+  "id": "seam-agency-v0-harbor-qualification",
+  "metric": "harbor_reward_pass_rate",
+  "successes": 2,
+  "n": 2,
+  "point": 1.0,
+  "method": "Wilson",
+  "agent": "oracle"
+}
+```
+
+The full untracked evidence remains at
+`$HOME/.cache/bench-seam-agency-v0-run/harbor-run.json`. Oracle applied the
+checked-in solutions through the public Harbor contract. This proves reference
+and verifier integration, not coding-agent capability.
+
+## Negative engine receipts
+
+The same run with `--out /tmp/bench-seam-agency-v0-run` exited 0 but reported
+0/2. Both task rows contained:
+
+```text
+RewardFileNotFoundError: No reward file found at
+/tmp/bench-seam-agency-v0-run/harbor-jobs/<task>/run/<trial>/verifier/reward.txt
+or .../verifier/reward.json
+```
+
+Moving only the output/ledger under `$HOME` changed the result to 2/2. This is
+an infrastructure/mount state, not model or task evidence.
+
+The installed generic importer also refused the current task format:
+
+```text
+crucible import harbor ...
+error: no Harbor task directory ... could be imported (2 entries, all skipped):
+task.toml does not declare a [task] section
+```
+
+The hand-authored public `crucible.eval_spec.v1` validates and runs, so the
+incompatibility is isolated to the installed import/preflight path. Finally,
+`harbor tasks check` is removed and `harbor check` refused without an
+`ANTHROPIC_API_KEY`; no credential or paid quality check was supplied.
+
+## Fresh post-implementation review
+
+Review scope: methodology completeness, request solvability, mutation kill
+reasons, public-boundary honesty, staged diff, and Crucible repository
+isolation.
+
+Findings and resolutions:
+
+1. `engine-gaps.md` initially said the installed Crucible imported current
+   Harbor tasks, contradicting the captured importer failure. The claim was
+   narrowed to what was actually proven: validate and run.
+2. The publication reference rejected credential-shaped drafts but did not
+   independently reject a credential shape introduced by reviewer output. The
+   deterministic boundary and adversarial verifier now refuse both inputs and
+   outputs.
+3. The manifest gate asserted that pooling was forbidden but did not verify the
+   declared four separate rate names. It now requires the exact Build, Extend,
+   Repair, and Critique set.
+4. The root README described every benchmark as a prompt-style
+   `references.json` package. Discovery text now distinguishes prompt reference
+   answers from agentic reference implementations and mutants.
+
+After fixes, `./scripts/check.sh`, JSON/Python/shell syntax checks,
+`git diff --cached --check`, and the generic Crucible→Harbor oracle run all
+passed. The staged diff changes only Bench-owned files. The Crucible checkout
+was inspected read-only and had pre-existing concurrent branch/backlog state;
+no Crucible file was staged or edited by this lane.

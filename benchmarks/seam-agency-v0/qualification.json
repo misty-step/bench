@@ -1,0 +1,106 @@
+{
+  "schema_version": "bench.seam_agency_qualification.v0",
+  "benchmark_id": "seam-agency-v0",
+  "owner": "bench",
+  "decision": "Determine whether a declared agent configuration may implement an AI-bearing feature without mandatory seam-placement review.",
+  "reporting": {
+    "headline": "binary feature success with an acceptable seam",
+    "separate_rates": ["build", "extend", "repair", "critique"],
+    "forbid_pooled_mode_score": true,
+    "unit_of_analysis": "source task cluster"
+  },
+  "tasks": [
+    {
+      "id": "build-publication-assistant",
+      "mode": "build",
+      "ai_necessity": "mixed",
+      "seam_family": "semantic judgment plus deterministic gate",
+      "visible_request": "Turn a natural-language draft and declared field list into a publishable JSON packet, withholding drafts the reviewer rejects and refusing secrets, malformed reviewer output, or undeclared fields without damaging an existing destination.",
+      "invariants": [
+        "the supplied semantic review boundary receives the full draft and declared fields",
+        "publish versus withhold follows the controlled semantic response",
+        "credential-shaped content is refused even when semantic review says publish",
+        "review output is typed and undeclared fields are rejected",
+        "successful writes are atomic and failures preserve the prior destination"
+      ],
+      "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "under-enforced", "functional-wrong-seam", "nonfunctional"],
+      "required_mutations": ["missing-ai-keywords", "ai-washed-decorative-call", "under-enforced-raw-output"],
+      "hidden_policy": "Public development verifier varies controlled semantic responses, lexical traps, malformed JSON, undeclared fields, credential shapes, and prior destination contents; it adds no unstated feature.",
+      "materialized": true,
+      "task_dir": "harbor/build-publication-assistant"
+    },
+    {
+      "id": "build-incident-grouping",
+      "mode": "build",
+      "ai_necessity": "mixed",
+      "seam_family": "semantic judgment plus exact consumer",
+      "visible_request": "Group paraphrased incident reports while keeping stable group identities, idempotent persistence, and malformed-decision handling exact.",
+      "invariants": ["low-overlap semantic matches group", "high-overlap nonmatches remain separate", "group IDs are stable", "replay is idempotent", "malformed semantic output cannot mutate storage"],
+      "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "under-enforced", "functional-wrong-seam"],
+      "required_mutations": ["token-overlap-grouper", "decorative-model-call", "raw-label-as-primary-key"],
+      "hidden_policy": "Held-out paraphrase and lexical-trap families preserve the visible grouping contract.",
+      "materialized": false
+    },
+    {
+      "id": "build-claim-lease",
+      "mode": "build",
+      "ai_necessity": "unnecessary",
+      "seam_family": "pure deterministic control",
+      "visible_request": "Implement exact lease acquisition, ownership, renewal, and expiry in an offline JSON-backed store with atomic updates.",
+      "invariants": ["only the current owner may renew", "renewal after expiry fails", "now equal to expiry is expired", "failed operations preserve storage", "the feature works offline without model access"],
+      "forbidden_outcomes": ["unnecessary-ai", "under-enforced", "functional-wrong-seam", "nonfunctional"],
+      "required_mutations": ["unnecessary-ai-advisor", "under-enforced-expired-renewal", "inclusive-expiry-boundary"],
+      "hidden_policy": "Public development verifier varies owners, times, TTLs, missing files, and boundary equality; it adds no semantic policy.",
+      "materialized": true,
+      "task_dir": "harbor/build-claim-lease"
+    },
+    {
+      "id": "extend-provider-routing",
+      "mode": "extend",
+      "ai_necessity": "mixed",
+      "seam_family": "declaration plus judgment plus gate",
+      "visible_request": "Add a provider family to a declared capability system, semantically rank eligible candidates, and enforce tool and budget requirements before selection.",
+      "invariants": ["new family is declarative", "semantic ranking sees rich task context", "ineligible candidates never reach ranking", "budget and tool gates cannot be overridden by model output"],
+      "forbidden_outcomes": ["missing-ai", "over-determinized", "under-enforced", "functional-wrong-seam"],
+      "required_mutations": ["provider-special-case-branch", "keyword-ranker", "prompt-only-budget-gate"],
+      "hidden_policy": "Provider and task variants remain within the visible capability, budget, and tool model.",
+      "materialized": false
+    },
+    {
+      "id": "extend-comparison-attribution",
+      "mode": "extend",
+      "ai_necessity": "unnecessary",
+      "seam_family": "declaration plus deterministic mechanism",
+      "visible_request": "Add reasoning effort as an identity axis in exact comparison attribution without special-case control flow or a model call.",
+      "invariants": ["identity is declared and hashed", "only the changed axis is reported", "missing versus explicit values remain distinct", "existing axes retain compatibility"],
+      "forbidden_outcomes": ["unnecessary-ai", "functional-wrong-seam", "nonfunctional"],
+      "required_mutations": ["reasoning-special-case-branch", "prose-model-diff", "missing-equals-default-collapse"],
+      "hidden_policy": "Identity fixtures cover declared combinations and compatibility cases already implied by the visible schema.",
+      "materialized": false
+    },
+    {
+      "id": "repair-memory-extraction",
+      "mode": "repair",
+      "ai_necessity": "required",
+      "seam_family": "pure semantic control",
+      "visible_request": "Repair meaning-aware memory extraction that currently uses keyword heuristics, preserving rich evidence and returning no memory when the text does not support one.",
+      "invariants": ["semantic paraphrases are recognized", "lexical traps are rejected", "evidence text remains available", "unsupported facts are not invented"],
+      "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "functional-wrong-seam"],
+      "required_mutations": ["expanded-keyword-table", "model-call-with-keyword-verdict", "premature-memory-enum"],
+      "hidden_policy": "Hidden examples vary meaning and wording without changing the visible extraction contract.",
+      "materialized": false
+    },
+    {
+      "id": "critique-operator-action-router",
+      "mode": "critique",
+      "ai_necessity": "mixed",
+      "seam_family": "mixed decomposition",
+      "visible_request": "Diagnose a candidate action router and provide a structured consequence and repair sketch for semantic interpretation, approval, persistence, and send/publish/buy/destructive boundaries.",
+      "invariants": ["semantic intent placement is identified", "must-confirm actions remain deterministic", "consequences name an observable failure", "repair sketch preserves exact gates"],
+      "forbidden_outcomes": ["missing-ai", "ai-washed", "under-enforced", "over-determinized"],
+      "required_mutations": ["prompt-only-approval", "regex-intent-router", "raw-model-action-dispatch"],
+      "hidden_policy": "Candidate patches are blinded; scoring criteria and independent labels are fixed before worker outputs.",
+      "materialized": false
+    }
+  ]
+}
