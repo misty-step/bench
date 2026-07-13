@@ -46,8 +46,8 @@ Command (the output and ledger deliberately live under `$HOME` for Colima):
 
 ```sh
 crucible run benchmarks/seam-agency-v0/seam-agency-v0-harbor.json \
-  --out "$HOME/.cache/bench-seam-agency-v0-run" \
-  --db "$HOME/.cache/bench-seam-agency-v0.sqlite" \
+  --out "$HOME/.cache/bench-seam-agency-preflight-green" \
+  --db "$HOME/.cache/bench-seam-agency-preflight-green.sqlite" \
   --json
 ```
 
@@ -61,15 +61,59 @@ Relevant stable report fields:
   "successes": 2,
   "n": 2,
   "point": 1.0,
+  "lower": 0.34237195288961925,
+  "upper": 1.0,
+  "confidence": 0.95,
   "method": "Wilson",
   "agent": "oracle"
 }
 ```
 
 The full untracked evidence remains at
-`$HOME/.cache/bench-seam-agency-v0-run/harbor-run.json`. Oracle applied the
+`$HOME/.cache/bench-seam-agency-preflight-green/harbor-run.json`. Oracle applied the
 checked-in solutions through the public Harbor contract. This proves reference
 and verifier integration, not coding-agent capability.
+
+### Sanitized run identity for human review
+
+The Bench review surface checks in only the non-local identity and result fields
+needed to interpret the run. Local cache paths and artifact URIs are excluded.
+
+```json
+{
+  "run_id": "run-1783975121483-94811-0:seam-agency-v0-harbor-qualification",
+  "invocation_id": "run-1783975121483-94811-0",
+  "created_at_unix_ms": 1783975121483,
+  "benchmark_id": "seam-agency-v0-harbor-qualification",
+  "runner_kind": "harbor_task",
+  "config_id": "harbor:oracle:default",
+  "agent": {"name": "oracle", "version": "1.0.0"},
+  "provider": null,
+  "model": null,
+  "git_sha": "36515473b77cbed2a3a8b9ab7a4182f0cc86b4d2",
+  "model_usage": {
+    "cost_usd": null,
+    "n_input_tokens": null,
+    "n_output_tokens": null,
+    "n_cache_tokens": null
+  }
+}
+```
+
+The null usage fields are expected: Harbor's oracle copied the reference
+solutions and invoked no model. Therefore the economic model cost is zero, not
+an unreported candidate cost. There was no candidate model, provider, prompt,
+transcript, or token usage to report.
+
+Per-task stable identities:
+
+| Task | Trial | Job | Evidence | Task checksum | Latency ms | Reward |
+| --- | --- | --- | --- | --- | ---: | ---: |
+| `build-publication-assistant` | `build-publication-assistant__NxuCyLi` | `5fb65f16-0e53-496b-8d28-7a1e6d397fb3` | `0245a5e8-75c0-4273-8ca8-cdebaf8c8fbb` | `469f36a03836c452568eaed2db138933effeb8edf31e473d067626b900d411c6` | 15798 | 1.0 |
+| `build-claim-lease` | `build-claim-lease__iyd92mH` | `031d92f1-0690-4b9d-b14b-a03b20502f96` | `a35b9958-dfb5-496c-8dfd-b23c3e5a8deb` | `7790388f66d868aea1cbe53ccd27c8695c001c7f0fc883cce715b13c86cb3b15` | 15559 | 1.0 |
+
+The complete sanitized review data is checked in at
+`docs/data/reviews/seam-agency-v0-qualification.json`.
 
 ## Negative engine receipts
 
@@ -135,3 +179,37 @@ After fixes, `./scripts/check.sh`, JSON/Python/shell syntax checks,
 passed. The staged diff changes only Bench-owned files. The Crucible checkout
 was inspected read-only and had pre-existing concurrent branch/backlog state;
 no Crucible file was staged or edited by this lane.
+
+## Bench human-review surface — 2026-07-13
+
+Bench now renders the sanitized receipt at
+`docs/seam-agency-review.html`. The page is a read-only evidence consumer: it
+contains no run controls and does not act as a Crucible or Harbor control plane.
+
+Fresh evidence review cross-checked every displayed run, invocation, revision,
+score, interval, task checksum, trial, job, evidence ID, latency, reward, and
+null model-usage field against the current successful ledger at
+`$HOME/.cache/bench-seam-agency-preflight-green.sqlite` and its
+`harbor-run.json`. The repository gate additionally joins the page data to the
+checked-in Seam Agency declarations, Crucible spec, source paths, reference
+coverage, and mutant manifests.
+
+The review also surfaces three benchmark blockers found in the checked-in pair:
+
+1. `build-publication-assistant` supplies a `ReviewBoundary` protocol and tells
+   the candidate that a reviewer interprets the full draft. This qualifies
+   causal semantic use against keyword and decorative-call mutants, but weakly
+   tests independent recognition that AI is necessary.
+2. `build-claim-lease` does not yet test concurrent acquisition or injected
+   write failure despite its exact/atomic contract.
+3. `unnecessary-ai-advisor` is killed through closed-network `urlopen`, which
+   is an indirect dependency proxy rather than a direct architectural
+   assertion about an unnecessary AI boundary.
+
+Local browser QA at
+`http://127.0.0.1:8766/seam-agency-review.html` confirmed the title, every
+evidence section, current preflight-green identities, index-card navigation,
+full-page visual layout, and an empty browser console/error surface. The
+supplemental untracked screenshot receipt is
+`/tmp/bench-seam-agency-review.png`. No site publication or branch push was
+performed.

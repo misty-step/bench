@@ -33,6 +33,16 @@
         <div class="editions">editions: ${lineage}</div>
       </div>`;
     }).join('');
+    const reviewCards = $('#review-cards');
+    if (reviewCards) {
+      reviewCards.innerHTML = (manifest.reviews || []).map((review) => `
+        <a class="review-card" href="${esc(review.url)}">
+          <span class="review-card-status">${esc(review.status)}</span>
+          <h2>${esc(review.title)}</h2>
+          <p>${esc(review.tagline)}</p>
+          <span class="review-card-link">inspect evidence →</span>
+        </a>`).join('');
+    }
     return;
   }
 

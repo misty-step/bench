@@ -1,0 +1,258 @@
+{
+  "schema_version": "bench.qualification_review.v1",
+  "id": "seam-agency-v0-qualification",
+  "title": "Seam Agency v0",
+  "subtitle": "Matched Build pair qualification",
+  "status": {
+    "kind": "harbor_oracle_reference_qualification",
+    "label": "Harbor oracle/reference qualification",
+    "headline": "References passed. No model candidate was run.",
+    "explanation": "Crucible invoked Harbor's oracle agent, which applied the checked-in reference solution for each task. This qualifies the task, reference, and verifier integration only; it is not evidence that a model or coding agent solved either task."
+  },
+  "run": {
+    "run_id": "run-1783975121483-94811-0:seam-agency-v0-harbor-qualification",
+    "invocation_id": "run-1783975121483-94811-0",
+    "created_at_unix_ms": 1783975121483,
+    "benchmark_id": "seam-agency-v0-harbor-qualification",
+    "runner_kind": "harbor_task",
+    "harness": "oracle",
+    "config_id": "harbor:oracle:default",
+    "agent": {
+      "name": "oracle",
+      "version": "1.0.0"
+    },
+    "provider": null,
+    "model": null,
+    "repo": "bench",
+    "git_sha": "36515473b77cbed2a3a8b9ab7a4182f0cc86b4d2",
+    "resource_envelope": {
+      "cpu_millicores": 1000,
+      "memory_mb": 512,
+      "headroom_percent": 50
+    },
+    "model_usage": {
+      "cost_usd": null,
+      "n_input_tokens": null,
+      "n_output_tokens": null,
+      "n_cache_tokens": null,
+      "interpretation": "Zero model cost and null token counts are expected: the Harbor oracle copied reference solutions and invoked no model. The raw Harbor model-usage fields are null."
+    },
+    "score": {
+      "metric": "harbor_reward_pass_rate",
+      "successes": 2,
+      "n": 2,
+      "point": 1.0,
+      "lower": 0.34237195288961925,
+      "upper": 1.0,
+      "confidence": 0.95,
+      "method": "Wilson"
+    }
+  },
+  "tasks": [
+    {
+      "task_id": "build-publication-assistant",
+      "mode": "build",
+      "ai_necessity": "mixed",
+      "seam_family": "semantic judgment plus deterministic gate",
+      "visible_request": "Turn a natural-language draft and declared field list into a publishable JSON packet, withholding drafts the reviewer rejects and refusing secrets, malformed reviewer output, or undeclared fields without damaging an existing destination.",
+      "reference_path": "benchmarks/seam-agency-v0/harbor/build-publication-assistant/solution",
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/build-publication-assistant/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "publication-assistant verifier: PASS",
+      "latency_ms": 15798,
+      "task_checksum": "469f36a03836c452568eaed2db138933effeb8edf31e473d067626b900d411c6",
+      "job_id": "5fb65f16-0e53-496b-8d28-7a1e6d397fb3",
+      "trial_name": "build-publication-assistant__NxuCyLi",
+      "evidence_id": "0245a5e8-75c0-4273-8ca8-cdebaf8c8fbb",
+      "mutants": [
+        {
+          "id": "missing-ai-keywords",
+          "expected_failure": "Ignores controlled semantic review and substitutes a keyword rule.",
+          "failure_marker": "reviewer must receive the full draft and declared fields"
+        },
+        {
+          "id": "ai-washed-decorative-call",
+          "expected_failure": "Calls the reviewer but ignores its decision.",
+          "failure_marker": "packet shape mismatch"
+        },
+        {
+          "id": "under-enforced-raw-output",
+          "expected_failure": "Lets unvalidated reviewer fields and secret-bearing drafts reach persistence.",
+          "failure_marker": "credential shape must refuse"
+        }
+      ]
+    },
+    {
+      "task_id": "build-claim-lease",
+      "mode": "build",
+      "ai_necessity": "unnecessary",
+      "seam_family": "pure deterministic control",
+      "visible_request": "Implement exact lease acquisition, ownership, renewal, and expiry in an offline JSON-backed store with atomic updates.",
+      "reference_path": "benchmarks/seam-agency-v0/harbor/build-claim-lease/solution",
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "claim-lease verifier: PASS",
+      "latency_ms": 15559,
+      "task_checksum": "7790388f66d868aea1cbe53ccd27c8695c001c7f0fc883cce715b13c86cb3b15",
+      "job_id": "031d92f1-0690-4b9d-b14b-a03b20502f96",
+      "trial_name": "build-claim-lease__iyd92mH",
+      "evidence_id": "a35b9958-dfb5-496c-8dfd-b23c3e5a8deb",
+      "mutants": [
+        {
+          "id": "unnecessary-ai-advisor",
+          "expected_failure": "Makes exact acquisition depend on an external semantic advisor.",
+          "failure_marker": "urlopen error"
+        },
+        {
+          "id": "under-enforced-expired-renewal",
+          "expected_failure": "Allows the named owner to renew after expiry.",
+          "failure_marker": "expired lease renewed"
+        },
+        {
+          "id": "inclusive-expiry-boundary",
+          "expected_failure": "Treats now equal to expires_at as active.",
+          "failure_marker": "expiry equality must be expired"
+        }
+      ]
+    }
+  ],
+  "evidence_ledger": [
+    {
+      "state": "measured",
+      "label": "Measured by the oracle run",
+      "items": [
+        "Crucible invoked Harbor's oracle against both checked-in task directories.",
+        "Both reference applications returned Harbor verifier reward 1.0: 2/2, or 100%.",
+        "The 95% Wilson interval is 34.2% to 100.0%; it is wide because n=2.",
+        "Run, invocation, config, task checksum, trial, job, evidence, revision, and resource identities were captured."
+      ]
+    },
+    {
+      "state": "package_gate_only",
+      "label": "Proved only by the package gate",
+      "items": [
+        "The two reference implementations pass the repository-owned deterministic check.",
+        "All six named wrong-seam mutants fail for their declared marker.",
+        "The seven-task manifest covers Build, Extend, Repair, and Critique, but only the matched Build pair is materialized.",
+        "Mutation results qualify verifier sensitivity; they are not candidate attempts and do not enter the 2/2 oracle score."
+      ]
+    },
+    {
+      "state": "planned",
+      "label": "Planned before benchmark use",
+      "items": [
+        "Materialize the remaining five declared tasks and add a structurally different acceptable reference for every headline task.",
+        "Create source-clustered development, calibration, frozen test, and renewal splits with independent expert gold and adjudication.",
+        "Run a declared candidate pilot through Crucible and Harbor, then report mode-specific paired results and repeat near-threshold configurations.",
+        "Add calibrated judge and human-audit layers only after blinded labels, UNKNOWN handling, and drift probes exist."
+      ]
+    },
+    {
+      "state": "missing",
+      "label": "Missing from current evidence",
+      "items": [
+        "No candidate model, provider, prompt, transcript, retries, candidate cost, or candidate token counts exist in this qualification.",
+        "No held-out capability estimate, cross-harness comparison, calibrated model-judge result, or human audit result exists.",
+        "Cluster-aware inference, complete harness-treatment identity, independent Bench packet intake, and fail-closed safe publication remain open.",
+        "Five declared tasks and the second acceptable reference for each headline task remain unimplemented."
+      ]
+    }
+  ],
+  "construct_blockers": [
+    {
+      "id": "prompted-ai-recognition",
+      "title": "The AI-necessity decision is substantially prompted",
+      "detail": "build-publication-assistant gives the candidate a ReviewBoundary protocol and explicitly says a reviewer interprets the full draft. The verifier proves that semantic output is causally used and rejects keyword and decorative-call mutants, but it only weakly tests whether a candidate independently recognizes that AI is needed—the benchmark's central construct.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/instruction.md",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/environment/repo/packetizer.py",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/tests/verify.py"
+      ]
+    },
+    {
+      "id": "lease-failure-and-concurrency-coverage",
+      "title": "Lease atomicity coverage is incomplete",
+      "detail": "build-claim-lease asks for exact, atomic updates, but its current verifier does not exercise concurrent acquisition or inject a write failure. Passing proves the covered ownership, expiry, persistence, offline, and no-change cases—not concurrency safety or preservation under an interrupted write.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/instruction.md",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py"
+      ]
+    },
+    {
+      "id": "unnecessary-ai-mutant-proxy",
+      "title": "The unnecessary-AI kill is an indirect proxy",
+      "detail": "The unnecessary-ai-advisor mutant fails because its urlopen call hits the verifier's closed-network endpoint. That usefully rejects an external dependency, but it is not a direct structural assertion that the candidate introduced an unnecessary AI decision boundary.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/mutants/unnecessary-ai-advisor/lease_store.py",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/mutants/manifest.json",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py"
+      ]
+    }
+  ],
+  "readiness_path": [
+    {
+      "step": 1,
+      "title": "Complete the corpus",
+      "detail": "Materialize the five remaining declarations, strengthen the current pair's construct coverage, then qualify two structurally different references and applicable wrong-layer mutants per headline task."
+    },
+    {
+      "step": 2,
+      "title": "Freeze independent gold",
+      "detail": "Split by source cluster into development, calibration, private test, and renewal sets; collect two expert labels plus adjudication before reviewing candidate outputs."
+    },
+    {
+      "step": 3,
+      "title": "Receipt a real candidate",
+      "detail": "Declare one candidate configuration and run it through Crucible's Harbor runner with actual model, provider, prompt, tools, transcript, retries, resources, latency, tokens, and cost captured."
+    },
+    {
+      "step": 4,
+      "title": "Calibrate the scoring ladder",
+      "detail": "Keep deterministic behavior as the headline; calibrate any judge against blinded human labels and audit disagreements and novel passes."
+    },
+    {
+      "step": 5,
+      "title": "Analyze and accept a packet",
+      "detail": "Report mode-specific, source-cluster-aware and paired uncertainty, then pass an independent Bench intake and disclosure gate before any public model claim."
+    }
+  ],
+  "sources": [
+    {
+      "label": "Method and limitations",
+      "path": "benchmarks/seam-agency-v0/README.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/README.md"
+    },
+    {
+      "label": "Seven-task declarations",
+      "path": "benchmarks/seam-agency-v0/qualification.json",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/qualification.json"
+    },
+    {
+      "label": "Crucible Harbor specification",
+      "path": "benchmarks/seam-agency-v0/seam-agency-v0-harbor.json",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/seam-agency-v0-harbor.json"
+    },
+    {
+      "label": "Qualification receipt",
+      "path": "benchmarks/seam-agency-v0/receipts/qualification-2026-07-13.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/receipts/qualification-2026-07-13.md"
+    },
+    {
+      "label": "Engine and publication gaps",
+      "path": "benchmarks/seam-agency-v0/engine-gaps.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/engine-gaps.md"
+    },
+    {
+      "label": "Publication-assistant reference, verifier, and mutants",
+      "path": "benchmarks/seam-agency-v0/harbor/build-publication-assistant",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/build-publication-assistant"
+    },
+    {
+      "label": "Claim-lease reference, verifier, and mutants",
+      "path": "benchmarks/seam-agency-v0/harbor/build-claim-lease",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/build-claim-lease"
+    }
+  ]
+}
