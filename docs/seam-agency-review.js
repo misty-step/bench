@@ -24,7 +24,15 @@
   const usage = run.model_usage;
   const executed = new Date(run.created_at_unix_ms).toISOString();
 
-  const tasks = review.tasks.map((task) => `
+  const tasks = review.tasks.map((task) => {
+    const capability = task.capability_receipt;
+    const capabilitySummary = capability.observed_calls === 0
+      ? `zero calls · absent recheck ${capability.capability_absent_recheck}`
+      : `${capability.observed} · full inputs ${capability.full_semantic_inputs ? 'yes' : 'no'}`;
+    const references = task.reference_paths.map((path, index) =>
+      `<a href="${sourceUrl(path)}">reference ${index + 1}</a><span>${esc(path)} · ${esc(task.reference_structures[index])}</span>`
+    ).join('');
+    return `
     <article class="qual-task">
       <div class="qual-task-head">
         <div>
@@ -48,20 +56,23 @@
             <div><dt>evidence</dt><dd>${esc(task.evidence_id)}</dd></div>
             <div><dt>task checksum</dt><dd>${esc(task.task_checksum)}</dd></div>
             <div><dt>wall receipt</dt><dd>${(task.latency_ms / 1000).toFixed(3)}s</dd></div>
+            <div><dt>semantic receipt</dt><dd>${esc(capabilitySummary)}</dd></div>
+            <div><dt>receipt authorship</dt><dd>${esc(capability.candidate_receipt_authorship)}</dd></div>
           </dl>
         </div>
         <div class="coverage-block gate-block">
           <p class="coverage-label">Package gate only · not scored attempts</p>
-          <p><strong>${task.mutants.length}/${task.mutants.length} named mutants rejected</strong> for their declared reason.</p>
+          <p><strong>2/2 structurally distinct references passed; ${task.mutants.length}/${task.mutants.length} named mutants rejected</strong> for their declared reason.</p>
           <ul class="mutant-list">${task.mutants.map((mutant) => `
             <li><span class="mutant-kill" aria-label="expected failure">×</span><div><code>${esc(mutant.id)}</code><p>${esc(mutant.expected_failure)}</p><small>marker: ${esc(mutant.failure_marker)}</small></div></li>`).join('')}</ul>
         </div>
       </div>
       <div class="task-source-row mono">
-        <a href="${sourceUrl(task.reference_path)}">reference</a><span>${esc(task.reference_path)}</span>
+        ${references}
         <a href="${sourceUrl(task.verifier_path)}">verifier</a><span>${esc(task.verifier_path)}</span>
       </div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
 
   const ledger = review.evidence_ledger.map((group) => `
     <article class="evidence-card evidence-${esc(group.state)}">
@@ -73,12 +84,12 @@
   const readiness = review.readiness_path.map((item) => `
     <li><span class="path-number num">${item.step}</span><div><h3>${esc(item.title)}</h3><p>${esc(item.detail)}</p></div></li>`).join('');
 
-  const blockers = review.construct_blockers.map((blocker) => `
-    <article class="blocker-card">
-      <div class="blocker-heading"><span>Benchmark blocker</span><code>${esc(blocker.id)}</code></div>
-      <h3>${esc(blocker.title)}</h3>
-      <p>${esc(blocker.detail)}</p>
-      <div class="blocker-sources">${blocker.source_paths.map((path) => `<a href="${sourceUrl(path)}">${esc(path)}</a>`).join('')}</div>
+  const findings = review.construct_findings.map((finding) => `
+    <article class="blocker-card finding-${esc(finding.status)}">
+      <div class="blocker-heading"><span>${esc(finding.status.replaceAll('_', ' '))}</span><code>${esc(finding.id)}</code></div>
+      <h3>${esc(finding.title)}</h3>
+      <p>${esc(finding.detail)}</p>
+      <div class="blocker-sources">${finding.source_paths.map((path) => `<a href="${sourceUrl(path)}">${esc(path)}</a>`).join('')}</div>
     </article>`).join('');
 
   const sources = review.sources.map((source) => `
@@ -94,8 +105,8 @@
       <div class="boundary-grid">
         <div class="boundary-yes">
           <p>What ran</p>
-          <strong>2 checked-in references</strong>
-          <span>Crucible → Harbor → oracle → deterministic verifier</span>
+          <strong>2 task oracle applications</strong>
+          <span>Crucible → Harbor → oracle → deterministic verifier; 4 references package-qualified</span>
         </div>
         <div class="boundary-no">
           <p>What did not run</p>
@@ -154,7 +165,7 @@
 
     <section aria-labelledby="materialized-tasks">
       <p class="sect-title" id="materialized-tasks">Two materialized tasks</p>
-      <p class="section-intro">Each task exposes its declared seam, reference and verifier, runtime receipt, and separately qualified wrong-seam mutants.</p>
+      <p class="section-intro">Each task exposes its declared seam, two structurally distinct references, verifier, runtime capability receipt, and separately qualified wrong-seam mutants.</p>
       <div class="qual-tasks">${tasks}</div>
     </section>
 
@@ -164,10 +175,10 @@
       <div class="evidence-grid">${ledger}</div>
     </section>
 
-    <section aria-labelledby="construct-blockers">
-      <p class="sect-title" id="construct-blockers">Current construct blockers</p>
-      <p class="section-intro">These limits are visible in the checked-in tasks today. They block a capability claim; this review does not silently upgrade them into measured evidence.</p>
-      <div class="blocker-grid">${blockers}</div>
+    <section aria-labelledby="construct-findings">
+      <p class="sect-title" id="construct-findings">Construct hardening and remaining blockers</p>
+      <p class="section-intro">Resolved findings are limited to the two materialized development tasks. Remaining limitations still block a benchmark capability claim.</p>
+      <div class="blocker-grid">${findings}</div>
     </section>
 
     <section aria-labelledby="benchmark-path">

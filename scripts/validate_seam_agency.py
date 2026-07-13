@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -136,6 +137,9 @@ def validate_shared_capability(materialized: list[dict]) -> None:
     ):
         fail("candidate-visible semantic capability contract drifted")
     for task_dir in task_dirs:
+        task_config = tomllib.loads((task_dir / "task.toml").read_text())
+        if task_config.get("environment", {}).get("network_mode") != "no-network":
+            fail(f"{task_dir.name} must explicitly deny network access")
         for relative in ("environment/crucible-semantic", "tests/crucible-semantic"):
             if (task_dir / relative).stat().st_mode & 0o111 == 0:
                 fail(f"shared capability command is not executable: {task_dir / relative}")
@@ -248,10 +252,16 @@ def validate_review_surface(materialized: list[dict]) -> None:
             if reviewed.get(review_key) != declared.get(declaration_key):
                 fail(f"review {task_id} {review_key} drifted from qualification.json")
         task_dir = PACKAGE / declared["task_dir"]
-        expected_reference = (task_dir / "solution").relative_to(ROOT).as_posix()
+        expected_references = [
+            (task_dir / reference).relative_to(ROOT).as_posix()
+            for reference in declared["reference_dirs"]
+        ]
         expected_verifier = (task_dir / "tests" / "verify.py").relative_to(ROOT).as_posix()
-        if reviewed.get("reference_path") != expected_reference:
-            fail(f"review {task_id} reference path drifted")
+        if reviewed.get("reference_paths") != expected_references:
+            fail(f"review {task_id} reference paths drifted")
+        reference_structures = reviewed.get("reference_structures", [])
+        if len(reference_structures) != 2 or len(set(reference_structures)) != 2:
+            fail(f"review {task_id} must describe two distinct reference structures")
         if reviewed.get("verifier_path") != expected_verifier:
             fail(f"review {task_id} verifier path drifted")
         if reviewed.get("passed") is not True or reviewed.get("reward") != 1.0:
@@ -267,21 +277,61 @@ def validate_review_surface(materialized: list[dict]) -> None:
         ]
         if reviewed.get("mutants") != expected_mutants:
             fail(f"review {task_id} mutant evidence drifted from its manifest")
+        capability_receipt = reviewed.get("capability_receipt", {})
+        if capability_receipt.get("capability_id") != "semantic.generate.v1":
+            fail(f"review {task_id} capability receipt drifted")
+        if capability_receipt.get("candidate_receipt_authorship") != "blocked":
+            fail(f"review {task_id} must preserve blocked candidate receipt authorship")
+
+    publication_receipt = next(
+        task["capability_receipt"]
+        for task in reviewed_tasks
+        if task["task_id"] == "build-publication-assistant"
+    )
+    if (
+        publication_receipt.get("observed") != "positive causal use"
+        or publication_receipt.get("full_semantic_inputs") is not True
+        or publication_receipt.get("exact_positive_call_count_scored") is not False
+    ):
+        fail("publication capability receipt lost its causal/full-input boundary")
+    lease_receipt = next(
+        task["capability_receipt"]
+        for task in reviewed_tasks
+        if task["task_id"] == "build-claim-lease"
+    )
+    if (
+        lease_receipt.get("observed_calls") != 0
+        or lease_receipt.get("capability_absent_recheck") != "pass"
+        or "denied by Harbor" not in lease_receipt.get("network", "")
+    ):
+        fail("lease capability receipt lost its zero-use/absent/network boundary")
 
     ledger_states = {group.get("state") for group in review.get("evidence_ledger", [])}
     if ledger_states != {"measured", "package_gate_only", "planned", "missing"}:
         fail("review must separate measured, package-gate-only, planned, and missing evidence")
-    blockers = review.get("construct_blockers", [])
-    if {blocker.get("id") for blocker in blockers} != {
+    findings = review.get("construct_findings", [])
+    if {finding.get("id") for finding in findings} != {
         "prompted-ai-recognition",
         "lease-failure-and-concurrency-coverage",
         "unnecessary-ai-mutant-proxy",
+        "controlled-semantic-fixture",
+        "corpus-incomplete",
     }:
-        fail("review must expose the three current construct-validity blockers")
-    for blocker in blockers:
-        for source_path in blocker.get("source_paths", []):
+        fail("review must expose resolved construct findings and remaining blockers")
+    finding_statuses = {finding.get("id"): finding.get("status") for finding in findings}
+    for finding_id in (
+        "prompted-ai-recognition",
+        "lease-failure-and-concurrency-coverage",
+        "unnecessary-ai-mutant-proxy",
+    ):
+        if finding_statuses.get(finding_id) != "resolved_for_materialized_pair":
+            fail(f"review must mark {finding_id} resolved only for the materialized pair")
+    if finding_statuses.get("corpus-incomplete") != "benchmark_blocker":
+        fail("review must preserve the incomplete corpus as a benchmark blocker")
+    for finding in findings:
+        for source_path in finding.get("source_paths", []):
             if not (ROOT / source_path).is_file():
-                fail(f"construct blocker source does not exist: {source_path!r}")
+                fail(f"construct finding source does not exist: {source_path!r}")
     if len(review.get("readiness_path", [])) < 4:
         fail("review must provide a concrete multi-step benchmark-readiness path")
 
@@ -305,11 +355,11 @@ def validate_review_surface(materialized: list[dict]) -> None:
     if (
         "qualification-review" not in page
         or "evidence_ledger" not in renderer
-        or "construct_blockers" not in renderer
+        or "construct_findings" not in renderer
     ):
         fail("qualification review page or renderer is incomplete")
 
-    receipt = (PACKAGE / "receipts" / "qualification-2026-07-13.md").read_text()
+    receipt = (PACKAGE / "receipts" / "construct-hardening-2026-07-13.md").read_text()
     stable_identity = [
         run.get("run_id"),
         run.get("invocation_id"),

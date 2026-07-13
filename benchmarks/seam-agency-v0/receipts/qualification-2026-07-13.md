@@ -213,3 +213,17 @@ full-page visual layout, and an empty browser console/error surface. The
 supplemental untracked screenshot receipt is
 `/tmp/bench-seam-agency-review.png`. No site publication or branch push was
 performed.
+
+### Construct-hardening reconciliation — 2026-07-13
+
+This receipt is the pre-hardening baseline and its three browser-review
+blockers should not be read as current package truth. The matched pair now uses
+an identical neutral `semantic.generate.v1` capability declaration with a
+verifier-owned positive/zero-use ledger; publication no longer receives the
+former `ReviewBoundary` protocol; lease now covers concurrent acquisition and
+injected write-failure preservation; and the unnecessary-AI mutant is rejected
+by a direct capability invocation receipt rather than `urlopen`. Each task also
+has two structurally distinct passing references. Current identities, limits,
+and proof are in
+`benchmarks/seam-agency-v0/receipts/construct-hardening-2026-07-13.md` and the
+checked-in review data.
