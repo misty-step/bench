@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "unnecessary-ai-advisor",
+      "path": "unnecessary-ai-advisor",
+      "expected_failure": "Makes exact acquisition depend on an external semantic advisor.",
+      "failure_marker": "semantic capability invoked for deterministic lease"
+    },
+    {
+      "id": "under-enforced-expired-renewal",
+      "path": "under-enforced-expired-renewal",
+      "expected_failure": "Allows the named owner to renew after expiry.",
+      "failure_marker": "expired lease renewed"
+    },
+    {
+      "id": "inclusive-expiry-boundary",
+      "path": "inclusive-expiry-boundary",
+      "expected_failure": "Treats now equal to expires_at as active.",
+      "failure_marker": "expiry equality must be expired"
+    }
+  ]
+}

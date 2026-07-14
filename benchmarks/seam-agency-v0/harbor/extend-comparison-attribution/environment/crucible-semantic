@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""Candidate-visible one-shot capability stub; hidden verification owns responses."""
+
+from __future__ import annotations
+
+import json
+import sys
+
+
+request = json.loads(sys.stdin.read())
+json.dump(
+    {
+        "schema_version": "bench.semantic_generate.result.v1",
+        "request_id": request.get("request_id"),
+        "status": "execution_error",
+        "error": {
+            "code": "verification_fixture_absent",
+            "message": "No semantic scenario is active outside verification.",
+        },
+    },
+    sys.stdout,
+)
+sys.stdout.write("\n")

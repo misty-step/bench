@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "procedural JSON catalog and prefiltered run-style semantic selection",
+      "behavioral_difference": "deterministically returns the sole eligible provider without invoking semantic ranking",
+      "proof_marker": "reference-behavior: sole-eligible-deterministic"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "catalog and eligibility objects with Popen transport and indexed result validation",
+      "behavioral_difference": "routes even a sole eligible provider through the semantic chooser while retaining deterministic eligibility gates",
+      "proof_marker": "reference-behavior: sole-eligible-semantic"
+    }
+  ]
+}

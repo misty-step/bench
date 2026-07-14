@@ -1,0 +1,10 @@
+{
+  "standard": {
+    "supports_batch": false,
+    "max_context": 32000
+  },
+  "long-context": {
+    "supports_batch": false,
+    "max_context": 128000
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "bench.runtime_capabilities.v1",
+  "capabilities": [
+    {
+      "id": "semantic.generate.v1",
+      "transport": "json_stdio_once",
+      "command": "crucible-semantic",
+      "request_schema": "bench.semantic_generate.request.v1",
+      "result_schema": "bench.semantic_generate.result.v1",
+      "statuses": [
+        "ok",
+        "refused",
+        "timeout",
+        "malformed_output",
+        "execution_error"
+      ],
+      "content_trust": "untrusted"
+    }
+  ]
+}

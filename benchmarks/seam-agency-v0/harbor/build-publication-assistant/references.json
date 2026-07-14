@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "functional manifest adapter using subprocess.run plus NamedTemporaryFile and os.replace",
+      "behavioral_difference": "atomically replaces the destination on every accepted publication, including an equivalent repeat",
+      "proof_marker": "reference-behavior: replace-equivalent-packet"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "object semantic adapter using subprocess.Popen plus directory-relative exclusive creation and os.replace",
+      "behavioral_difference": "returns success without replacing an existing destination when its parsed packet is already equivalent",
+      "proof_marker": "reference-behavior: preserve-equivalent-packet"
+    }
+  ]
+}

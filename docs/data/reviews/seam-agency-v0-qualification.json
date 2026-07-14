@@ -1,0 +1,699 @@
+{
+  "schema_version": "bench.qualification_review.v1",
+  "id": "seam-agency-v0-qualification",
+  "title": "Seam Agency v0",
+  "subtitle": "Seven-task public development qualification",
+  "status": {
+    "kind": "harbor_oracle_reference_qualification",
+    "label": "Harbor oracle/reference qualification",
+    "headline": "Seven references passed. No model candidate was run.",
+    "explanation": "Crucible invoked Harbor's oracle agent, which applied one checked-in reference solution per task. This qualifies task/reference/verifier integration only; it is not evidence that a model or coding agent solved any task."
+  },
+  "run": {
+    "run_id": "run-1783988831378-17513-0:seam-agency-v0-harbor-qualification",
+    "invocation_id": "run-1783988831378-17513-0",
+    "created_at_unix_ms": 1783988831378,
+    "benchmark_id": "seam-agency-v0-harbor-qualification",
+    "runner_kind": "harbor_task",
+    "harness": "oracle",
+    "config_id": "harbor:oracle:default",
+    "agent": {
+      "name": "oracle",
+      "version": "1.0.0"
+    },
+    "provider": null,
+    "model": null,
+    "repo": "bench",
+    "git_sha": "17b21930c0514fb039f1eaf6bbd1f484719703de",
+    "resource_envelope": {
+      "cpu_millicores": 1000,
+      "memory_mb": 512,
+      "headroom_percent": 50
+    },
+    "model_usage": {
+      "cost_usd": null,
+      "n_input_tokens": null,
+      "n_output_tokens": null,
+      "n_cache_tokens": null,
+      "interpretation": "Zero model cost and null token counts are expected: the Harbor oracle copied reference solutions and invoked no model. The raw Harbor model-usage fields are null."
+    },
+    "score": {
+      "metric": "harbor_reward_pass_rate",
+      "successes": 7,
+      "n": 7,
+      "point": 1.0,
+      "lower": 0.6456611570247934,
+      "upper": 1.0,
+      "confidence": 0.95,
+      "method": "Wilson"
+    },
+    "mode_scores": [
+      {
+        "mode": "build",
+        "successes": 3,
+        "n": 3,
+        "point": 1.0,
+        "lower": 0.43849391955098227,
+        "upper": 1.0,
+        "confidence": 0.95,
+        "method": "Wilson"
+      },
+      {
+        "mode": "extend",
+        "successes": 2,
+        "n": 2,
+        "point": 1.0,
+        "lower": 0.34237195288961925,
+        "upper": 1.0,
+        "confidence": 0.95,
+        "method": "Wilson"
+      },
+      {
+        "mode": "repair",
+        "successes": 1,
+        "n": 1,
+        "point": 1.0,
+        "lower": 0.20654329147389294,
+        "upper": 1.0,
+        "confidence": 0.95,
+        "method": "Wilson"
+      },
+      {
+        "mode": "critique",
+        "successes": 1,
+        "n": 1,
+        "point": 1.0,
+        "lower": 0.20654329147389294,
+        "upper": 1.0,
+        "confidence": 0.95,
+        "method": "Wilson",
+        "interpretation": "Deterministic replay artifact qualification only; not semantic critique quality."
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "task_id": "build-publication-assistant",
+      "mode": "build",
+      "ai_necessity": "mixed",
+      "seam_family": "semantic judgment plus deterministic gate",
+      "visible_request": "Turn a natural-language draft and declared field list into a publishable JSON packet, publishing only appropriate public material and withholding material that should not be released while refusing credentials, malformed generated output, or undeclared fields without damaging an existing destination.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/solution",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/solution-alt"
+      ],
+      "reference_structures": [
+        "functional manifest adapter using subprocess.run plus NamedTemporaryFile and os.replace",
+        "object semantic adapter using subprocess.Popen plus directory-relative exclusive creation and os.replace"
+      ],
+      "reference_behaviors": [
+        "atomically replaces the destination on every accepted publication, including an equivalent repeat",
+        "returns success without replacing an existing destination when its parsed packet is already equivalent"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: replace-equivalent-packet",
+        "reference-behavior: preserve-equivalent-packet"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/build-publication-assistant/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Positive semantic.generate.v1 use observed; full draft, declared fields, and response schema receipted; controlled responses causally governed publication; candidate receipt authorship blocked.",
+      "latency_ms": 17619,
+      "task_checksum": "49f67bdccef52ad8429e55ae27f3a5a495393c8e5d45d70007f045b9d37939e4",
+      "job_id": "c65d673f-26ea-462f-8c61-98c140b5f626",
+      "trial_name": "build-publication-assistant__8QXajCZ",
+      "evidence_id": "08252cb7-14ab-4bd8-ae96-53e25700335f",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed": "positive causal use",
+        "full_semantic_inputs": true,
+        "candidate_receipt_authorship": "blocked",
+        "exact_positive_call_count_scored": false
+      },
+      "mutants": [
+        {
+          "id": "missing-ai-keywords",
+          "expected_failure": "Ignores controlled semantic review and substitutes a keyword rule.",
+          "failure_marker": "semantic capability not causally used"
+        },
+        {
+          "id": "ai-washed-decorative-call",
+          "expected_failure": "Calls the reviewer but ignores its decision.",
+          "failure_marker": "semantic response did not causally control publication"
+        },
+        {
+          "id": "under-enforced-raw-output",
+          "expected_failure": "Lets unvalidated reviewer fields and secret-bearing drafts reach persistence.",
+          "failure_marker": "credential-shaped draft crossed the semantic boundary"
+        }
+      ]
+    },
+    {
+      "task_id": "build-incident-grouping",
+      "mode": "build",
+      "ai_necessity": "mixed",
+      "seam_family": "semantic judgment plus exact consumer",
+      "visible_request": "Group paraphrased incident reports while keeping stable group identities, idempotent persistence, and malformed-decision handling exact.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-incident-grouping/solution",
+        "benchmarks/seam-agency-v0/harbor/build-incident-grouping/solution-alt"
+      ],
+      "reference_structures": [
+        "procedural manifest transport with copy-on-write JSON snapshot and deterministic hash IDs",
+        "semantic gateway object with Popen transport and directory-relative exclusive staging"
+      ],
+      "reference_behaviors": [
+        "derives a new incident group ID from the first report ID and preserves accepted evidence in ingestion order",
+        "derives a new incident group ID from the first report text and canonically orders joined evidence by report ID"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: report-id-derived-group",
+        "reference-behavior: report-text-derived-group"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/build-incident-grouping/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Positive semantic.generate.v1 use observed with full report and existing groups; controlled new/join decisions governed grouping while repository IDs and persistence stayed deterministic.",
+      "latency_ms": 16921,
+      "task_checksum": "0bcb8c5a2749934d8149c2a26ca240a6e4436b2ccf51c31e41b2951c7d400844",
+      "job_id": "60a738c6-a702-4a60-94a3-9f7a6e6572a3",
+      "trial_name": "build-incident-grouping__hqM9y8z",
+      "evidence_id": "da38b353-6e6e-4078-9d3c-3712fd2deb25",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed": "positive causal use",
+        "full_semantic_inputs": true,
+        "candidate_receipt_authorship": "blocked",
+        "exact_positive_call_count_scored": false
+      },
+      "mutants": [
+        {
+          "id": "token-overlap-grouper",
+          "expected_failure": "Uses token overlap instead of meaning-aware grouping.",
+          "failure_marker": "semantic capability not causally used for incident grouping"
+        },
+        {
+          "id": "decorative-model-call",
+          "expected_failure": "Invokes the semantic capability but always creates a new group.",
+          "failure_marker": "semantic response did not causally control incident grouping"
+        },
+        {
+          "id": "raw-label-as-primary-key",
+          "expected_failure": "Persists an untrusted semantic label as a group identity.",
+          "failure_marker": "unknown semantic group id mutated storage"
+        }
+      ]
+    },
+    {
+      "task_id": "build-claim-lease",
+      "mode": "build",
+      "ai_necessity": "unnecessary",
+      "seam_family": "pure deterministic control",
+      "visible_request": "Implement exact lease acquisition, ownership, renewal, and expiry in an offline JSON-backed store with atomic updates.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/solution",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/solution-alt"
+      ],
+      "reference_structures": [
+        "fcntl advisory lock file plus NamedTemporaryFile and os.replace",
+        "atomic lock-directory coordination plus exclusive unique staging and os.replace"
+      ],
+      "reference_behaviors": [
+        "waits on operating-system advisory lock ownership during contention",
+        "returns failure after a bounded wait when lock-directory contention does not clear"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: ignores-unrelated-lockdir",
+        "reference-behavior: bounded-lockdir-refusal"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Zero semantic.generate.v1 calls observed; concurrent acquisition and injected write failure passed; capability-absent recheck passed under the network-denied credential-free baseline.",
+      "latency_ms": 20017,
+      "task_checksum": "a1def054a8e027c0778386fd73179b45de2de97564da3f23ec44155c4b47857b",
+      "job_id": "c946a7d6-aebe-4dfd-bb18-9b744880d8c3",
+      "trial_name": "build-claim-lease__dicVvW6",
+      "evidence_id": "88bc29e6-763f-4194-b7d1-96f39dcb53ea",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed_calls": 0,
+        "capability_absent_recheck": "pass",
+        "network": "denied by Harbor verifier baseline; no credentials provided",
+        "candidate_receipt_authorship": "blocked"
+      },
+      "mutants": [
+        {
+          "id": "unnecessary-ai-advisor",
+          "expected_failure": "Makes exact acquisition depend on an external semantic advisor.",
+          "failure_marker": "semantic capability invoked for deterministic lease"
+        },
+        {
+          "id": "under-enforced-expired-renewal",
+          "expected_failure": "Allows the named owner to renew after expiry.",
+          "failure_marker": "expired lease renewed"
+        },
+        {
+          "id": "inclusive-expiry-boundary",
+          "expected_failure": "Treats now equal to expires_at as active.",
+          "failure_marker": "expiry equality must be expired"
+        }
+      ]
+    },
+    {
+      "task_id": "extend-provider-routing",
+      "mode": "extend",
+      "ai_necessity": "mixed",
+      "seam_family": "declaration plus judgment plus gate",
+      "visible_request": "Add a provider family to a declared capability system, semantically rank eligible candidates, and enforce tool and budget requirements before selection.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/extend-provider-routing/solution",
+        "benchmarks/seam-agency-v0/harbor/extend-provider-routing/solution-alt"
+      ],
+      "reference_structures": [
+        "procedural JSON catalog and prefiltered run-style semantic selection",
+        "catalog and eligibility objects with Popen transport and indexed result validation"
+      ],
+      "reference_behaviors": [
+        "deterministically returns the sole eligible provider without invoking semantic ranking",
+        "routes even a sole eligible provider through the semantic chooser while retaining deterministic eligibility gates"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: sole-eligible-deterministic",
+        "reference-behavior: sole-eligible-semantic"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/extend-provider-routing/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Positive semantic.generate.v1 use observed only after deterministic eligibility; full task and eligible declarations were receipted; ineligible or malformed choices were refused.",
+      "latency_ms": 16663,
+      "task_checksum": "a7e049419af0715e3e97be6bce724ea515d0f090c4a707327718c7f0adcfa0d0",
+      "job_id": "eca93b66-3b47-42ff-9289-27489c606f77",
+      "trial_name": "extend-provider-routing__Seyh2gk",
+      "evidence_id": "321ce34f-f32f-42b8-a1e0-151fb5e480a2",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed": "positive causal use after deterministic eligibility",
+        "full_semantic_inputs": true,
+        "candidate_receipt_authorship": "blocked",
+        "exact_positive_call_count_scored": false
+      },
+      "mutants": [
+        {
+          "id": "provider-special-case-branch",
+          "expected_failure": "Special-cases one known provider instead of extending the family declaration.",
+          "failure_marker": "declarative provider family did not generalize"
+        },
+        {
+          "id": "keyword-ranker",
+          "expected_failure": "Ranks rich task context with deterministic keywords.",
+          "failure_marker": "semantic capability not causally used for provider ranking"
+        },
+        {
+          "id": "prompt-only-budget-gate",
+          "expected_failure": "Sends ineligible providers to semantic ranking and trusts the response.",
+          "failure_marker": "ineligible candidate reached semantic ranking"
+        }
+      ]
+    },
+    {
+      "task_id": "extend-comparison-attribution",
+      "mode": "extend",
+      "ai_necessity": "unnecessary",
+      "seam_family": "declaration plus deterministic mechanism",
+      "visible_request": "Add reasoning effort as an identity axis in exact comparison attribution without special-case control flow or a model call.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/extend-comparison-attribution/solution",
+        "benchmarks/seam-agency-v0/harbor/extend-comparison-attribution/solution-alt"
+      ],
+      "reference_structures": [
+        "direct canonical serialization with alphabetically ordered change reporting",
+        "identity record object with declared-axis-first change reporting"
+      ],
+      "reference_behaviors": [
+        "reports multi-axis changes in canonical alphabetical order",
+        "reports known multi-axis changes in declaration order before extra keys"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: alphabetical-attribution-order",
+        "reference-behavior: declared-axis-priority-order"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/extend-comparison-attribution/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Zero semantic.generate.v1 calls observed; exact full-configuration identity, missing-versus-explicit attribution, and capability-absent recheck passed.",
+      "latency_ms": 17141,
+      "task_checksum": "4d6e03d773cb8bed5e745c2aad4156a86ef85b06a193e474395522bc7a5b1c3d",
+      "job_id": "88cb2aef-2c28-4740-aa74-15003a48465d",
+      "trial_name": "extend-comparison-attribution__3JsjnVc",
+      "evidence_id": "b8917b22-bbdd-4305-a6d0-10aad7100458",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed_calls": 0,
+        "capability_absent_recheck": "pass",
+        "network": "explicit Harbor no-network baseline; no credentials provided",
+        "candidate_receipt_authorship": "blocked"
+      },
+      "mutants": [
+        {
+          "id": "reasoning-special-case-branch",
+          "expected_failure": "Reports reasoning changes but omits reasoning from the exact identity.",
+          "failure_marker": "reasoning effort was not identity-bearing"
+        },
+        {
+          "id": "prose-model-diff",
+          "expected_failure": "Uses semantic prose to attribute an exact configuration delta.",
+          "failure_marker": "semantic capability invoked for comparison attribution"
+        },
+        {
+          "id": "missing-equals-default-collapse",
+          "expected_failure": "Collapses a missing reasoning value into an explicit default.",
+          "failure_marker": "missing reasoning effort collapsed into explicit value"
+        }
+      ]
+    },
+    {
+      "task_id": "repair-memory-extraction",
+      "mode": "repair",
+      "ai_necessity": "required",
+      "seam_family": "pure semantic control",
+      "visible_request": "Repair meaning-aware memory extraction that currently uses keyword heuristics, preserving rich evidence and returning no memory when the text does not support one.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/repair-memory-extraction/solution",
+        "benchmarks/seam-agency-v0/harbor/repair-memory-extraction/solution-alt"
+      ],
+      "reference_structures": [
+        "procedural semantic envelope validation returning the minimal fact/evidence record",
+        "semantic extractor object with Popen transport and deterministic evidence span validation"
+      ],
+      "reference_behaviors": [
+        "returns only the required fact and evidence fields",
+        "also returns the optional exact source_offset for accepted evidence"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: minimal-memory-record",
+        "reference-behavior: evidence-offset-record"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/repair-memory-extraction/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Positive semantic.generate.v1 use observed with full source text and response schema; paraphrase recognition was causal while unsupported evidence and malformed output were refused.",
+      "latency_ms": 17673,
+      "task_checksum": "84e753190dcf900524b38f7a525d6589fda9e607c61b6eb0a66286b4e7164f91",
+      "job_id": "4162e24f-0f27-4d09-8ce7-42214f838672",
+      "trial_name": "repair-memory-extraction__gGbTKiB",
+      "evidence_id": "3e51bbaa-143b-4404-a096-3841943831dc",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed": "positive causal use",
+        "full_semantic_inputs": true,
+        "candidate_receipt_authorship": "blocked",
+        "exact_positive_call_count_scored": false
+      },
+      "mutants": [
+        {
+          "id": "expanded-keyword-table",
+          "expected_failure": "Expands lexical triggers instead of repairing semantic extraction.",
+          "failure_marker": "semantic capability not causally used for memory extraction"
+        },
+        {
+          "id": "model-call-with-keyword-verdict",
+          "expected_failure": "Calls the capability but lets keywords decide whether a memory exists.",
+          "failure_marker": "semantic response did not causally control memory extraction"
+        },
+        {
+          "id": "premature-memory-enum",
+          "expected_failure": "Collapses rich memory output into a fixed category and loses the fact.",
+          "failure_marker": "memory fact or evidence was lost"
+        }
+      ]
+    },
+    {
+      "task_id": "critique-operator-action-router",
+      "mode": "critique",
+      "ai_necessity": "mixed",
+      "seam_family": "replayable deterministic critique artifact",
+      "visible_request": "Replay declared operator-router counterexamples and emit versioned findings with expected versus observed action/state, exact affected boundary, preserved repair invariants, and UNKNOWN when trustworthy reproduction is unavailable.",
+      "reference_paths": [
+        "benchmarks/seam-agency-v0/harbor/critique-operator-action-router/solution",
+        "benchmarks/seam-agency-v0/harbor/critique-operator-action-router/solution-alt"
+      ],
+      "reference_structures": [
+        "in-process per-case module reload with exception capture",
+        "isolated subprocess replay with typed result projection"
+      ],
+      "reference_behaviors": [
+        "emits only confirmed and unknown findings",
+        "emits confirmed, unknown, and passing findings"
+      ],
+      "reference_proof_markers": [
+        "reference-behavior: omit-passing-findings",
+        "reference-behavior: include-passing-findings"
+      ],
+      "verifier_path": "benchmarks/seam-agency-v0/harbor/critique-operator-action-router/tests/verify.py",
+      "passed": true,
+      "reward": 1.0,
+      "verifier_summary": "Replay artifact schema, actual reproduction, exact affected boundary, repair invariants, and UNKNOWN handling passed. Capability calls were observed as metadata only and not scored.",
+      "latency_ms": 15403,
+      "task_checksum": "7dc5510907b1e6db444ed12cc8819cd78b152c69d2eac731b7b38b5abb918793",
+      "job_id": "cfb53837-1fe5-452d-ae8d-a19d7dd91530",
+      "trial_name": "critique-operator-action-router__dqS3stH",
+      "evidence_id": "2ef43cf2-cd0d-401f-aff1-3d8075089b4c",
+      "capability_receipt": {
+        "capability_id": "semantic.generate.v1",
+        "observed_calls": 0,
+        "scoring": "observed non-scoring",
+        "semantic_quality_claim": null,
+        "candidate_receipt_authorship": "blocked"
+      },
+      "mutants": [
+        {
+          "id": "prompt-only-approval",
+          "expected_failure": "Describes expected approval behavior without replaying the candidate router.",
+          "failure_marker": "counterexample was not actually replayed"
+        },
+        {
+          "id": "regex-intent-router",
+          "expected_failure": "Infers the affected boundary from action vocabulary instead of preserving the declared replay boundary.",
+          "failure_marker": "exact affected boundary was not preserved"
+        },
+        {
+          "id": "raw-model-action-dispatch",
+          "expected_failure": "Lets untrusted semantic output dispatch an action during critique.",
+          "failure_marker": "critique executed an action"
+        }
+      ]
+    }
+  ],
+  "evidence_ledger": [
+    {
+      "state": "measured",
+      "label": "Measured by the oracle run",
+      "items": [
+        "Crucible invoked Harbor oracle against all seven checked-in task directories at clean source revision 17b21930c0514fb039f1eaf6bbd1f484719703de.",
+        "All seven reference applications returned Harbor verifier reward 1.0: 7/7 overall, Wilson 95% 64.6% to 100.0%.",
+        "Mode receipts are Build 3/3 [43.8%, 100%], Extend 2/2 [34.2%, 100%], Repair 1/1 [20.7%, 100%], and Critique 1/1 [20.7%, 100%]. These are reference integration rates, not model capability rates.",
+        "Per-task trial, job, evidence, checksum, latency, capability, source revision, and resource identities were captured.",
+        "Provider, model, cost, and token fields are null because no model was invoked."
+      ]
+    },
+    {
+      "state": "package_gate_only",
+      "label": "Proved only by the package gate",
+      "items": [
+        "Both references for each task pass: 14/14 reference checks. Each pair also emits a distinct executable strategy marker; references.json prose alone cannot satisfy the gate.",
+        "All 21 named wrong-seam mutants fail at their declared observable marker. Mutation kills are verifier-sensitivity checks, not model attempts.",
+        "The candidate-visible semantic.generate.v1 manifest, executable, fixture, and transport are byte-identical across all seven tasks; every task explicitly denies network access.",
+        "Lease concurrency/write-failure preservation and comparison zero-use/absent behavior are deterministic gate evidence.",
+        "Router critique qualification proves schema, actual replay, exact gate preservation, and UNKNOWN handling only."
+      ]
+    },
+    {
+      "state": "planned",
+      "label": "Required before benchmark use",
+      "items": [
+        "Create independently sourced, source-clustered calibration, frozen private test, and renewal splits with provenance and disclosure review.",
+        "Obtain two blinded expert labels plus adjudication for behavior, AI-necessity, seams, and invariants before candidate outputs are reviewed.",
+        "Run a predeclared real candidate pilot through Crucible and report mode-specific paired outcomes, treatment identity, retries, transcripts, tokens, cost, and near-threshold repeats.",
+        "If semantic critique quality becomes a headline, add two blinded experts plus a decorrelated calibrated judge with fail-class precision/recall at least 0.90, UNKNOWN, format/drift probes, and human adjudication.",
+        "Pass an independent Bench packet-intake and fail-closed disclosure gate before any public model claim."
+      ]
+    },
+    {
+      "state": "missing",
+      "label": "Missing from current evidence",
+      "items": [
+        "No model candidate, provider, prompt, transcript, retries, candidate cost, candidate tokens, or candidate result exists in this qualification.",
+        "No held-out capability estimate, source-cluster-aware population inference, cross-harness comparison, calibrated model judge, or human audit exists.",
+        "No evidence establishes critique finding completeness, consequence quality, or architectural soundness.",
+        "Complete harness-treatment identity, independent packet intake, and fail-closed safe publication remain open.",
+        "Seven public development tasks are a construct-qualified corpus, not yet a usable decision benchmark."
+      ]
+    }
+  ],
+  "construct_findings": [
+    {
+      "id": "independent-ai-recognition",
+      "status": "resolved_public_development",
+      "title": "AI-necessity recognition is unprompted and observable",
+      "detail": "All tasks expose the same neutral semantic.generate.v1 capability without prescribing use. Positive tasks must causally use full semantic inputs; unnecessary controls must record zero calls and pass with the capability absent. Candidate source vocabulary, prompt wording, class shape, subprocess choice, and exact positive call count are not graded.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/qualification.json",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/instruction.md",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py"
+      ]
+    },
+    {
+      "id": "behaviorally-distinct-references",
+      "status": "resolved_public_development",
+      "title": "Every reference pair differs in executable behavior",
+      "detail": "The gate runs both references and requires distinct observed markers: equivalent-repeat replacement, lock contention, group-ID policy, sole-eligible routing, attribution order, optional evidence offsets, and passing-finding inclusion. Adapter syntax or references.json prose cannot prove this criterion.",
+      "source_paths": [
+        "scripts/validate_seam_agency.py",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/references.json",
+        "benchmarks/seam-agency-v0/harbor/build-incident-grouping/references.json"
+      ]
+    },
+    {
+      "id": "lease-concurrency-and-failure",
+      "status": "resolved_public_development",
+      "title": "Lease concurrency and write-failure preservation are covered",
+      "detail": "The gate races eight isolated processes and requires one persisted winner, then injects an unwritable-directory failure and requires prior bytes to remain exact. These are deterministic development checks, not model evidence.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py",
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/references.json"
+      ]
+    },
+    {
+      "id": "unnecessary-ai-direct-invariant",
+      "status": "resolved_public_development",
+      "title": "Unnecessary AI is directly observable",
+      "detail": "Lease and comparison record zero semantic calls and pass with the capability absent under explicit no-network baselines. Their model-using mutants fail on the verifier-owned invocation ledger, not semantic keywords or regex.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/build-claim-lease/tests/verify.py",
+        "benchmarks/seam-agency-v0/harbor/extend-comparison-attribution/tests/verify.py"
+      ]
+    },
+    {
+      "id": "controlled-semantic-fixture",
+      "status": "remaining_limitation",
+      "title": "The semantic service is a controlled construct fixture",
+      "detail": "Deterministic scenarios prove causal integration, input completeness, validation, and refusal behavior. They do not measure quality, calibration, latency, or cost of any real model.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/README.md",
+        "benchmarks/seam-agency-v0/harbor/build-publication-assistant/tests/semantic_fixture.py"
+      ]
+    },
+    {
+      "id": "critique-quality-ceiling",
+      "status": "benchmark_blocker",
+      "title": "Router critique semantic quality is not qualified",
+      "detail": "The task is narrowed to replayable versioned findings. Deterministic gold proves schema, actual reproduction, exact affected boundary, repair invariants, and UNKNOWN only; it does not claim completeness, consequence quality, or architectural soundness. Headline semantic quality remains blocked on blinded experts, a decorrelated calibrated judge, drift probes, and adjudication.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/harbor/critique-operator-action-router/instruction.md",
+        "benchmarks/seam-agency-v0/harbor/critique-operator-action-router/tests/verify.py",
+        "benchmarks/seam-agency-v0/qualification.json"
+      ]
+    },
+    {
+      "id": "public-development-only",
+      "status": "benchmark_blocker",
+      "title": "The corpus is public development evidence only",
+      "detail": "All seven declarations are materialized, but independent private source clusters, candidate evidence, expert gold, calibrated judging, packet acceptance, and disclosure review remain missing. The package is not yet a usable decision benchmark.",
+      "source_paths": [
+        "benchmarks/seam-agency-v0/README.md",
+        "benchmarks/seam-agency-v0/engine-gaps.md",
+        "benchmarks/seam-agency-v0/qualification.json"
+      ]
+    }
+  ],
+  "readiness_path": [
+    {
+      "step": 1,
+      "title": "Source private benchmark splits",
+      "detail": "Add independently sourced calibration, frozen test, and renewal cases split by repository/source incident; preserve provenance, cluster identity, and disclosure receipts."
+    },
+    {
+      "step": 2,
+      "title": "Freeze independent gold",
+      "detail": "Collect two blinded expert rulings plus adjudication for behavior, AI necessity, seam map, invariants, and mutation intent before candidate output review."
+    },
+    {
+      "step": 3,
+      "title": "Calibrate any semantic critique claim",
+      "detail": "Keep replay/schema/gate preservation deterministic. If broader critique quality is scored, require the declared expert/judge calibration, UNKNOWN handling, format and drift probes, and human adjudication."
+    },
+    {
+      "step": 4,
+      "title": "Receipt a real candidate",
+      "detail": "Predeclare one candidate configuration and run it through Crucible with actual model, provider, prompt, tools, transcript, retries, resources, latency, tokens, and cost captured."
+    },
+    {
+      "step": 5,
+      "title": "Analyze and accept a packet",
+      "detail": "Report mode-specific, source-cluster-aware, paired uncertainty and repeat stability, then pass independent Bench intake and fail-closed disclosure review before publication."
+    }
+  ],
+  "sources": [
+    {
+      "label": "Method and limitations",
+      "path": "benchmarks/seam-agency-v0/README.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/README.md"
+    },
+    {
+      "label": "Seven-task declarations",
+      "path": "benchmarks/seam-agency-v0/qualification.json",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/qualification.json"
+    },
+    {
+      "label": "Crucible Harbor specification",
+      "path": "benchmarks/seam-agency-v0/seam-agency-v0-harbor.json",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/seam-agency-v0-harbor.json"
+    },
+    {
+      "label": "Seven-task oracle qualification receipt",
+      "path": "benchmarks/seam-agency-v0/receipts/seven-task-qualification-2026-07-13.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/receipts/seven-task-qualification-2026-07-13.md"
+    },
+    {
+      "label": "Engine and publication gaps",
+      "path": "benchmarks/seam-agency-v0/engine-gaps.md",
+      "url": "https://github.com/misty-step/bench/blob/master/benchmarks/seam-agency-v0/engine-gaps.md"
+    },
+    {
+      "label": "build-publication-assistant task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/build-publication-assistant",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/build-publication-assistant"
+    },
+    {
+      "label": "build-incident-grouping task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/build-incident-grouping",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/build-incident-grouping"
+    },
+    {
+      "label": "build-claim-lease task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/build-claim-lease",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/build-claim-lease"
+    },
+    {
+      "label": "extend-provider-routing task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/extend-provider-routing",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/extend-provider-routing"
+    },
+    {
+      "label": "extend-comparison-attribution task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/extend-comparison-attribution",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/extend-comparison-attribution"
+    },
+    {
+      "label": "repair-memory-extraction task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/repair-memory-extraction",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/repair-memory-extraction"
+    },
+    {
+      "label": "critique-operator-action-router task sources",
+      "path": "benchmarks/seam-agency-v0/harbor/critique-operator-action-router",
+      "url": "https://github.com/misty-step/bench/tree/master/benchmarks/seam-agency-v0/harbor/critique-operator-action-router"
+    }
+  ]
+}

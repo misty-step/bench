@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "missing-ai-keywords",
+      "path": "missing-ai-keywords",
+      "expected_failure": "Ignores controlled semantic review and substitutes a keyword rule.",
+      "failure_marker": "semantic capability not causally used"
+    },
+    {
+      "id": "ai-washed-decorative-call",
+      "path": "ai-washed-decorative-call",
+      "expected_failure": "Calls the reviewer but ignores its decision.",
+      "failure_marker": "semantic response did not causally control publication"
+    },
+    {
+      "id": "under-enforced-raw-output",
+      "path": "under-enforced-raw-output",
+      "expected_failure": "Lets unvalidated reviewer fields and secret-bearing drafts reach persistence.",
+      "failure_marker": "credential-shaped draft crossed the semantic boundary"
+    }
+  ]
+}

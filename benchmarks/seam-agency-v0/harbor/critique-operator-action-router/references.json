@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "in-process per-case module reload with exception capture",
+      "behavioral_difference": "emits only confirmed and unknown findings",
+      "proof_marker": "reference-behavior: omit-passing-findings"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "isolated subprocess replay with typed result projection",
+      "behavioral_difference": "emits confirmed, unknown, and passing findings",
+      "proof_marker": "reference-behavior: include-passing-findings"
+    }
+  ]
+}

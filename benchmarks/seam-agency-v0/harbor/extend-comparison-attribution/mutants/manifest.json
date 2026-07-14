@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "reasoning-special-case-branch",
+      "path": "reasoning-special-case-branch",
+      "expected_failure": "Reports reasoning changes but omits reasoning from the exact identity.",
+      "failure_marker": "reasoning effort was not identity-bearing"
+    },
+    {
+      "id": "prose-model-diff",
+      "path": "prose-model-diff",
+      "expected_failure": "Uses semantic prose to attribute an exact configuration delta.",
+      "failure_marker": "semantic capability invoked for comparison attribution"
+    },
+    {
+      "id": "missing-equals-default-collapse",
+      "path": "missing-equals-default-collapse",
+      "expected_failure": "Collapses a missing reasoning value into an explicit default.",
+      "failure_marker": "missing reasoning effort collapsed into explicit value"
+    }
+  ]
+}

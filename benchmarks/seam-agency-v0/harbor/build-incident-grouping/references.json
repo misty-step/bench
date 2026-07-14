@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "procedural manifest transport with copy-on-write JSON snapshot and deterministic hash IDs",
+      "behavioral_difference": "derives a new incident group ID from the first report ID and preserves accepted evidence in ingestion order",
+      "proof_marker": "reference-behavior: report-id-derived-group"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "semantic gateway object with Popen transport and directory-relative exclusive staging",
+      "behavioral_difference": "derives a new incident group ID from the first report text and canonically orders joined evidence by report ID",
+      "proof_marker": "reference-behavior: report-text-derived-group"
+    }
+  ]
+}

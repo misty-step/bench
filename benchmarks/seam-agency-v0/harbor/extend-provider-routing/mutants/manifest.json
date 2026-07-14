@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "provider-special-case-branch",
+      "path": "provider-special-case-branch",
+      "expected_failure": "Special-cases one known provider instead of extending the family declaration.",
+      "failure_marker": "declarative provider family did not generalize"
+    },
+    {
+      "id": "keyword-ranker",
+      "path": "keyword-ranker",
+      "expected_failure": "Ranks rich task context with deterministic keywords.",
+      "failure_marker": "semantic capability not causally used for provider ranking"
+    },
+    {
+      "id": "prompt-only-budget-gate",
+      "path": "prompt-only-budget-gate",
+      "expected_failure": "Sends ineligible providers to semantic ranking and trusts the response.",
+      "failure_marker": "ineligible candidate reached semantic ranking"
+    }
+  ]
+}
