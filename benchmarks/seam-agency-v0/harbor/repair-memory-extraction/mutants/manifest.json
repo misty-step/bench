@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "expanded-keyword-table",
+      "path": "expanded-keyword-table",
+      "expected_failure": "Expands lexical triggers instead of repairing semantic extraction.",
+      "failure_marker": "semantic capability not causally used for memory extraction"
+    },
+    {
+      "id": "model-call-with-keyword-verdict",
+      "path": "model-call-with-keyword-verdict",
+      "expected_failure": "Calls the capability but lets keywords decide whether a memory exists.",
+      "failure_marker": "semantic response did not causally control memory extraction"
+    },
+    {
+      "id": "premature-memory-enum",
+      "path": "premature-memory-enum",
+      "expected_failure": "Collapses rich memory output into a fixed category and loses the fact.",
+      "failure_marker": "memory fact or evidence was lost"
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -78,6 +79,7 @@ def check_safe_refusal(report: dict, destination: Path, prior: str, label: str) 
 
 def main(repo: Path) -> None:
     ledger: list[dict] = []
+    reference_behavior: str | None = None
     draft = "A neighborhood seed library is opening Saturday; anyone may visit."
     fields = ("title", "summary")
     publish_content = {
@@ -103,6 +105,24 @@ def main(repo: Path) -> None:
         check_positive_semantic_use(publish_records, draft, fields)
         check(publish_report["error"] is None, f"publish raised: {publish_report['error']}")
         check(publish_report["result"] is True and published.exists(), "controlled publish failed")
+        if os.environ.get("BENCH_REFERENCE_AUDIT") == "1":
+            first_inode = published.stat().st_ino
+            repeat_report, repeat_records = run_scenario(
+                repo,
+                ledger,
+                "equivalent-repeat",
+                result("", "ok", content=publish_content),
+                draft,
+                fields,
+                published,
+            )
+            check_positive_semantic_use(repeat_records, draft, fields)
+            check(repeat_report["error"] is None and repeat_report["result"] is True, "equivalent repeat failed")
+            reference_behavior = (
+                "preserve-equivalent-packet"
+                if published.stat().st_ino == first_inode
+                else "replace-equivalent-packet"
+            )
 
         withheld = root / "causal-withhold.json"
         withhold_report, withhold_records = run_scenario(
@@ -177,6 +197,8 @@ def main(repo: Path) -> None:
             "candidate_receipt_authorship": "blocked",
         },
     )
+    if reference_behavior:
+        print(f"reference-behavior: {reference_behavior}")
     print("publication-assistant verifier: PASS")
 
 

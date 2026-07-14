@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "direct canonical serialization with alphabetically ordered change reporting",
+      "behavioral_difference": "reports multi-axis changes in canonical alphabetical order",
+      "proof_marker": "reference-behavior: alphabetical-attribution-order"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "identity record object with declared-axis-first change reporting",
+      "behavioral_difference": "reports known multi-axis changes in declaration order before extra keys",
+      "proof_marker": "reference-behavior: declared-axis-priority-order"
+    }
+  ]
+}

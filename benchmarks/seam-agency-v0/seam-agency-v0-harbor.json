@@ -1,10 +1,10 @@
 {
   "schema_version": "crucible.eval_spec.v1",
   "id": "seam-agency-v0-harbor-qualification",
-  "title": "Seam Agency v0 matched Build pair qualification",
-  "context": "Bench-owned public development tasks. Oracle execution qualifies references only and is not agent performance evidence.",
+  "title": "Seam Agency v0 seven-task development corpus qualification",
+  "context": "Seven Bench-owned public development tasks across Build, Extend, Repair, and Critique. Oracle execution qualifies references only and is not agent performance evidence.",
   "task": "seam-agency-v0",
-  "inputs": "Two clean-room Harbor microrepositories: one AI-required mixed-seam Build task and one pure deterministic Build control.",
+  "inputs": "Seven clean-room Harbor microrepositories: three Build, two Extend, one Repair, and one narrowly deterministic Critique task.",
   "outputs": "Harbor verifier rewards for reference qualification; agent attempts require a separately declared real agent configuration.",
   "graders": {
     "graders": [
@@ -19,7 +19,7 @@
     "method": "wilson",
     "confidence": 0.95
   },
-  "decision": "Qualify the matched Build task shape before any cross-harness Seam Agency experiment.",
+  "decision": "Qualify the seven-task public development corpus before any real candidate or cross-harness Seam Agency experiment.",
   "runner": {
     "kind": "harbor_task",
     "corpus": {
@@ -39,8 +39,28 @@
           "task_dir": "harbor/build-publication-assistant"
         },
         {
+          "task_id": "build-incident-grouping",
+          "task_dir": "harbor/build-incident-grouping"
+        },
+        {
           "task_id": "build-claim-lease",
           "task_dir": "harbor/build-claim-lease"
+        },
+        {
+          "task_id": "extend-provider-routing",
+          "task_dir": "harbor/extend-provider-routing"
+        },
+        {
+          "task_id": "extend-comparison-attribution",
+          "task_dir": "harbor/extend-comparison-attribution"
+        },
+        {
+          "task_id": "repair-memory-extraction",
+          "task_dir": "harbor/repair-memory-extraction"
+        },
+        {
+          "task_id": "critique-operator-action-router",
+          "task_dir": "harbor/critique-operator-action-router"
         }
       ]
     }

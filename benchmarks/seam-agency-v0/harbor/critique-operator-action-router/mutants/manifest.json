@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "prompt-only-approval",
+      "path": "prompt-only-approval",
+      "expected_failure": "Describes expected approval behavior without replaying the candidate router.",
+      "failure_marker": "counterexample was not actually replayed"
+    },
+    {
+      "id": "regex-intent-router",
+      "path": "regex-intent-router",
+      "expected_failure": "Infers the affected boundary from action vocabulary instead of preserving the declared replay boundary.",
+      "failure_marker": "exact affected boundary was not preserved"
+    },
+    {
+      "id": "raw-model-action-dispatch",
+      "path": "raw-model-action-dispatch",
+      "expected_failure": "Lets untrusted semantic output dispatch an action during critique.",
+      "failure_marker": "critique executed an action"
+    }
+  ]
+}

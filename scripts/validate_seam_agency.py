@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import json
+import os
 from pathlib import Path
 import re
 import shutil
@@ -45,10 +47,23 @@ def validate_manifest() -> list[dict]:
         "request_schema": "bench.semantic_generate.request.v1",
         "result_schema": "bench.semantic_generate.result.v1",
         "content_trust": "untrusted",
-        "identical_for_materialized_pair": True,
+        "identical_across_all_tasks": True,
     }
     if any(capability.get(key) != value for key, value in expected_capability.items()):
         fail("qualification manifest has an invalid shared runtime capability")
+    expected_policies = {
+        "build-publication-assistant": "positive_causal_full_input",
+        "build-incident-grouping": "positive_causal_full_input",
+        "build-claim-lease": "zero_calls_plus_capability_absent",
+        "extend-provider-routing": "positive_causal_after_deterministic_eligibility",
+        "extend-comparison-attribution": "zero_calls_plus_capability_absent",
+        "repair-memory-extraction": "positive_causal_full_input",
+        "critique-operator-action-router": "observed_non_scoring",
+    }
+    if capability.get("per_task_receipt_policy") != expected_policies:
+        fail("qualification manifest has invalid per-task capability policies")
+    if capability.get("exact_positive_call_count_scored") is not False:
+        fail("qualification manifest must not score exact positive capability call count")
     reporting = manifest.get("reporting", {})
     if reporting.get("forbid_pooled_mode_score") is not True:
         fail("manifest must forbid a pooled mode score")
@@ -100,12 +115,20 @@ def validate_manifest() -> list[dict]:
             structures = [reference.get("structure") for reference in references]
             if any(not structure for structure in structures) or len(set(structures)) != 2:
                 fail(f"{task['id']} must declare two distinct reference structures")
+            behavioral = [reference.get("behavioral_difference") for reference in references]
+            if any(not difference for difference in behavioral) or len(set(behavioral)) != 2:
+                fail(f"{task['id']} must declare two behaviorally distinct acceptable references")
+            proof_markers = [reference.get("proof_marker") for reference in references]
+            if any(not marker for marker in proof_markers) or len(set(proof_markers)) != 2:
+                fail(f"{task['id']} must declare two distinct executable behavior proof markers")
     materialized = [task for task in tasks if task["materialized"]]
-    if {(task["mode"], task["ai_necessity"]) for task in materialized} != {
-        ("build", "mixed"),
-        ("build", "unnecessary"),
+    if len(materialized) != 7 or Counter(task["mode"] for task in materialized) != {
+        "build": 3,
+        "extend": 2,
+        "repair": 1,
+        "critique": 1,
     }:
-        fail("materialized pair must be matched Build mixed/control tasks")
+        fail("materialized corpus must be 3 Build, 2 Extend, 1 Repair, and 1 Critique")
     return materialized
 
 
@@ -119,7 +142,7 @@ def validate_shared_capability(materialized: list[dict]) -> None:
     ):
         contents = [(task_dir / relative).read_bytes() for task_dir in task_dirs]
         if len(set(contents)) != 1:
-            fail(f"shared capability file differs across the matched pair: {relative}")
+            fail(f"shared capability file differs across the seven-task corpus: {relative}")
     capability = load_json(task_dirs[0] / "environment" / "capabilities.json")
     if capability.get("schema_version") != "bench.runtime_capabilities.v1":
         fail("candidate-visible capability manifest has an invalid schema")
@@ -158,7 +181,7 @@ def validate_shared_capability(materialized: list[dict]) -> None:
         verifier = (task_dir / "tests" / "verify.py").read_text()
         if "inspect.getsource" in verifier or "ast.parse" in verifier:
             fail(f"{task_dir.name} verifier must not grade candidate source shape")
-    print("semantic-capability: identical manifest/command and verifier-owned receipt harness PASS")
+    print("semantic-capability: seven identical manifests/commands and per-task receipt policies PASS")
 
 
 def validate_crucible_spec(materialized: list[dict]) -> None:
@@ -173,7 +196,7 @@ def validate_crucible_spec(materialized: list[dict]) -> None:
     declared = {task.get("task_id") for task in corpus.get("tasks", [])}
     expected = {task["id"] for task in materialized}
     if declared != expected:
-        fail("generic Crucible spec must name exactly the materialized pair")
+        fail("generic Crucible spec must name exactly the seven materialized tasks")
     if shutil.which("crucible"):
         result = subprocess.run(
             ["crucible", "validate", str(spec_path), "--json"],
@@ -384,16 +407,20 @@ def overlay(source: Path, destination: Path) -> None:
             shutil.copy2(path, target)
 
 
-def run_candidate(task_dir: Path, candidate: Path) -> tuple[int, str]:
+def run_candidate(task_dir: Path, candidate: Path, *, reference_audit: bool = False) -> tuple[int, str]:
     with tempfile.TemporaryDirectory(prefix="bench-seam-agency-") as temp:
         repo = Path(temp) / "repo"
         shutil.copytree(task_dir / "environment" / "repo", repo)
         overlay(candidate, repo)
+        environment = dict(os.environ)
+        if reference_audit:
+            environment["BENCH_REFERENCE_AUDIT"] = "1"
         result = subprocess.run(
             [sys.executable, str(task_dir / "tests" / "verify.py"), str(repo)],
             cwd=repo,
             text=True,
             capture_output=True,
+            env=environment,
         )
         output = (result.stdout + result.stderr).strip().replace("\n", " | ")
         return result.returncode, output
@@ -410,12 +437,22 @@ def qualify_task(task: dict) -> None:
     if len(mutants) < 2:
         fail(f"{task['id']} needs at least two named mutants")
 
+    reference_declarations = {
+        reference["path"]: reference
+        for reference in load_json(task_dir / "references.json")["references"]
+    }
     for reference_name in task["reference_dirs"]:
         reference = task_dir / reference_name
-        code, output = run_candidate(task_dir, reference)
+        code, output = run_candidate(task_dir, reference, reference_audit=True)
         if code != 0:
             fail(f"{task['id']} reference {reference_name} failed: {output}")
-        print(f"{task['id']}: reference {reference_name} PASS")
+        marker = reference_declarations[reference_name]["proof_marker"]
+        if marker not in output:
+            fail(
+                f"{task['id']} reference {reference_name} did not prove its declared behavior: "
+                f"expected {marker!r}; output={output}"
+            )
+        print(f"{task['id']}: reference {reference_name} PASS ({marker})")
 
     for mutant in mutants:
         candidate = task_dir / "mutants" / mutant["path"]
@@ -453,7 +490,7 @@ def main() -> None:
     scan_public_package()
     for task in materialized:
         qualify_task(task)
-    print("seam-agency-v0: package qualification PASS (4 references, 6 mutants)")
+    print("seam-agency-v0: package qualification PASS (14 references, 21 mutants)")
 
 
 if __name__ == "__main__":

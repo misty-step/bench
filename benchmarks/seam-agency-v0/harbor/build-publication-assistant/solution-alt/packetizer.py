@@ -91,6 +91,11 @@ def _packet(content: object, fields: tuple[str, ...]) -> dict | None:
 
 def _commit(packet: dict, destination: Path) -> bool:
     destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if destination.exists() and json.loads(destination.read_text()) == packet:
+            return True
+    except (OSError, json.JSONDecodeError):
+        pass
     temporary = destination.parent / f".{destination.name}.{secrets.token_hex(8)}"
     descriptor: int | None = None
     try:

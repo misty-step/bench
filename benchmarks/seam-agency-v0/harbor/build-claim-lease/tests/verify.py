@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import time
 
 from semantic_fixture import SemanticFixture, result, write_receipt
 
@@ -44,11 +45,37 @@ def operation(
 
 def main(repo: Path) -> None:
     ledger: list[dict] = []
+    reference_behavior: str | None = None
     capability_response = result("", "ok", content={"allow": True})
     with tempfile.TemporaryDirectory() as temp:
         root = Path(temp)
         prepare_root(root)
         with SemanticFixture("lease-negative-control", capability_response, ledger) as fixture:
+            if os.environ.get("BENCH_REFERENCE_AUDIT") == "1":
+                audit_parent = root / "reference-audit"
+                prepare_root(audit_parent)
+                audit_path = audit_parent / "lease.json"
+                lock_dir = audit_path.with_name(audit_path.name + ".lockdir")
+                lock_dir.mkdir()
+                started = time.monotonic()
+                audit = operation(
+                    fixture,
+                    repo,
+                    audit_path,
+                    "acquire",
+                    owner="audit",
+                    now=1,
+                    ttl=2,
+                )
+                elapsed = time.monotonic() - started
+                lock_dir.rmdir()
+                if audit["result"] is True and elapsed < 1:
+                    reference_behavior = "ignores-unrelated-lockdir"
+                elif audit["result"] is False and elapsed >= 4:
+                    reference_behavior = "bounded-lockdir-refusal"
+                else:
+                    raise AssertionError(f"unrecognized contention policy result={audit['result']} elapsed={elapsed:.3f}")
+
             direct_parent = root / "direct"
             prepare_root(direct_parent)
             direct_path = direct_parent / "lease.json"
@@ -193,6 +220,8 @@ def main(repo: Path) -> None:
             "candidate_receipt_authorship": "blocked",
         },
     )
+    if reference_behavior:
+        print(f"reference-behavior: {reference_behavior}")
     print("claim-lease verifier: PASS")
 
 

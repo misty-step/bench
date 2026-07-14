@@ -1,0 +1,16 @@
+{
+  "references": [
+    {
+      "path": "solution",
+      "structure": "procedural semantic envelope validation returning the minimal fact/evidence record",
+      "behavioral_difference": "returns only the required fact and evidence fields",
+      "proof_marker": "reference-behavior: minimal-memory-record"
+    },
+    {
+      "path": "solution-alt",
+      "structure": "semantic extractor object with Popen transport and deterministic evidence span validation",
+      "behavioral_difference": "also returns the optional exact source_offset for accepted evidence",
+      "proof_marker": "reference-behavior: evidence-offset-record"
+    }
+  ]
+}

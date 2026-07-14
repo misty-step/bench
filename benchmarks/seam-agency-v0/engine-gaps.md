@@ -44,10 +44,12 @@ The following gaps prevent a trusted cross-harness or public benchmark run:
    repository gate that validates packet schema, joins, runtime identity,
    disclosure, integrity, duplicates, and manifest drift before tracked
    publication. Tracked by `bench-packet-acceptance-gate`.
-8. **Qualification corpus is incomplete.** Only the matched Build pair is
-   materialized. Each now has two structurally different acceptable references,
-   but the other five declared tasks do not yet have runnable repositories,
-   references, or mutation-qualified verifiers.
+8. **Private decision evidence is absent.** The seven public development tasks
+   are now materialized with two behaviorally distinct references and three
+   mutation-qualified wrong-seam implementations each. No independently
+   sourced private calibration/test corpus, blinded expert labels, or frozen
+   disclosure review exists, so the package still cannot support held-out
+   capability or population claims.
 9. **The jobs-root mount constraint is not preflighted.** Running the generic
    spec with `--out /tmp/bench-seam-agency-v0-run` on the Colima host completed
    with process exit 0 but recorded 0/2 and `RewardFileNotFoundError` for both
@@ -77,9 +79,10 @@ portable task-path rebasing, with green oracle/nop proof) and `10044b5`
 Readers should distinguish the reproducible installed-binary baseline above
 from this newer local source truth until those commits are published.
 
-Therefore this package claims only gold and Harbor-oracle qualification: both
-references per materialized task pass, the named wrong-seam mutants fail under
-deterministic verifiers, and the shared semantic capability has verifier-owned
-positive/zero-use receipts. It does not claim a real agent run, real-model
-semantic quality, cross-harness comparability, calibrated model judgment,
-held-out generalization, or publication safety.
+Therefore this package claims only gold qualification pending a fresh
+seven-task Harbor-oracle receipt: both references per task pass, each pair has
+an executable behavior distinction, the 21 named wrong-seam mutants fail under
+deterministic verifiers, and the shared semantic capability has per-task
+verifier-owned receipt policy. It does not claim a real agent run, real-model
+semantic quality, critique completeness or architectural soundness,
+cross-harness comparability, held-out generalization, or publication safety.

@@ -11,8 +11,17 @@
     "request_schema": "bench.semantic_generate.request.v1",
     "result_schema": "bench.semantic_generate.result.v1",
     "content_trust": "untrusted",
-    "identical_for_materialized_pair": true,
-    "verifier_receipt_policy": "positive causal use for the publication task; zero use for the deterministic lease control; exact positive call count is not scored"
+    "identical_across_all_tasks": true,
+    "per_task_receipt_policy": {
+      "build-publication-assistant": "positive_causal_full_input",
+      "build-incident-grouping": "positive_causal_full_input",
+      "build-claim-lease": "zero_calls_plus_capability_absent",
+      "extend-provider-routing": "positive_causal_after_deterministic_eligibility",
+      "extend-comparison-attribution": "zero_calls_plus_capability_absent",
+      "repair-memory-extraction": "positive_causal_full_input",
+      "critique-operator-action-router": "observed_non_scoring"
+    },
+    "exact_positive_call_count_scored": false
   },
   "reporting": {
     "headline": "binary feature success with an acceptable seam",
@@ -50,8 +59,10 @@
       "invariants": ["low-overlap semantic matches group", "high-overlap nonmatches remain separate", "group IDs are stable", "replay is idempotent", "malformed semantic output cannot mutate storage"],
       "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "under-enforced", "functional-wrong-seam"],
       "required_mutations": ["token-overlap-grouper", "decorative-model-call", "raw-label-as-primary-key"],
-      "hidden_policy": "Held-out paraphrase and lexical-trap families preserve the visible grouping contract.",
-      "materialized": false
+      "hidden_policy": "Public development verifier varies paraphrase and lexical-trap families, controls join/new responses, requires full report and existing-group context, and checks stable IDs, replay idempotence, typed refusal, and atomic preservation without inspecting source vocabulary or exact call count.",
+      "materialized": true,
+      "task_dir": "harbor/build-incident-grouping",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "build-claim-lease",
@@ -76,8 +87,10 @@
       "invariants": ["new family is declarative", "semantic ranking sees rich task context", "ineligible candidates never reach ranking", "budget and tool gates cannot be overridden by model output"],
       "forbidden_outcomes": ["missing-ai", "over-determinized", "under-enforced", "functional-wrong-seam"],
       "required_mutations": ["provider-special-case-branch", "keyword-ranker", "prompt-only-budget-gate"],
-      "hidden_policy": "Provider and task variants remain within the visible capability, budget, and tool model.",
-      "materialized": false
+      "hidden_policy": "Public development verifier varies provider IDs within declared families, checks full task context and causal ranking, and proves unknown-family, disabled, missing-tool, and over-budget providers are excluded before semantic ranking without grading source shape.",
+      "materialized": true,
+      "task_dir": "harbor/extend-provider-routing",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "extend-comparison-attribution",
@@ -88,8 +101,10 @@
       "invariants": ["identity is declared and hashed", "only the changed axis is reported", "missing versus explicit values remain distinct", "existing axes retain compatibility"],
       "forbidden_outcomes": ["unnecessary-ai", "functional-wrong-seam", "nonfunctional"],
       "required_mutations": ["reasoning-special-case-branch", "prose-model-diff", "missing-equals-default-collapse"],
-      "hidden_policy": "Identity fixtures cover declared combinations and compatibility cases already implied by the visible schema.",
-      "materialized": false
+      "hidden_policy": "Public development verifier covers canonical identity fixtures, reasoning-only and multi-axis changes, missing versus explicit values, legacy compatibility, direct zero capability calls, and capability-absent operation under explicit no-network.",
+      "materialized": true,
+      "task_dir": "harbor/extend-comparison-attribution",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "repair-memory-extraction",
@@ -100,20 +115,24 @@
       "invariants": ["semantic paraphrases are recognized", "lexical traps are rejected", "evidence text remains available", "unsupported facts are not invented"],
       "forbidden_outcomes": ["missing-ai", "ai-washed", "over-determinized", "functional-wrong-seam"],
       "required_mutations": ["expanded-keyword-table", "model-call-with-keyword-verdict", "premature-memory-enum"],
-      "hidden_policy": "Hidden examples vary meaning and wording without changing the visible extraction contract.",
-      "materialized": false
+      "hidden_policy": "Public development verifier controls meaning-aware remember/none responses across paraphrases and lexical traps, requires full source context, preserves verbatim evidence, rejects unsupported or malformed output, and does not inspect candidate keywords.",
+      "materialized": true,
+      "task_dir": "harbor/repair-memory-extraction",
+      "reference_dirs": ["solution", "solution-alt"]
     },
     {
       "id": "critique-operator-action-router",
       "mode": "critique",
       "ai_necessity": "mixed",
-      "seam_family": "mixed decomposition",
-      "visible_request": "Diagnose a candidate action router and provide a structured consequence and repair sketch for semantic interpretation, approval, persistence, and send/publish/buy/destructive boundaries.",
-      "invariants": ["semantic intent placement is identified", "must-confirm actions remain deterministic", "consequences name an observable failure", "repair sketch preserves exact gates"],
+      "seam_family": "replayable deterministic critique artifact",
+      "visible_request": "Replay declared operator-router counterexamples and emit versioned findings with expected versus observed action/state, exact affected boundary, preserved repair invariants, and UNKNOWN when trustworthy reproduction is unavailable.",
+      "invariants": ["every confirmed or unknown finding is backed by an actual replay", "counterexample input and expected versus observed action/state are preserved", "the exact declared affected boundary and repair invariants are preserved", "UNKNOWN is accepted when execution cannot produce a trustworthy observation", "deterministic qualification does not claim completeness, consequence quality, semantic placement quality, or architectural soundness", "semantic capability invocation is observed but not scored"],
       "forbidden_outcomes": ["missing-ai", "ai-washed", "under-enforced", "over-determinized"],
       "required_mutations": ["prompt-only-approval", "regex-intent-router", "raw-model-action-dispatch"],
-      "hidden_policy": "Candidate patches are blinded; scoring criteria and independent labels are fixed before worker outputs.",
-      "materialized": false
+      "hidden_policy": "Public development verifier independently replays supplied cases and checks only versioned schema, actual reproduction, exact expected/observed state, boundary and repair-invariant preservation, UNKNOWN, and absence of critique-triggered effects. Free-form semantic quality remains unqualified pending two blinded experts and a decorrelated calibrated judge with fail-class precision/recall at least 0.90, UNKNOWN, format/drift probes, and human adjudication.",
+      "materialized": true,
+      "task_dir": "harbor/critique-operator-action-router",
+      "reference_dirs": ["solution", "solution-alt"]
     }
   ]
 }

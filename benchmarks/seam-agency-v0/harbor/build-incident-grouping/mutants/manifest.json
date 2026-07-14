@@ -1,0 +1,22 @@
+{
+  "mutants": [
+    {
+      "id": "token-overlap-grouper",
+      "path": "token-overlap-grouper",
+      "expected_failure": "Uses token overlap instead of meaning-aware grouping.",
+      "failure_marker": "semantic capability not causally used for incident grouping"
+    },
+    {
+      "id": "decorative-model-call",
+      "path": "decorative-model-call",
+      "expected_failure": "Invokes the semantic capability but always creates a new group.",
+      "failure_marker": "semantic response did not causally control incident grouping"
+    },
+    {
+      "id": "raw-label-as-primary-key",
+      "path": "raw-label-as-primary-key",
+      "expected_failure": "Persists an untrusted semantic label as a group identity.",
+      "failure_marker": "unknown semantic group id mutated storage"
+    }
+  ]
+}

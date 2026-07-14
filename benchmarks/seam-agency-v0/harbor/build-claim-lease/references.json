@@ -2,11 +2,15 @@
   "references": [
     {
       "path": "solution",
-      "structure": "fcntl advisory lock file plus NamedTemporaryFile and os.replace"
+      "structure": "fcntl advisory lock file plus NamedTemporaryFile and os.replace",
+      "behavioral_difference": "waits on operating-system advisory lock ownership during contention",
+      "proof_marker": "reference-behavior: ignores-unrelated-lockdir"
     },
     {
       "path": "solution-alt",
-      "structure": "atomic lock-directory coordination plus exclusive unique staging and os.replace"
+      "structure": "atomic lock-directory coordination plus exclusive unique staging and os.replace",
+      "behavioral_difference": "returns failure after a bounded wait when lock-directory contention does not clear",
+      "proof_marker": "reference-behavior: bounded-lockdir-refusal"
     }
   ]
 }

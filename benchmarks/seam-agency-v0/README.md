@@ -18,10 +18,10 @@ the benchmark, and there is no Bench-only runner or adapter.
 
 The eventual decision is whether a declared agent configuration may implement
 an AI-bearing feature without mandatory seam-placement review. V0 only
-qualifies the task and verifier shape. The checked-in matched pair proves that
-one AI-required Build task and one deterministic Build control have solvable
-requests, passing references, and mutation-sensitive deterministic verifiers.
-It does not measure an agent.
+qualifies the task and verifier shape. The checked-in seven-task public
+development corpus proves that three Build, two Extend, one Repair, and one
+Critique request have passing references and mutation-sensitive deterministic
+verifiers. It does not measure an agent.
 
 The binary implementation headline requires both correct product behavior and
 an acceptable boundary. Tracked dimensions explain a failure; they cannot
@@ -60,11 +60,11 @@ workload distribution fixed before results are seen.
 
 ## Corpus and gold governance
 
-The committed v0 pair is a clean-room public development corpus written for
+The committed v0 corpus is a clean-room public development corpus written for
 Bench. It contains no copied project history, proprietary material, live
 credentials, network dependency, or hidden scoring material. Each task starts
 from a compact pre-feature repository, a behavioral request, an independently
-authored references, named plausible wrong-seam mutants, and a deterministic
+authored pair of references, named plausible wrong-seam mutants, and a deterministic
 verifier.
 
 A decision-grade corpus must be split by source incident and repository family:
@@ -82,16 +82,17 @@ is reviewed; a third adjudicates disagreements. Public development references
 are not evidence about held-out performance. Active calibration/test references
 remain private and receive provenance/disclosure receipts before any run.
 
-Every qualified task needs a passing reference, a structurally different
+Every qualified task needs a passing reference, a structurally and behaviorally different
 acceptable implementation before it enters the headline set, and at least two
 applicable wrong-layer implementations rejected for the intended reason. Each
-materialized task now has two passing references with different coordination
-and persistence structures. That removes the alternative-reference blocker for
-this pair; it does not qualify the five unmaterialized declarations.
+materialized task now has two passing references with a distinct observable
+strategy. The repository gate executes both, checks the task contract, and
+requires the declared behavior marker; descriptions in `references.json`
+cannot substitute for that proof.
 
 ## Shared runtime capability
 
-Both materialized tasks expose the identical candidate-visible
+All seven materialized tasks expose the byte-identical candidate-visible
 `bench.runtime_capabilities.v1` manifest and immutable one-shot
 `crucible-semantic` executable. The declared `semantic.generate.v1` transport
 accepts a versioned JSON request on standard input, including messages and a
@@ -99,17 +100,17 @@ response schema, and returns a versioned `ok`, `refused`, `timeout`,
 `malformed_output`, or `execution_error` result. Every returned content field is
 untrusted.
 
-The task request does not tell the publication candidate to call this
-capability, and the matched lease control receives the same declaration. The
+The task requests do not prescribe whether or how to call this capability, and
+every unnecessary-AI control receives the same declaration. The
 verifier supplies deterministic scenario responses only during hidden
 verification. Candidate code runs unprivileged; the verifier-owned broker keeps
 its invocation ledger outside the candidate repository and writes the receipt
-after candidate exit. Publication is graded on positive causal use carrying the
-full draft, declared fields, and a response schema. Lease is graded on a direct
-zero-call receipt and runs again with the capability absent under Harbor's
-network-denied, credential-free verifier baseline. No source keyword, regex,
-prompt wording, internal class/API shape, SDK, subprocess library, or exact
-positive call count is graded.
+after candidate exit. Publication, incident grouping, provider routing, and
+memory extraction prove the task-specific positive causal boundary; lease and
+comparison attribution prove zero use and pass again with the capability
+absent. Critique records invocation only as observed, non-scoring metadata.
+No source keyword, regex, prompt wording, internal class/API shape, SDK,
+subprocess library, or exact positive call count is graded.
 
 ## Verifier ladder
 
@@ -139,18 +140,31 @@ Extend tasks, one Repair task, and one Critique task. Each entry fixes the
 visible request, seam conflict, invariants, forbidden outcomes, required
 mutations, hidden-policy ruling, and qualification state before agent runs.
 
-The first matched pair is materialized under `harbor/`:
+All seven declarations are materialized under `harbor/`:
 
 - `build-publication-assistant`: semantic disclosure/field drafting is causal;
   secret-shape refusal, declared fields, typed parsing, and atomic writes are
   deterministic.
+- `build-incident-grouping`: semantic grouping is causal while stable IDs,
+  replay idempotence, validation, and persistence remain deterministic.
 - `build-claim-lease`: ownership, renewal, and expiry are exact; a model
   dependency is itself a failure.
+- `extend-provider-routing`: a provider family is declarative, eligibility is
+  deterministic before semantic ranking, and untrusted choices are bounded to
+  eligible IDs.
+- `extend-comparison-attribution`: complete configuration identity includes
+  reasoning effort and distinguishes a missing axis from an explicit value;
+  semantic calls are unnecessary.
+- `repair-memory-extraction`: semantic paraphrase recognition is causal while
+  evidence support, schema validation, and non-invention are deterministic.
+- `critique-operator-action-router`: deterministic qualification covers only a
+  versioned replay artifact with counterexamples, expected/observed state,
+  exact boundaries, repair invariants, and accepted `UNKNOWN` outcomes.
 
 Each is a standard Harbor task directory with `instruction.md`, an environment
 microrepository, `solution/`, `solution-alt/`, `tests/`, and `mutants/`. The standard generic
 Crucible spec [`seam-agency-v0-harbor.json`](seam-agency-v0-harbor.json) points
-at the two tasks and uses Harbor's `oracle` agent only to qualify references.
+at all seven tasks and uses Harbor's `oracle` agent only to qualify references.
 
 ## Experiment axes and statistics
 
@@ -177,7 +191,6 @@ exact reason each comparison is claimed or withheld.
 
 The current limitations are material:
 
-- only two of seven qualification tasks are implemented;
 - public development tasks cannot estimate held-out agent capability;
 - the deterministic verifier cannot by itself validate broad architectural
   coherence outside its adversarial cases;
@@ -186,13 +199,18 @@ The current limitations are material:
   across an operating-system or storage crash;
 - the controlled semantic fixture proves causal integration with the declared
   capability, not the quality, calibration, or cost of any real model;
+- the router critique qualifies replay/schema/gate preservation only. It does
+  not establish finding completeness, consequence quality, or architectural
+  soundness; such claims remain blocked on two blinded experts, a decorrelated
+  calibrated judge with fail-class precision/recall at least 0.90, `UNKNOWN`,
+  format/drift probes, and human adjudication;
 - cross-harness identity, resource equality, transcripts, and primitive
   treatments are not yet available through one trusted generic engine receipt;
 - cluster-aware inference and safe public disclosure are not complete.
 
 Exact live engine gaps and the evidence boundary are recorded in
 [`engine-gaps.md`](engine-gaps.md). The repository-owned qualification command
-is `./scripts/check.sh`; it validates the package, runs both references for each
-materialized task, and
-proves every named mutant fails. That command is a gold-package check, not an
-agent runner.
+is `./scripts/check.sh`; it validates the package, runs both references for all
+seven tasks, proves each pair has a distinct observed strategy, and proves all
+21 named mutants fail for their intended reason. That command is a
+gold-package check, not an agent runner.
