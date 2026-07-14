@@ -50,39 +50,31 @@ The following gaps prevent a trusted cross-harness or public benchmark run:
    sourced private calibration/test corpus, blinded expert labels, or frozen
    disclosure review exists, so the package still cannot support held-out
    capability or population claims.
-9. **The jobs-root mount constraint is not preflighted.** Running the generic
-   spec with `--out /tmp/bench-seam-agency-v0-run` on the Colima host completed
-   with process exit 0 but recorded 0/2 and `RewardFileNotFoundError` for both
-   tasks because the verifier receipt path was outside the home directory
-   Colima mounts. Re-running the identical spec under
-   `$HOME/.cache/bench-seam-agency-v0-run` produced 2/2. Crucible currently
-   preflights task directories under `$HOME`, but not the jobs/output root, and
-   treats the resulting infrastructure errors as a zero score rather than a
-   refused run.
-10. **Installed import/preflight surfaces drift from executable task support.**
-    The installed `crucible import harbor` rejected both Harbor 0.13.1 tasks
-    because their current `task.toml` shape has top-level `version` plus
-    `[verifier]`, `[agent]`, and `[environment]` instead of legacy `[task]`, even
-    though `crucible validate` accepted the hand-authored generic spec and
-    `crucible run` executed both directories successfully. Harbor's own
-    `harbor tasks check` command reports that it has been removed, while its
-    replacement `harbor check` requires `ANTHROPIC_API_KEY`; there is no
-    credential-free deterministic task-definition preflight in that surface.
 
-## Reconciliation — 2026-07-13
+## Historical installed-binary baseline — former gaps 9 and 10
 
-Items 9 and 10 remain valid receipts for the installed `crucible 0.0.0` used
-by this qualification run; they are no longer current Crucible source gaps.
-Concurrent, unpushed Crucible commits `baa92e2` (current Harbor import plus
-portable task-path rebasing, with green oracle/nop proof) and `10044b5`
-(outside-`$HOME` Harbor output preflight) close those two failures in source.
-Readers should distinguish the reproducible installed-binary baseline above
-from this newer local source truth until those commits are published.
+The installed `crucible 0.0.0` used during the initial two-task qualification
+produced two valid baseline receipts that are not current Crucible source gaps:
 
-Therefore this package claims only gold qualification pending a fresh
-seven-task Harbor-oracle receipt: both references per task pass, each pair has
-an executable behavior distinction, the 21 named wrong-seam mutants fail under
-deterministic verifiers, and the shared semantic capability has per-task
-verifier-owned receipt policy. It does not claim a real agent run, real-model
-semantic quality, critique completeness or architectural soundness,
-cross-harness comparability, held-out generalization, or publication safety.
+- A run with `--out /tmp/bench-seam-agency-v0-run` exited successfully but
+  recorded 0/2 with `RewardFileNotFoundError` because Colima could not mount the
+  verifier receipt path outside `$HOME`. The identical run under
+  `$HOME/.cache/bench-seam-agency-v0-run` produced 2/2.
+- `crucible import harbor` rejected Harbor 0.13.1's current `task.toml` shape
+  even though a hand-authored generic spec validated and ran both tasks.
+
+Current Crucible source supports the current Harbor task format, portable
+task-path rebasing, and preflight refusal when either the Harbor task or run
+output path is outside the Colima-mounted `$HOME` tree. Those durable source
+contracts supersede the installed-binary failures above without erasing them
+as historical qualification receipts.
+
+Therefore this package claims only gold and Harbor-oracle reference
+qualification. The clean source revision
+`17b21930c0514fb039f1eaf6bbd1f484719703de` produced 7/7 through Crucible's
+generic `harbor_task` path; both references per task pass the repository gate,
+each pair has an executable behavior distinction, and the 21 named wrong-seam
+mutants fail under deterministic verifiers. It does not claim a real agent
+run, real-model semantic quality, critique completeness or architectural
+soundness, cross-harness comparability, held-out generalization, or publication
+safety.

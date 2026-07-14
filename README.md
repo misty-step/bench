@@ -41,9 +41,10 @@ design (`docs/bench.css`), light/dark following the system.
   family rendered by the site.
 - **[Seam Agency v0](benchmarks/seam-agency-v0/README.md)** is a Bench-owned
   qualification package for agent placement of semantic judgment, declarative
-  structure, and deterministic enforcement. Its matched Build pair uses only
-  public Harbor/Crucible contracts. It has gold and mutation proof, but no
-  agent ranking or public result claim.
+  structure, and deterministic enforcement. Its seven-task public development
+  corpus spans Build, Extend, Repair, and Critique using only public
+  Harbor/Crucible contracts. It has gold, mutation, and Harbor-oracle reference
+  qualification proof, but no agent ranking or public result claim.
 
 Run the repository-owned qualification gate with:
 
