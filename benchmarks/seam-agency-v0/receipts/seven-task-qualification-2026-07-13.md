@@ -165,4 +165,3 @@ decorrelated calibrated judge with fail-class precision/recall at least 0.90,
 
 Bench remains a read-only evidence consumer of Crucible and Harbor. No
 Bench-specific runner or alternate control plane was added.
-
