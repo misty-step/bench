@@ -194,6 +194,11 @@ footer{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem;color:v
 .review-ci-point{position:absolute;right:1px;top:50%;width:3px;height:1.35rem;transform:translate(-100%,-50%);background:var(--accent)}
 .ci-label{font:600 .78rem/1.4 ui-monospace,monospace;color:var(--ink);margin:.5rem 0 0}
 .score-caution{margin:.8rem 0 0;color:var(--muted);font-size:.86rem}
+.mode-score-grid{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-top:1rem}
+.mode-score-grid article{display:grid;gap:.15rem;padding:.65rem;background:var(--chip);border:1px solid var(--line);border-radius:.4rem}
+.mode-score-grid p{margin:0;font:700 .63rem/1 ui-monospace,monospace;text-transform:uppercase;color:var(--muted)}
+.mode-score-grid strong{font:700 1rem/1.2 ui-monospace,monospace}
+.mode-score-grid span,.mode-score-grid small{font:500 .66rem/1.35 ui-monospace,monospace;color:var(--muted)}
 .usage-panel{border-top:4px solid var(--ok)}
 .usage-title{color:var(--ok)}
 .usage-panel>p:nth-child(2){color:var(--muted);font-size:.88rem}
@@ -265,6 +270,8 @@ footer{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem;color:v
 .blocker-sources a{font:500 .64rem/1.4 ui-monospace,monospace;overflow-wrap:anywhere}
 .finding-resolved_for_materialized_pair{background:color-mix(in srgb,var(--ok) 4%,var(--panel));border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
 .finding-resolved_for_materialized_pair .blocker-heading span{color:var(--ok)}
+.finding-resolved_public_development{background:color-mix(in srgb,var(--ok) 4%,var(--panel));border-color:color-mix(in srgb,var(--ok) 35%,var(--line))}
+.finding-resolved_public_development .blocker-heading span{color:var(--ok)}
 .finding-remaining_limitation{background:color-mix(in srgb,#5577a8 5%,var(--panel));border-color:color-mix(in srgb,#5577a8 40%,var(--line))}
 .finding-remaining_limitation .blocker-heading span{color:#5577a8}
 
@@ -289,6 +296,7 @@ footer{margin-top:3rem;border-top:1px solid var(--line);padding-top:1rem;color:v
 }
 @media(max-width:520px){
   .usage-grid{grid-template-columns:1fr}
+  .mode-score-grid{grid-template-columns:1fr}
   .qual-task-head{grid-template-columns:1fr}
   .task-reward{text-align:left}
   .mini-receipt>div{grid-template-columns:1fr;gap:0}

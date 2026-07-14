@@ -247,21 +247,66 @@ def validate_review_surface(materialized: list[dict]) -> None:
     score = run.get("score", {})
     expected_score = {
         "metric": "harbor_reward_pass_rate",
-        "successes": 2,
-        "n": 2,
+        "successes": 7,
+        "n": 7,
         "point": 1.0,
-        "lower": 0.34237195288961925,
+        "lower": 0.6456611570247934,
         "upper": 1.0,
         "confidence": 0.95,
         "method": "Wilson",
     }
     if score != expected_score:
         fail("review score does not match the sanitized Crucible oracle receipt")
+    expected_mode_scores = [
+        {
+            "mode": "build",
+            "successes": 3,
+            "n": 3,
+            "point": 1.0,
+            "lower": 0.43849391955098227,
+            "upper": 1.0,
+            "confidence": 0.95,
+            "method": "Wilson",
+        },
+        {
+            "mode": "extend",
+            "successes": 2,
+            "n": 2,
+            "point": 1.0,
+            "lower": 0.34237195288961925,
+            "upper": 1.0,
+            "confidence": 0.95,
+            "method": "Wilson",
+        },
+        {
+            "mode": "repair",
+            "successes": 1,
+            "n": 1,
+            "point": 1.0,
+            "lower": 0.20654329147389294,
+            "upper": 1.0,
+            "confidence": 0.95,
+            "method": "Wilson",
+        },
+        {
+            "mode": "critique",
+            "successes": 1,
+            "n": 1,
+            "point": 1.0,
+            "lower": 0.20654329147389294,
+            "upper": 1.0,
+            "confidence": 0.95,
+            "method": "Wilson",
+            "interpretation": "Deterministic replay artifact qualification only; not semantic critique quality.",
+        },
+    ]
+    if run.get("mode_scores") != expected_mode_scores:
+        fail("review must report the exact separate Build, Extend, Repair, and Critique rates")
 
     reviewed_tasks = review.get("tasks", [])
     expected_ids = {task["id"] for task in materialized}
     if {task.get("task_id") for task in reviewed_tasks} != expected_ids:
-        fail("review must render exactly the two materialized tasks")
+        fail("review must render exactly the seven materialized tasks")
     declarations = {task["id"]: task for task in materialized}
     for reviewed in reviewed_tasks:
         task_id = reviewed["task_id"]
@@ -285,6 +330,15 @@ def validate_review_surface(materialized: list[dict]) -> None:
         reference_structures = reviewed.get("reference_structures", [])
         if len(reference_structures) != 2 or len(set(reference_structures)) != 2:
             fail(f"review {task_id} must describe two distinct reference structures")
+        references = load_json(task_dir / "references.json")["references"]
+        if reviewed.get("reference_behaviors") != [
+            reference["behavioral_difference"] for reference in references
+        ]:
+            fail(f"review {task_id} behavioral reference evidence drifted")
+        if reviewed.get("reference_proof_markers") != [
+            reference["proof_marker"] for reference in references
+        ]:
+            fail(f"review {task_id} executable reference witnesses drifted")
         if reviewed.get("verifier_path") != expected_verifier:
             fail(f"review {task_id} verifier path drifted")
         if reviewed.get("passed") is not True or reviewed.get("reward") != 1.0:
@@ -328,29 +382,63 @@ def validate_review_surface(materialized: list[dict]) -> None:
         or "denied by Harbor" not in lease_receipt.get("network", "")
     ):
         fail("lease capability receipt lost its zero-use/absent/network boundary")
+    for task_id in ("build-incident-grouping", "extend-provider-routing", "repair-memory-extraction"):
+        capability = next(
+            task["capability_receipt"] for task in reviewed_tasks if task["task_id"] == task_id
+        )
+        if (
+            "positive causal use" not in capability.get("observed", "")
+            or capability.get("full_semantic_inputs") is not True
+            or capability.get("exact_positive_call_count_scored") is not False
+        ):
+            fail(f"{task_id} capability receipt lost its positive causal boundary")
+    comparison_receipt = next(
+        task["capability_receipt"]
+        for task in reviewed_tasks
+        if task["task_id"] == "extend-comparison-attribution"
+    )
+    if (
+        comparison_receipt.get("observed_calls") != 0
+        or comparison_receipt.get("capability_absent_recheck") != "pass"
+    ):
+        fail("comparison capability receipt lost its zero-use/absent boundary")
+    critique_receipt = next(
+        task["capability_receipt"]
+        for task in reviewed_tasks
+        if task["task_id"] == "critique-operator-action-router"
+    )
+    if (
+        critique_receipt.get("scoring") != "observed non-scoring"
+        or critique_receipt.get("semantic_quality_claim") is not None
+    ):
+        fail("critique receipt must remain observed non-scoring with no semantic quality claim")
 
     ledger_states = {group.get("state") for group in review.get("evidence_ledger", [])}
     if ledger_states != {"measured", "package_gate_only", "planned", "missing"}:
         fail("review must separate measured, package-gate-only, planned, and missing evidence")
     findings = review.get("construct_findings", [])
     if {finding.get("id") for finding in findings} != {
-        "prompted-ai-recognition",
-        "lease-failure-and-concurrency-coverage",
-        "unnecessary-ai-mutant-proxy",
+        "independent-ai-recognition",
+        "behaviorally-distinct-references",
+        "lease-concurrency-and-failure",
+        "unnecessary-ai-direct-invariant",
         "controlled-semantic-fixture",
-        "corpus-incomplete",
+        "critique-quality-ceiling",
+        "public-development-only",
     }:
-        fail("review must expose resolved construct findings and remaining blockers")
+        fail("review must expose the seven-task construct findings and remaining blockers")
     finding_statuses = {finding.get("id"): finding.get("status") for finding in findings}
     for finding_id in (
-        "prompted-ai-recognition",
-        "lease-failure-and-concurrency-coverage",
-        "unnecessary-ai-mutant-proxy",
+        "independent-ai-recognition",
+        "behaviorally-distinct-references",
+        "lease-concurrency-and-failure",
+        "unnecessary-ai-direct-invariant",
     ):
-        if finding_statuses.get(finding_id) != "resolved_for_materialized_pair":
-            fail(f"review must mark {finding_id} resolved only for the materialized pair")
-    if finding_statuses.get("corpus-incomplete") != "benchmark_blocker":
-        fail("review must preserve the incomplete corpus as a benchmark blocker")
+        if finding_statuses.get(finding_id) != "resolved_public_development":
+            fail(f"review must mark {finding_id} resolved only for public development qualification")
+    for finding_id in ("critique-quality-ceiling", "public-development-only"):
+        if finding_statuses.get(finding_id) != "benchmark_blocker":
+            fail(f"review must preserve {finding_id} as a benchmark blocker")
     for finding in findings:
         for source_path in finding.get("source_paths", []):
             if not (ROOT / source_path).is_file():
@@ -373,6 +461,8 @@ def validate_review_surface(materialized: list[dict]) -> None:
     )
     if not review_entry or review_entry.get("url") != "seam-agency-review.html":
         fail("site manifest must link the Seam Agency qualification review")
+    if "seven-task public development corpus" not in review_entry.get("tagline", ""):
+        fail("site manifest review card must describe the seven-task corpus")
     page = (ROOT / "docs" / "seam-agency-review.html").read_text()
     renderer = (ROOT / "docs" / "seam-agency-review.js").read_text()
     if (
@@ -382,7 +472,7 @@ def validate_review_surface(materialized: list[dict]) -> None:
     ):
         fail("qualification review page or renderer is incomplete")
 
-    receipt = (PACKAGE / "receipts" / "construct-hardening-2026-07-13.md").read_text()
+    receipt = (PACKAGE / "receipts" / "seven-task-qualification-2026-07-13.md").read_text()
     stable_identity = [
         run.get("run_id"),
         run.get("invocation_id"),

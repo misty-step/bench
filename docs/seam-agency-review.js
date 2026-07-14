@@ -26,11 +26,13 @@
 
   const tasks = review.tasks.map((task) => {
     const capability = task.capability_receipt;
-    const capabilitySummary = capability.observed_calls === 0
-      ? `zero calls · absent recheck ${capability.capability_absent_recheck}`
-      : `${capability.observed} · full inputs ${capability.full_semantic_inputs ? 'yes' : 'no'}`;
+    const capabilitySummary = capability.scoring === 'observed non-scoring'
+      ? `${capability.observed_calls} observed calls · non-scoring · semantic quality claim null`
+      : capability.observed_calls === 0
+        ? `zero calls · absent recheck ${capability.capability_absent_recheck}`
+        : `${capability.observed} · full inputs ${capability.full_semantic_inputs ? 'yes' : 'no'}`;
     const references = task.reference_paths.map((path, index) =>
-      `<a href="${sourceUrl(path)}">reference ${index + 1}</a><span>${esc(path)} · ${esc(task.reference_structures[index])}</span>`
+      `<a href="${sourceUrl(path)}">reference ${index + 1}</a><span>${esc(path)} · ${esc(task.reference_structures[index])}<br><strong>${esc(task.reference_behaviors[index])}</strong><br>witness: ${esc(task.reference_proof_markers[index])}</span>`
     ).join('');
     return `
     <article class="qual-task">
@@ -62,7 +64,7 @@
         </div>
         <div class="coverage-block gate-block">
           <p class="coverage-label">Package gate only · not scored attempts</p>
-          <p><strong>2/2 structurally distinct references passed; ${task.mutants.length}/${task.mutants.length} named mutants rejected</strong> for their declared reason.</p>
+          <p><strong>2/2 structurally and behaviorally distinct references passed; ${task.mutants.length}/${task.mutants.length} named mutants rejected</strong> for their declared reason.</p>
           <ul class="mutant-list">${task.mutants.map((mutant) => `
             <li><span class="mutant-kill" aria-label="expected failure">×</span><div><code>${esc(mutant.id)}</code><p>${esc(mutant.expected_failure)}</p><small>marker: ${esc(mutant.failure_marker)}</small></div></li>`).join('')}</ul>
         </div>
@@ -94,6 +96,13 @@
 
   const sources = review.sources.map((source) => `
     <li><a href="${esc(source.url)}">${esc(source.label)}</a><code>${esc(source.path)}</code></li>`).join('');
+  const modeScores = run.mode_scores.map((mode) => `
+    <article>
+      <p>${esc(mode.mode)}</p>
+      <strong class="num">${mode.successes}/${mode.n}</strong>
+      <span class="num">95% ${esc(mode.method)} · ${pct(mode.lower)}–${pct(mode.upper)}</span>
+      ${mode.interpretation ? `<small>${esc(mode.interpretation)}</small>` : ''}
+    </article>`).join('');
 
   root.innerHTML = `
     <div class="review-hero">
@@ -105,8 +114,8 @@
       <div class="boundary-grid">
         <div class="boundary-yes">
           <p>What ran</p>
-          <strong>2 task oracle applications</strong>
-          <span>Crucible → Harbor → oracle → deterministic verifier; 4 references package-qualified</span>
+          <strong>${score.n} task oracle applications</strong>
+          <span>Crucible → Harbor → oracle → deterministic verifier; ${review.tasks.length * 2} references package-qualified</span>
         </div>
         <div class="boundary-no">
           <p>What did not run</p>
@@ -127,7 +136,8 @@
             <div class="review-ci-point" style="left:${score.point * 100}%"></div>
           </div>
           <p class="ci-label num">${score.confidence * 100}% ${esc(score.method)} interval · ${pct(score.lower)}–${pct(score.upper)}</p>
-          <p class="score-caution">This is the reference integration rate for two development tasks. The wide interval reflects n=2; neither the point nor interval estimates model capability.</p>
+          <p class="score-caution">This is the reference integration rate for ${score.n} public development tasks. Neither the point nor interval estimates model capability, and unlike modes are not pooled into a Seam Agency model score.</p>
+          <div class="mode-score-grid">${modeScores}</div>
         </div>
         <div class="usage-panel">
           <p class="usage-title">Model use: none</p>
@@ -164,8 +174,8 @@
     </section>
 
     <section aria-labelledby="materialized-tasks">
-      <p class="sect-title" id="materialized-tasks">Two materialized tasks</p>
-      <p class="section-intro">Each task exposes its declared seam, two structurally distinct references, verifier, runtime capability receipt, and separately qualified wrong-seam mutants.</p>
+      <p class="sect-title" id="materialized-tasks">Seven materialized tasks</p>
+      <p class="section-intro">Each task exposes its declared seam, two structurally and behaviorally distinct references with executable witnesses, verifier, runtime capability receipt, and separately qualified wrong-seam mutants.</p>
       <div class="qual-tasks">${tasks}</div>
     </section>
 
@@ -177,7 +187,7 @@
 
     <section aria-labelledby="construct-findings">
       <p class="sect-title" id="construct-findings">Construct hardening and remaining blockers</p>
-      <p class="section-intro">Resolved findings are limited to the two materialized development tasks. Remaining limitations still block a benchmark capability claim.</p>
+      <p class="section-intro">Resolved findings are limited to public development construct qualification. Remaining limitations still block a benchmark capability claim.</p>
       <div class="blocker-grid">${findings}</div>
     </section>
 

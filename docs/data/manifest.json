@@ -72,7 +72,7 @@
    "id": "seam-agency-v0-qualification",
    "title": "Seam Agency v0",
    "status": "Oracle/reference qualification · no model run",
-   "tagline": "Human review of the matched Build pair, its references, verifiers, mutant coverage, exact Crucible/Harbor oracle receipt, limitations, and benchmark-readiness path.",
+   "tagline": "Human review of the seven-task public development corpus, 14 references, 21 mutants, exact Crucible/Harbor oracle receipt, limitations, and benchmark-readiness path.",
    "url": "seam-agency-review.html"
   }
  ]
