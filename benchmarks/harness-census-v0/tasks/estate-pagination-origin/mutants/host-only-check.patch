@@ -1,0 +1,40 @@
+diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
+--- a/src/collect/digitalocean.rs
++++ b/src/collect/digitalocean.rs
+@@ -171,6 +171,18 @@ async fn get_json<T: serde::de::DeserializeOwned(
+         .await?)
+ }
+ 
++fn validated_next(base: &str, next: String) -> anyhow::Result<String> {
++    if next.starts_with('/') && !next.starts_with("//") {
++        return Ok(next);
++    }
++    let base = url::Url::parse(base)?;
++    let candidate = url::Url::parse(&next)?;
++    if candidate.host_str() != base.host_str() {
++        anyhow::bail!("cross-origin pagination");
++    }
++    Ok(candidate.into())
++}
++
+ async fn fetch_droplets(
+     client: &reqwest::Client,
+     base: &str,
+@@ -186,7 +201,7 @@ async fn fetch_droplets(
+             .and_then(|links| links.pages)
+             .and_then(|pages| pages.next)
+         {
+-            Some(next) => path = next,
++            Some(next) => path = validated_next(base, next)?,
+             None => return Ok(all),
+         }
+     }
+@@ -203,7 +218,7 @@ async fn fetch_apps(client: &reqwest::Client, base: &str, token: &str) -> anyhow
+             .and_then(|links| links.pages)
+             .and_then(|pages| pages.next)
+         {
+-            Some(next) => path = next,
++            Some(next) => path = validated_next(base, next)?,
+             None => return Ok(all),
+         }
+     }

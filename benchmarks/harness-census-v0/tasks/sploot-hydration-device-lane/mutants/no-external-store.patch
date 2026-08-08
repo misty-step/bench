@@ -1,0 +1,12 @@
+diff --git a/apps/web/components/library/empty-state.tsx b/apps/web/components/library/empty-state.tsx
+--- a/apps/web/components/library/empty-state.tsx
++++ b/apps/web/components/library/empty-state.tsx
+@@ -2,7 +2,7 @@
+ 
+ import Link from 'next/link';
+ import { useRouter } from 'next/navigation';
+-import { useEffect, useState, useCallback, useRef } from 'react';
++import { useEffect, useState, useCallback, useRef, useSyncExternalStore } from 'react';
+ import { cn } from '@/lib/utils';
+ import { trackEmptyStateRender } from '@/lib/performance-metrics';
+ import { Button } from '@/components/ui/button';

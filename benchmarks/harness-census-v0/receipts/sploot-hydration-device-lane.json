@@ -1,0 +1,64 @@
+{
+  "exposure": {
+    "future_git_objects_exposed": false,
+    "grader_and_reference_hidden_from_worker": true,
+    "private_source_bytes_checked_in": false
+  },
+  "fixture": {
+    "git_history_in_image": false,
+    "history_free": true,
+    "stable_repeated_digest": true,
+    "tree_digest": "5b7cfda43941cd928397b81f78412e7a8f2cfaf211c05a91849f764c0e1535bc"
+  },
+  "harbor_permissions": {
+    "reward_file_mode": "0644",
+    "verifier_dir_mode": "0755"
+  },
+  "mutants": [
+    {
+      "changed_paths": [
+        "apps/web/components/library/empty-state.tsx"
+      ],
+      "failure_check": "server-desktop",
+      "id": "wrong-server-snapshot",
+      "patch_digest": "5a9b0a71da5ff71f69f876171044786dd3f1f0837599f13b55d68034b63d8cb9"
+    },
+    {
+      "changed_paths": [
+        "apps/web/components/library/empty-state.tsx"
+      ],
+      "failure_check": "device-hook",
+      "id": "no-external-store",
+      "patch_digest": "e21a60d29bfa47c757a6ea4c7c898f1d796f6bf31ff8975c3535d6fdc258f533"
+    }
+  ],
+  "package_id": "harness-census-v0",
+  "qualified": true,
+  "reference": {
+    "changed_paths": [
+      "apps/web/components/library/empty-state.tsx"
+    ],
+    "grader_digest": "60609ff59b12024a866c56050eb1804429a5839c12f1a960752fb1bd1883ebd8",
+    "passed": true,
+    "patch_digest": "9c9e2024a09e07217e60f7a789d54a5f85cc37f63dcd72c668a5aa78f4227577"
+  },
+  "reference_sha": "1d5b3282a236996dbc4cf79ff4c9c4c5d2cb085c",
+  "schema_version": "harness_census.qualification_receipt.v1",
+  "scope": {
+    "allowed_paths": [
+      "apps/web/components/library/empty-state.tsx"
+    ],
+    "changed_paths": [
+      "apps/web/components/library/empty-state.tsx"
+    ],
+    "passed": true
+  },
+  "source_cluster": "product-hydration",
+  "source_repository": "misty-step/sploot",
+  "source_sha": "4a2a3d29831e4c8d22dc28130a062bda8f51b601",
+  "task_id": "sploot-hydration-device-lane",
+  "unchanged_image": {
+    "intended_failure": "external-store-import",
+    "passed": false
+  }
+}

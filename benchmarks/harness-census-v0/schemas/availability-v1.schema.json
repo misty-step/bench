@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "harness_census.availability.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "model_requested", "effort_requested", "provider_route_resolved", "provider_effort_resolved", "harness", "composition", "status", "reason_code", "evidence_ref", "row_id", "cohort_id"],
+  "properties": {
+    "schema_version": {"const": "harness_census.availability.v1"},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "model_requested": {"type": "string", "minLength": 1},
+    "effort_requested": {"type": ["string", "null"]},
+    "provider_route_resolved": {"type": ["string", "null"]},
+    "provider_effort_resolved": {"type": ["string", "null"]},
+    "harness": {"enum": ["prime", "omp", "pi"]},
+    "composition": {"enum": ["controlled_raw", "controlled_enriched"]},
+    "status": {"enum": ["confirmed", "blocked_route", "blocked_effort", "clamped_effort", "blocked_harness", "blocked_composition", "blocked_task"]},
+    "reason_code": {"type": ["string", "null"]},
+    "evidence_ref": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}@[^/].*$"},
+    "row_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "cohort_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "confirmed"}}},
+      "then": {"properties": {"provider_route_resolved": {"type": "string"}, "provider_effort_resolved": {"type": "string"}, "reason_code": {"type": "null"}, "evidence_ref": {"type": "string"}}}
+    },
+    {
+      "if": {"properties": {"status": {"enum": ["blocked_route", "blocked_effort", "clamped_effort", "blocked_harness", "blocked_composition", "blocked_task"]}}},
+      "then": {"properties": {"reason_code": {"type": "string", "minLength": 1}, "evidence_ref": {"type": "string"}}}
+    }
+  ]
+}

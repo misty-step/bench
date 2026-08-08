@@ -1,0 +1,18 @@
+{
+  "schema_version": "bench.harness_census_mutants.v1",
+  "task_id": "sploot-hydration-device-lane",
+  "mutants": [
+    {
+      "id": "wrong-server-snapshot",
+      "path": "wrong-server-snapshot.patch",
+      "expected_failure": "server-desktop",
+      "failure_marker": "server-desktop"
+    },
+    {
+      "id": "no-external-store",
+      "path": "no-external-store.patch",
+      "expected_failure": "device-hook",
+      "failure_marker": "device-hook"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "exposure": {
+    "future_git_objects_exposed": false,
+    "grader_and_reference_hidden_from_worker": true,
+    "private_source_bytes_checked_in": false
+  },
+  "fixture": {
+    "git_history_in_image": false,
+    "history_free": true,
+    "stable_repeated_digest": true,
+    "tree_digest": "fb041ac7aae2cc98155e035f1acea435e8e379bbba51c4945ad92d95a7407bcb"
+  },
+  "harbor_permissions": {
+    "reward_file_mode": "0644",
+    "verifier_dir_mode": "0755"
+  },
+  "mutants": [
+    {
+      "changed_paths": [
+        "src/collect/digitalocean.rs"
+      ],
+      "failure_check": "scheme-check",
+      "id": "no-origin-check",
+      "patch_digest": "4a12d1e201d751851b195a27f3cbcb64972fb14188104e74f7fe469380da7a2d"
+    },
+    {
+      "changed_paths": [
+        "src/collect/digitalocean.rs"
+      ],
+      "failure_check": "scheme-check",
+      "id": "host-only-check",
+      "patch_digest": "acd6d2e71de6aa39bdaa8114f18408786caceeb0459d8903118f168e4eee06df"
+    }
+  ],
+  "package_id": "harness-census-v0",
+  "qualified": true,
+  "reference": {
+    "changed_paths": [
+      "src/collect/digitalocean.rs"
+    ],
+    "grader_digest": "f24830f10c267b323c813fc6d97bc45642d7922ea43a89dc373bfa3b86a7e840",
+    "passed": true,
+    "patch_digest": "e2ddf841661a44639050eb7eaeb3dca0bd573742d090a5b8ec650aa2e5a5ffcd"
+  },
+  "reference_sha": "c6e92b73ee69fb6ef56d349000f85fb8b70843ed",
+  "schema_version": "harness_census.qualification_receipt.v1",
+  "scope": {
+    "allowed_paths": [
+      "src/collect/digitalocean.rs"
+    ],
+    "changed_paths": [
+      "src/collect/digitalocean.rs"
+    ],
+    "passed": true
+  },
+  "source_cluster": "security-boundary",
+  "source_repository": "misty-step/estate",
+  "source_sha": "054020ba4929ce8794cbd7524865fdc155cc9ef7",
+  "task_id": "estate-pagination-origin",
+  "unchanged_image": {
+    "intended_failure": "origin-helper",
+    "passed": false
+  }
+}

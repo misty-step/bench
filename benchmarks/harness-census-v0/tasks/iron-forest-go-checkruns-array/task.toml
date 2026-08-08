@@ -1,0 +1,28 @@
+version = "1.0"
+
+[metadata]
+author = "Misty Step Bench"
+category = "software-engineering"
+tags = ["harness-census-v0", "go", "history-free"]
+
+[verifier]
+timeout_sec = 60.0
+
+[agent]
+timeout_sec = 900.0
+
+[environment]
+build_timeout_sec = 120.0
+cpus = 1
+memory_mb = 1024
+storage_mb = 2048
+network_mode = "no-network"
+
+[census]
+task_id = "iron-forest-go-checkruns-array"
+source_repository = "misty-step/iron-forest"
+source_sha = "e98569f48664759242b062a5a46910c03375c0ed"
+allowed_paths = ["prs.go"]
+generator = "runtime-git-archive"
+grader = "grader.py"
+reference_patch = "reference.patch"

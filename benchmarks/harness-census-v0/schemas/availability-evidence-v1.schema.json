@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "harness_census.availability_evidence.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "row_id", "model_requested", "effort_requested", "provider_route_resolved", "provider_effort_resolved", "harness", "harness_version", "adapter_digest", "catalog_digest", "probe_request_digest", "probe_result_digest", "observed_status"],
+  "properties": {
+    "schema_version": {"const": "harness_census.availability_evidence.v1"},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "row_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "model_requested": {"type": "string", "minLength": 1},
+    "effort_requested": {"type": ["string", "null"]},
+    "provider_route_resolved": {"type": ["string", "null"]},
+    "provider_effort_resolved": {"type": ["string", "null"]},
+    "harness": {"enum": ["prime", "omp", "pi"]},
+    "harness_version": {"type": "string", "minLength": 1},
+    "adapter_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "catalog_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "probe_request_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "probe_result_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "observed_status": {"enum": ["confirmed", "blocked_route", "blocked_effort", "clamped_effort", "blocked_harness", "blocked_composition", "blocked_task"]}
+  }
+}

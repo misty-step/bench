@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "harness_census.baseline_summary.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "baseline_id", "harness", "harness_version", "provider_route_resolved", "provider_effort_resolved", "profile_digest", "task_receipt_refs", "valid"],
+  "properties": {
+    "schema_version": {"const": "harness_census.baseline_summary.v1"},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "baseline_id": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "harness": {"enum": ["prime", "omp", "pi"]},
+    "harness_version": {"type": "string", "minLength": 1},
+    "provider_route_resolved": {"type": "string", "minLength": 1},
+    "provider_effort_resolved": {"type": "string", "minLength": 1},
+    "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_receipt_refs": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}@[^/].*$"}},
+    "valid": {"type": "boolean"}
+  }
+}

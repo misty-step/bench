@@ -1,0 +1,64 @@
+{
+  "exposure": {
+    "future_git_objects_exposed": false,
+    "grader_and_reference_hidden_from_worker": true,
+    "private_source_bytes_checked_in": false
+  },
+  "fixture": {
+    "git_history_in_image": false,
+    "history_free": true,
+    "stable_repeated_digest": true,
+    "tree_digest": "227dbc72e7219a0e4d3fc7a9e7f69ddb91ec5d00dcf2cbb2e22f9864e4a59768"
+  },
+  "harbor_permissions": {
+    "reward_file_mode": "0644",
+    "verifier_dir_mode": "0755"
+  },
+  "mutants": [
+    {
+      "changed_paths": [
+        "prs.go"
+      ],
+      "failure_check": "failing-checks-array",
+      "id": "rollup-only-array",
+      "patch_digest": "956e64571b006eba97915f0dea74625f7a71f6ff32ca4c7ee5c2c1a986467460"
+    },
+    {
+      "changed_paths": [
+        "prs.go"
+      ],
+      "failure_check": "failing-output-decode",
+      "id": "failing-output-not-decoded",
+      "patch_digest": "93ad8e181d13d3842ae2c9ea2c3703e2a3efd62b78ee800fa1815a1e0ad10df4"
+    }
+  ],
+  "package_id": "harness-census-v0",
+  "qualified": true,
+  "reference": {
+    "changed_paths": [
+      "prs.go"
+    ],
+    "grader_digest": "c3f21d8ee24185e194f164d1cf70ff0765b6b150ecc177a53558c2d06a48737c",
+    "passed": true,
+    "patch_digest": "50585d1c8eac0c904f029fdbcac2d0a4929d1776e39a436b8224b5daf8efcf6f"
+  },
+  "reference_sha": "520c629d4987720e9533ae63e4478cd9479c6b78",
+  "schema_version": "harness_census.qualification_receipt.v1",
+  "scope": {
+    "allowed_paths": [
+      "prs.go"
+    ],
+    "changed_paths": [
+      "prs.go"
+    ],
+    "passed": true
+  },
+  "source_cluster": "generic-parser",
+  "source_repository": "misty-step/iron-forest",
+  "source_sha": "e98569f48664759242b062a5a46910c03375c0ed",
+  "task_id": "iron-forest-go-checkruns-array",
+  "unchanged_image": {
+    "intended_failure": "checkruns-array",
+    "passed": false
+  }
+}

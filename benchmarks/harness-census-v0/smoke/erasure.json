@@ -1,0 +1,15 @@
+{
+  "behavior_preserving_oracle": "No duplicate confirmed rows or evidence bytes are stored.",
+  "campaign_id": "harness-census-v0",
+  "candidate_kind": "duplicate_artifact",
+  "erased_counts": {
+    "artifacts": 0,
+    "trials": 0
+  },
+  "planned_trials_after": 0,
+  "planned_trials_before": 0,
+  "reason": "Smoke is identity and receipt plumbing only; no paid trial bytes are created.",
+  "schema_version": "harness_census.erasure.v1",
+  "stored_bytes_after": 0,
+  "stored_bytes_before": 0
+}

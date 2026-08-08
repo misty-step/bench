@@ -1,0 +1,11 @@
+{
+  "schema_version": "bench.harness_census_scope.v1",
+  "task_id": "sploot-hydration-device-lane",
+  "source_sha": "4a2a3d29831e4c8d22dc28130a062bda8f51b601",
+  "reference_sha": "1d5b3282a236996dbc4cf79ff4c9c4c5d2cb085c",
+  "allowed_paths": ["apps/web/components/library/empty-state.tsx"],
+  "immutable_paths": ["apps/web/components/chrome/status-line.tsx"],
+  "worker_network": "no-network",
+  "history_free": true,
+  "grader_outside_worker_image": true
+}

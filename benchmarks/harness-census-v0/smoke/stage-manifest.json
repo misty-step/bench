@@ -1,0 +1,28 @@
+{
+  "adapter_digest": "fb7b215edd6e3713b81a1a6f9fdbebbf7c51c6cbe36d13ad5d85414a64f6b4d7",
+  "bench_commit": "harness-census-v0-package",
+  "campaign_id": "harness-census-v0",
+  "catalog_digest": "83841237ebaa43f94e26601530dfa062df661c55be44e3cb0cc95651a35f3eb8",
+  "crucible_commit": "sibling-supplied",
+  "decision_policy": {
+    "hard_pass_requires_all_tasks": true,
+    "native_default_separate": true
+  },
+  "grader_digest": "27439ccdbcf867fadb62863b0362f09f08df0eeab86ee3876b7865b4b92cddeb",
+  "harness_digest": "f965d97f0cc94e1b5e5651573ed7a8b7339058c9ef2f3e1ba9431e3751e80707",
+  "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
+  "pack_digest": "19e2876604308751ec17c81fb7a3741511c4ae44005dea0c6f77420c4c048296",
+  "retry_policy": {
+    "product_retry": 0,
+    "transport_retry": 0
+  },
+  "roster_digest": "83841237ebaa43f94e26601530dfa062df661c55be44e3cb0cc95651a35f3eb8",
+  "schema_version": "harness_census.stage_manifest.v1",
+  "stage_id": "smoke",
+  "task_digest": "6412bde58c03958fb44d543062f7938058c1390c203b7572b563eee6dbe66832",
+  "task_qualification_receipts": [
+    "bfae73b6ce87e2005c533ab7e3170b25e20d4424f9fc11fab60ab13313a5cb89",
+    "9f36786ca2fdb9f63ea3120f2a186f28769ec8843938b1fd117126d954b8f1f2",
+    "4f5402948818037bc42fae6eaa2ce86e6aeeb2cdfec7e05b1dd6448205439d0d"
+  ]
+}

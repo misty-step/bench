@@ -1,0 +1,18 @@
+{
+  "schema_version": "bench.harness_census_mutants.v1",
+  "task_id": "estate-pagination-origin",
+  "mutants": [
+    {
+      "id": "no-origin-check",
+      "path": "only-first-pagination.patch",
+      "expected_failure": "scheme-check",
+      "failure_marker": "scheme-check"
+    },
+    {
+      "id": "host-only-check",
+      "path": "host-only-check.patch",
+      "expected_failure": "scheme-check",
+      "failure_marker": "scheme-check"
+    }
+  ]
+}

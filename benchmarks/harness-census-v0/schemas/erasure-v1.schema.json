@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "harness_census.erasure.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "candidate_kind", "behavior_preserving_oracle", "planned_trials_before", "planned_trials_after", "stored_bytes_before", "stored_bytes_after", "erased_counts", "reason"],
+  "properties": {
+    "schema_version": {"const": "harness_census.erasure.v1"},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "candidate_kind": {"enum": ["exact_route_alias", "blocked_input", "saturated_future_task", "redundant_grader_check", "duplicate_artifact"]},
+    "behavior_preserving_oracle": {"type": "string", "minLength": 1},
+    "planned_trials_before": {"type": "integer", "minimum": 0},
+    "planned_trials_after": {"type": "integer", "minimum": 0},
+    "stored_bytes_before": {"type": "integer", "minimum": 0},
+    "stored_bytes_after": {"type": "integer", "minimum": 0},
+    "erased_counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+    "reason": {"type": "string", "minLength": 1}
+  }
+}

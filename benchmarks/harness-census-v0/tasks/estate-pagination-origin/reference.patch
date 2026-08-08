@@ -1,0 +1,74 @@
+diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
+index 93c9233..2eb29b7 100644
+--- a/src/collect/digitalocean.rs
++++ b/src/collect/digitalocean.rs
+@@ -171,6 +171,21 @@ async fn get_json<T: serde::de::DeserializeOwned(
+         .await?)
+ }
+ 
++fn validated_next(base: &str, next: String) -> anyhow::Result<String> {
++    if next.starts_with('/') && !next.starts_with("//") {
++        return Ok(next);
++    }
++    let base = url::Url::parse(base)?;
++    let candidate = url::Url::parse(&next)?;
++    let same_origin = candidate.scheme() == base.scheme()
++        && candidate.host_str() == base.host_str()
++        && candidate.port_or_known_default() == base.port_or_known_default();
++    if !same_origin {
++        anyhow::bail!("digitalocean pagination next URL is cross-origin");
++    }
++    Ok(candidate.into())
++}
++
+ async fn fetch_droplets(
+     client: &reqwest::Client,
+     base: &str,
+@@ -186,7 +201,7 @@ async fn fetch_droplets(
+             .and_then(|links| links.pages)
+             .and_then(|pages| pages.next)
+         {
+-            Some(next) => path = next,
++            Some(next) => path = validated_next(base, next)?,
+             None => return Ok(all),
+         }
+     }
+@@ -203,7 +218,7 @@ async fn fetch_apps(client: &reqwest::Client, base: &str, token: &str) -> anyhow
+             .and_then(|links| links.pages)
+             .and_then(|pages| pages.next)
+         {
+-            Some(next) => path = next,
++            Some(next) => path = validated_next(base, next)?,
+             None => return Ok(all),
+         }
+     }
+@@ -498,6 +513,29 @@ mod tests {
+         assert_eq!(droplets[1].name, "second");
+     }
+ 
++    #[test]
++    fn pagination_rejects_cross_origin_urls_before_a_request() {
++        assert_eq!(
++            validated_next("https://api.digitalocean.com", "/v2/apps?page=2".into()).unwrap(),
++            "/v2/apps?page=2"
++        );
++        assert!(validated_next(
++            "https://api.digitalocean.com",
++            "https://api.digitalocean.com/v2/apps?page=2".into()
++        )
++        .is_ok());
++        assert!(validated_next(
++            "https://api.digitalocean.com",
++            "https://attacker.invalid/steal".into()
++        )
++        .is_err());
++        assert!(validated_next(
++            "https://api.digitalocean.com",
++            "//attacker.invalid/steal".into()
++        )
++        .is_err());
++    }
++
+     #[tokio::test]
+     async fn run_based_jobs_are_explicitly_unknown_not_monthly_compute() {
+         async fn droplets() -> &'static str {

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "harness_census.stage_manifest.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "stage_id", "bench_commit", "crucible_commit", "roster_digest", "catalog_digest", "harness_digest", "adapter_digest", "pack_digest", "mcp_digest", "task_digest", "grader_digest", "retry_policy", "decision_policy"],
+  "properties": {
+    "schema_version": {"const": "harness_census.stage_manifest.v1"},
+    "campaign_id": {"type": "string", "minLength": 1},
+    "stage_id": {"type": "string", "minLength": 1},
+    "bench_commit": {"type": "string", "minLength": 1},
+    "crucible_commit": {"type": "string", "minLength": 1},
+    "roster_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "catalog_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "harness_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "adapter_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "pack_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mcp_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "task_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "grader_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "retry_policy": {"type": "object", "required": ["product_retry", "transport_retry"], "properties": {"product_retry": {"const": 0}, "transport_retry": {"type": "integer", "minimum": 0}}},
+    "decision_policy": {"type": "object", "required": ["hard_pass_requires_all_tasks", "native_default_separate"], "properties": {"hard_pass_requires_all_tasks": {"const": true}, "native_default_separate": {"const": true}}}
+  }
+}
