@@ -17,12 +17,3 @@ cpus = 1
 memory_mb = 1024
 storage_mb = 2048
 network_mode = "no-network"
-
-[census]
-task_id = "estate-pagination-origin"
-source_repository = "misty-step/estate"
-source_sha = "054020ba4929ce8794cbd7524865fdc155cc9ef7"
-allowed_paths = ["src/collect/digitalocean.rs"]
-generator = "runtime-git-archive"
-grader = "grader.py"
-reference_patch = "reference.patch"

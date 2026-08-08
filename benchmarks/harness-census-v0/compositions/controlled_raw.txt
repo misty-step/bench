@@ -1,0 +1,6 @@
+Tool restrictions:
+- Use only the tools provided by the harness.
+- Do not use network access, credentials, or Git history.
+- Edit only the task's named allowed paths.
+- Do not add dependencies, tests, or generated files.
+- Stop after the requested repair.

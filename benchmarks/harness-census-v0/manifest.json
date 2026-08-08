@@ -1,9 +1,23 @@
 {
   "schema_version": "bench.harness_census_manifest.v0",
   "package_id": "harness-census-v0",
-  "source_contract": "model-harness-census-v0.md",
   "history_free_generator": "scripts/qualify_harness_census.py",
-  "worker_network": "no-network",
+  "campaign_driver": "scripts/run_harness_census.py",
+  "composition_manifest": "compositions/digests.json",
+  "network_policy": {
+    "native_default": {
+      "network_mode": "no-network",
+      "transport_network_mode": "no-network",
+      "network_enforcement": "host_allowlist_mint",
+      "task_network_enforcement": "host_allowlist_mint"
+    },
+    "controlled": {
+      "network_mode": "public",
+      "transport_network_mode": "public",
+      "network_enforcement": "tool_surface_no_network_tool",
+      "task_network_enforcement": "tool_surface_no_network_tool"
+    }
+  },
   "grader_visibility": "outside-worker-image",
   "tasks": [
     {
@@ -12,6 +26,7 @@
       "source_sha": "e98569f48664759242b062a5a46910c03375c0ed",
       "reference_sha": "520c629d4987720e9533ae63e4478cd9479c6b78",
       "allowed_paths": ["prs.go"],
+      "immutable_paths": ["go.mod"],
       "source_cluster": "generic-parser"
     },
     {
@@ -20,6 +35,7 @@
       "source_sha": "054020ba4929ce8794cbd7524865fdc155cc9ef7",
       "reference_sha": "c6e92b73ee69fb6ef56d349000f85fb8b70843ed",
       "allowed_paths": ["src/collect/digitalocean.rs"],
+      "immutable_paths": ["Cargo.toml", "Cargo.lock"],
       "source_cluster": "security-boundary"
     },
     {
@@ -28,6 +44,7 @@
       "source_sha": "4a2a3d29831e4c8d22dc28130a062bda8f51b601",
       "reference_sha": "1d5b3282a236996dbc4cf79ff4c9c4c5d2cb085c",
       "allowed_paths": ["apps/web/components/library/empty-state.tsx"],
+      "immutable_paths": ["apps/web/components/chrome/status-line.tsx"],
       "source_cluster": "product-hydration"
     }
   ],

@@ -1,0 +1,11 @@
+{
+  "schema_version": "harness_census.compositions.v1",
+  "controlled_raw": {
+    "path": "controlled_raw.txt",
+    "sha256": "559cebdef05be6d0d8cc7d97fb47bd17e62296c28e248eec514be310ab552ea2"
+  },
+  "controlled_enriched": {
+    "path": "controlled_enriched.txt",
+    "sha256": "5c6fc6e1ca7f18685253cfa46b07910a0b129828af3e31cbde9b8fe6468f5f0f"
+  }
+}

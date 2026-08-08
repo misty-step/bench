@@ -1,56 +1,5 @@
 {
   "aggregation": "proportion",
-  "blocked_sentinels": [
-    {
-      "composition": "controlled_raw",
-      "effort_requested": null,
-      "harness": "prime",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    },
-    {
-      "composition": "controlled_enriched",
-      "effort_requested": null,
-      "harness": "prime",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    },
-    {
-      "composition": "controlled_raw",
-      "effort_requested": null,
-      "harness": "omp",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    },
-    {
-      "composition": "controlled_enriched",
-      "effort_requested": null,
-      "harness": "omp",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    },
-    {
-      "composition": "controlled_raw",
-      "effort_requested": null,
-      "harness": "pi",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    },
-    {
-      "composition": "controlled_enriched",
-      "effort_requested": null,
-      "harness": "pi",
-      "model_requested": "google-antigravity/gemini-3.5-flash-lite",
-      "reason_code": "route_unavailable",
-      "status": "blocked_route"
-    }
-  ],
-  "campaign_id": "harness-census-v0",
   "decision": "Qualify harness identity and task receipt plumbing without paid model quality claims.",
   "graders": {
     "graders": [
@@ -62,32 +11,24 @@
   },
   "id": "harness-census-v0-smoke",
   "inputs": "Three history-free pinned repository repair tasks with deterministic graders.",
-  "outputs": "One native-default baseline and one six-cell controlled smoke receipt set.",
+  "outputs": "Nine-cell dry-run staging and task receipt plumbing.",
   "runner": {
     "corpus": {
       "config": {
         "agent": "pi",
         "agent_import_path": "crucible.harbor_agents.pi_agent:PiAgent",
         "job_timeout_ms": 900000,
-        "model": "openrouter/deepseek/deepseek-v4-flash-0731",
-        "resource_envelope": {
-          "cpu_millicores": 1000,
-          "headroom_percent": 50,
-          "memory_mb": 1024
-        }
+        "model": "openrouter/deepseek/deepseek-v4-flash-0731"
       },
       "source": "harbor_tasks",
       "tasks": [
         {
-          "task_dir": "../tasks/iron-forest-go-checkruns-array",
           "task_id": "iron-forest-go-checkruns-array"
         },
         {
-          "task_dir": "../tasks/estate-pagination-origin",
           "task_id": "estate-pagination-origin"
         },
         {
-          "task_dir": "../tasks/sploot-hydration-device-lane",
           "task_id": "sploot-hydration-device-lane"
         }
       ]
@@ -97,8 +38,11 @@
   "schema_version": "crucible.eval_spec.v1",
   "smoke_cells": [
     {
-      "cell_kind": "native_default",
+      "cell_id": "prime-native_default",
+      "composition": "native_default",
+      "effort_requested": null,
       "harness": "prime",
+      "model_requested": null,
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -106,30 +50,11 @@
       ]
     },
     {
-      "cell_kind": "native_default",
-      "harness": "omp",
-      "task_ids": [
-        "iron-forest-go-checkruns-array",
-        "estate-pagination-origin",
-        "sploot-hydration-device-lane"
-      ]
-    },
-    {
-      "cell_kind": "native_default",
-      "harness": "pi",
-      "task_ids": [
-        "iron-forest-go-checkruns-array",
-        "estate-pagination-origin",
-        "sploot-hydration-device-lane"
-      ]
-    },
-    {
-      "cell_kind": "controlled",
+      "cell_id": "prime-controlled_raw",
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "prime",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "85269b41ab8bdc4a2096a4ac3a753918116c427017f02ad7095df212b26b8f84",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -137,12 +62,11 @@
       ]
     },
     {
-      "cell_kind": "controlled",
+      "cell_id": "prime-controlled_enriched",
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "prime",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "415ba2c0ef56094026eec0a45a4bf97842e421327a6aec274ebd1d79a7db692d",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -150,12 +74,23 @@
       ]
     },
     {
-      "cell_kind": "controlled",
+      "cell_id": "omp-native_default",
+      "composition": "native_default",
+      "effort_requested": null,
+      "harness": "omp",
+      "model_requested": null,
+      "task_ids": [
+        "iron-forest-go-checkruns-array",
+        "estate-pagination-origin",
+        "sploot-hydration-device-lane"
+      ]
+    },
+    {
+      "cell_id": "omp-controlled_raw",
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "omp",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "2a5601037cd281f65b27614346393fbdc8b53e18b0f17c01051434a8b9be1347",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -163,12 +98,11 @@
       ]
     },
     {
-      "cell_kind": "controlled",
+      "cell_id": "omp-controlled_enriched",
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "omp",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "add6e3a07d9a71686889bc520ae7cb4c927be87ec16a7f4e9bf340c77260e9a1",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -176,12 +110,23 @@
       ]
     },
     {
-      "cell_kind": "controlled",
+      "cell_id": "pi-native_default",
+      "composition": "native_default",
+      "effort_requested": null,
+      "harness": "pi",
+      "model_requested": null,
+      "task_ids": [
+        "iron-forest-go-checkruns-array",
+        "estate-pagination-origin",
+        "sploot-hydration-device-lane"
+      ]
+    },
+    {
+      "cell_id": "pi-controlled_raw",
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "pi",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "d566ac00884cb60db5f0f9265e580b97efda4d2063f8692ded2fb8ae04f9bf87",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -189,12 +134,11 @@
       ]
     },
     {
-      "cell_kind": "controlled",
+      "cell_id": "pi-controlled_enriched",
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "pi",
-      "model_requested": "openrouter/deepseek-v4-flash-0731",
-      "row_id": "832afbda876919c125405dcba00568c35cfa6169c3fee0bd5079f0a17790a493",
+      "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
         "estate-pagination-origin",
@@ -202,7 +146,6 @@
       ]
     }
   ],
-  "stage_manifest_digest": "f388d0767b714b941342cb0ab946cbdf9803d590b47c00e26b4e3ca6e929f19c",
   "task": "harness-census-v0",
   "uncertainty": {
     "confidence": 0.95,

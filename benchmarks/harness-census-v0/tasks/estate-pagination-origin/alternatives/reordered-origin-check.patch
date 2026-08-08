@@ -1,0 +1,9 @@
+diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
+--- a/src/collect/digitalocean.rs
++++ b/src/collect/digitalocean.rs
+@@ -180,3 +180,3 @@ fn validated_next(base: &str, next: String) -> anyhow::Result<String> {
+-    let same_origin = candidate.scheme() == base.scheme()
+-        && candidate.host_str() == base.host_str()
++    let same_origin = candidate.host_str() == base.host_str()
++        && candidate.scheme() == base.scheme()
+         && candidate.port_or_known_default() == base.port_or_known_default();

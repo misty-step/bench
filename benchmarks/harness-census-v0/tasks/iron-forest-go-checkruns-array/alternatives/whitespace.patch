@@ -1,0 +1,22 @@
+diff --git a/prs.go b/prs.go
+index 76e1d42..2692f9d 100644
+--- a/prs.go
++++ b/prs.go
+@@ -139,7 +139,7 @@ func listOpenForestPRs(repo string) ([]int, error)
+ // review bots alone (CodeRabbit, Bugbot).
+ func checkRollup(repo, sha string) (string, error) {
+ 	out, err := ghJSON("api", fmt.Sprintf("repos/%s/commits/%s/check-runs", repo, sha),
+-		"-q", `[.check_runs[] | {status, conclusion, name}]`)
++		"-q", `[ .check_runs[] | {status, conclusion, name} ]`)
+ 	if err != nil {
+ 		return "", err
+ 	}
+@@ -206,7 +206,7 @@ func latestRequestedChange(repo string, n int) (body, commitID string, err error
+ // failingChecks lists names+conclusions of failed checks on a commit.
+ func failingChecks(repo, sha string) (string, error) {
+ 	out, err := ghJSON("api", fmt.Sprintf("repos/%s/commits/%s/check-runs", repo, sha),
+-		"-q", `[.check_runs[] | select(.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED") | .name + ": " + .conclusion]`)
++		"-q", `[.check_runs[] | select(.status == "COMPLETED" and .conclusion != "SUCCESS" and .conclusion != "NEUTRAL" and .conclusion != "SKIPPED") | .name + ": " + .conclusion ]`)
+ 	if err != nil {
+ 		return "", err
+ 	}

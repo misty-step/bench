@@ -5,13 +5,11 @@
     {
       "id": "rollup-only-array",
       "path": "rollup-only-array.patch",
-      "expected_failure": "failing-checks-array",
       "failure_marker": "failing-checks-array"
     },
     {
       "id": "failing-output-not-decoded",
       "path": "failing-output-not-decoded.patch",
-      "expected_failure": "failing-output-decode",
       "failure_marker": "failing-output-decode"
     }
   ]

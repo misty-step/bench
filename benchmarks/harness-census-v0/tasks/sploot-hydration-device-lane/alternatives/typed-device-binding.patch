@@ -1,0 +1,11 @@
+diff --git a/apps/web/components/library/empty-state.tsx b/apps/web/components/library/empty-state.tsx
+--- a/apps/web/components/library/empty-state.tsx
++++ b/apps/web/components/library/empty-state.tsx
+@@ -106,6 +106,6 @@ function useCaptureDevice(): CaptureDevice {
+ 
+ function CaptureSurfaces() {
+-  const device = useCaptureDevice();
++  const device: CaptureDevice = useCaptureDevice();
+   const { installable, installed, requiresManualInstall, promptInstall } = usePwaInstallPrompt();
+ 
+   return (

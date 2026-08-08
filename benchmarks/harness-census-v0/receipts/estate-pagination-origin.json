@@ -1,4 +1,17 @@
 {
+  "alternatives": [
+    {
+      "changed_paths": [
+        "src/collect/digitalocean.rs"
+      ],
+      "id": "reordered-origin-check",
+      "patch_digest": "0e3971385db860077b4d5e03db5baf93a8f98b80c60ce36e71c586c199cd7951"
+    }
+  ],
+  "comment_only_image": {
+    "intended_failure": "origin-helper",
+    "passed": false
+  },
   "exposure": {
     "future_git_objects_exposed": false,
     "grader_and_reference_hidden_from_worker": true,
@@ -13,6 +26,10 @@
   "harbor_permissions": {
     "reward_file_mode": "0644",
     "verifier_dir_mode": "0755"
+  },
+  "invalid_syntax_image": {
+    "intended_failure": "origin-helper",
+    "passed": false
   },
   "mutants": [
     {
@@ -38,7 +55,7 @@
     "changed_paths": [
       "src/collect/digitalocean.rs"
     ],
-    "grader_digest": "f24830f10c267b323c813fc6d97bc45642d7922ea43a89dc373bfa3b86a7e840",
+    "grader_digest": "619c09b1f5634f8c54172f4354be779610ba24972d7d02d1fda91043d6c4d121",
     "passed": true,
     "patch_digest": "e2ddf841661a44639050eb7eaeb3dca0bd573742d090a5b8ec650aa2e5a5ffcd"
   },

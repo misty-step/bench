@@ -1,4 +1,17 @@
 {
+  "alternatives": [
+    {
+      "changed_paths": [
+        "prs.go"
+      ],
+      "id": "whitespace",
+      "patch_digest": "d6366c23cc85b446e1088968e06ba3f692fbc6ace375545902a1224f62c55f83"
+    }
+  ],
+  "comment_only_image": {
+    "intended_failure": "failing-checks-array",
+    "passed": false
+  },
   "exposure": {
     "future_git_objects_exposed": false,
     "grader_and_reference_hidden_from_worker": true,
@@ -13,6 +26,10 @@
   "harbor_permissions": {
     "reward_file_mode": "0644",
     "verifier_dir_mode": "0755"
+  },
+  "invalid_syntax_image": {
+    "intended_failure": "invalid-syntax",
+    "passed": false
   },
   "mutants": [
     {
@@ -38,7 +55,7 @@
     "changed_paths": [
       "prs.go"
     ],
-    "grader_digest": "c3f21d8ee24185e194f164d1cf70ff0765b6b150ecc177a53558c2d06a48737c",
+    "grader_digest": "a5a995f062bf83d38cc5e477fda16be4f8e64cc6c48f76c14d55398a4baabb0d",
     "passed": true,
     "patch_digest": "50585d1c8eac0c904f029fdbcac2d0a4929d1776e39a436b8224b5daf8efcf6f"
   },
@@ -58,7 +75,7 @@
   "source_sha": "e98569f48664759242b062a5a46910c03375c0ed",
   "task_id": "iron-forest-go-checkruns-array",
   "unchanged_image": {
-    "intended_failure": "checkruns-array",
+    "intended_failure": "failing-checks-array",
     "passed": false
   }
 }
