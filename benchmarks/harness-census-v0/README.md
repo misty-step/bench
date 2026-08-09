@@ -35,6 +35,8 @@ The deterministic nine-cell preflight passed on 2026-08-08.
 It built all nine worker images and passed all 27 hidden-reference checks.
 The OpenRouter Mint route served a bounded DeepSeek probe.
 The same route refused `anthropic/claude-opus-5` because no endpoint matched the account privacy policy.
+The OMP controlled-raw canary persisted that refusal as canonical
+`reliability_failure` / `provider_request_failed` evidence and marked the campaign `invalid`.
 The direct Anthropic Mint alias was not configured.
 No coding task produced model output, so the pilot has no capability result.
 Do not change the model or privacy policy inside a frozen campaign.
