@@ -919,6 +919,16 @@ class HarnessCensusResumeTests(unittest.TestCase):
             with self.subTest(exception_type=exception_type):
                 self.assertEqual(classify_reliability({"exception_info": {"exception_type": exception_type}}, {"status": "failed"}, None), ("provider", "run", code))
 
+    def test_reliability_taxonomy_is_closed_and_reachable(self) -> None:
+        from harness_census_exchange import SUPPORTED_RELIABILITY_CODES, classify_reliability
+
+        for code in sorted(SUPPORTED_RELIABILITY_CODES):
+            with self.subTest(code=code):
+                failure = classify_reliability({"exception_info": {"reliability_code": code}}, {"status": "failed"}, None)
+                self.assertIsNotNone(failure)
+                self.assertEqual(failure[2], code)
+                self.assertIn(failure[2], SUPPORTED_RELIABILITY_CODES)
+
     def test_unsupported_explicit_failure_code_is_canonicalized(self) -> None:
         from harness_census_exchange import classify_reliability
 

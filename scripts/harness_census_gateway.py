@@ -22,6 +22,7 @@ MINT_UPSTREAM_PORT = 4949
 MINT_API_PATH = "/proxy/https/openrouter.ai/api/v1"
 GATEWAY_UID = 10001
 GATEWAY_GID = 10001
+DEFAULT_WORKER_IMAGE = "harness-census-worker:contract"
 
 
 def gateway_source() -> str:
@@ -142,7 +143,7 @@ ENTRYPOINT ["node", "/app/mint-gateway.mjs"]
 '''
 
 
-def compose_yaml(*, worker_image: str = "harness-census-worker:contract", allow_user_namespaces: bool = False) -> str:
+def compose_yaml(*, worker_image: str = DEFAULT_WORKER_IMAGE, allow_user_namespaces: bool = False) -> str:
     sandbox_profile = "    security_opt:\n      - seccomp=unconfined\n" if allow_user_namespaces else ""
     return f'''services:
   main:
@@ -225,7 +226,7 @@ def validate_gateway_contract() -> None:
         raise RuntimeError("Mint gateway or toolchain manifest identity is stale")
     if "main:\n" not in compose or "mint-gateway:\n" not in compose:
         raise RuntimeError("Compose topology is missing required services")
-    if "    image: harness-census-worker:contract" not in compose or "    build:\n      context: .\n      dockerfile: Dockerfile" in compose:
+    if f"    image: {DEFAULT_WORKER_IMAGE}" not in compose or "    build:\n      context: .\n      dockerfile: Dockerfile" in compose:
         raise RuntimeError("Compose main service must use a prebuilt worker image")
     if "    depends_on:\n      mint-gateway:\n        condition: service_healthy" not in compose or "    networks:\n      - internal\n  mint-gateway:" not in compose:
         raise RuntimeError("Compose main service must wait for the gateway on the internal network")
@@ -250,7 +251,7 @@ def validate_gateway_contract() -> None:
         raise RuntimeError("Mint gateway asset paths do not match Harbor's environment contract")
 
 
-def gateway_assets(*, worker_image: str = "harness-census-worker:contract", allow_user_namespaces: bool = False) -> dict[str, bytes]:
+def gateway_assets(*, worker_image: str = DEFAULT_WORKER_IMAGE, allow_user_namespaces: bool = False) -> dict[str, bytes]:
     return {
         "environment/mint-gateway.mjs": gateway_source().encode("utf-8"),
         "environment/mint-gateway.Dockerfile": gateway_dockerfile().encode("utf-8"),
@@ -258,7 +259,7 @@ def gateway_assets(*, worker_image: str = "harness-census-worker:contract", allo
     }
 
 
-def gateway_identity(*, worker_image: str = "harness-census-worker:contract", allow_user_namespaces: bool = False) -> dict[str, str]:
+def gateway_identity(*, worker_image: str = DEFAULT_WORKER_IMAGE, allow_user_namespaces: bool = False) -> dict[str, str]:
     assets = gateway_assets(worker_image=worker_image, allow_user_namespaces=allow_user_namespaces)
     return {
         "gateway_digest": hashlib.sha256(assets["environment/mint-gateway.mjs"]).hexdigest(),
@@ -267,7 +268,7 @@ def gateway_identity(*, worker_image: str = "harness-census-worker:contract", al
     }
 
 
-def write_gateway_assets(task_dir: Path, *, worker_image: str = "harness-census-worker:contract", allow_user_namespaces: bool = False) -> dict[str, str]:
+def write_gateway_assets(task_dir: Path, *, worker_image: str = DEFAULT_WORKER_IMAGE, allow_user_namespaces: bool = False) -> dict[str, str]:
     assets = gateway_assets(worker_image=worker_image, allow_user_namespaces=allow_user_namespaces)
     for relative, value in assets.items():
         path = task_dir / relative

@@ -12,6 +12,7 @@ from typing import Mapping
 
 from harness_census_common import (
     BUN_VERSION,
+    PNPM_VERSION,
     CARGO_VERSION,
     GO_IMAGE,
     GO_VERSION,
@@ -198,7 +199,7 @@ def prime_dependency_lock_info(metadata: dict[str, object]) -> dict[str, str]:
 def runtime_package_info(harness: str) -> dict[str, str]:
     spec = HARNESSES[harness]
     path = PACKAGE / "packages" / harness
-    expected = {spec.package.rsplit("@", 1)[0]: spec.version, "bun": BUN_VERSION, "pnpm": "10.22.0"}
+    expected = {spec.package.rsplit("@", 1)[0]: spec.version, "bun": BUN_VERSION, "pnpm": PNPM_VERSION}
     return {
         "package": spec.package,
         "version": spec.version,
@@ -208,7 +209,7 @@ def runtime_package_info(harness: str) -> dict[str, str]:
 
 
 def node_toolchain_package_info() -> dict[str, str]:
-    expected = {"bun": BUN_VERSION, "pnpm": "10.22.0"}
+    expected = {"bun": BUN_VERSION, "pnpm": PNPM_VERSION}
     return locked_package_info(PACKAGE / "packages" / "node-toolchain", expected, "Node toolchain")
 
 
@@ -262,7 +263,7 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
             "WORKDIR /workspace\n"
             "RUN node --version | grep -Eq '^v(22\\.(19|[2-9][0-9])\\.|2[3-9]\\.)'\n"
         )
-        toolchain_labels = f'LABEL org.misty-step.toolchain.bun="{BUN_VERSION}"\nLABEL org.misty-step.toolchain.pnpm="10.22.0"\n'
+        toolchain_labels = f'LABEL org.misty-step.toolchain.bun="{BUN_VERSION}"\nLABEL org.misty-step.toolchain.pnpm="{PNPM_VERSION}"\n'
     packages = "python3 ca-certificates unzip git patch"
     if task_kind == "rust":
         packages += " build-essential"
@@ -271,11 +272,11 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     install = f"RUN apt-get update && apt-get install -y --no-install-recommends {packages} && rm -rf /var/lib/apt/lists/*\n"
     labels = f'LABEL org.misty-step.harness="{harness}"\nLABEL org.misty-step.agent-package="{spec.package}"\n' + toolchain_labels
     if harness == "prime":
-        install += f"COPY runtime-package/ /opt/node-toolchain/\nRUN cd /opt/node-toolchain && npm ci --omit=dev\nRUN /opt/node-toolchain/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/node-toolchain/node_modules/.bin/pnpm --version | grep -Fx '10.22.0'\nCOPY {package_name}/ /opt/prime-agent/\nRUN test -x /opt/prime-agent/dist/bundle/cli.js\nRUN cd /opt/prime-agent && npm ci --omit=dev\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN /opt/prime-agent/dist/bundle/cli.js --version 2>&1 | grep -F '0.7.0'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
+        install += f"COPY runtime-package/ /opt/node-toolchain/\nRUN cd /opt/node-toolchain && npm ci --omit=dev\nRUN /opt/node-toolchain/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/node-toolchain/node_modules/.bin/pnpm --version | grep -Fx '{PNPM_VERSION}'\nCOPY {package_name}/ /opt/prime-agent/\nRUN test -x /opt/prime-agent/dist/bundle/cli.js\nRUN cd /opt/prime-agent && npm ci --omit=dev\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN /opt/prime-agent/dist/bundle/cli.js --version 2>&1 | grep -F '0.7.0'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
         path = "/opt/node-toolchain/node_modules/.bin:/opt/prime-agent/node_modules/.bin:/usr/local/bin:${PATH}"
     else:
         binary = "omp" if harness == "omp" else "pi"
-        install += f"COPY {package_name}/ /opt/harness/\nRUN cd /opt/harness && npm ci --omit=dev\nRUN /opt/harness/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/harness/node_modules/.bin/pnpm --version | grep -Fx '10.22.0'\nRUN ln -sf /opt/harness/node_modules/.bin/{binary} /usr/local/bin/{binary}\n"
+        install += f"COPY {package_name}/ /opt/harness/\nRUN cd /opt/harness && npm ci --omit=dev\nRUN /opt/harness/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/harness/node_modules/.bin/pnpm --version | grep -Fx '{PNPM_VERSION}'\nRUN ln -sf /opt/harness/node_modules/.bin/{binary} /usr/local/bin/{binary}\n"
         path = "/opt/harness/node_modules/.bin:${PATH}"
     dependencies = "COPY repo/ /workspace/\n"
     if task_kind == "go":
@@ -283,7 +284,7 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     elif task_kind == "rust":
         dependencies += "RUN cd /workspace && CARGO_NET_OFFLINE=false cargo fetch --locked\nENV CARGO_NET_OFFLINE=true CARGO_TERM_COLOR=never CARGO_TARGET_DIR=/tmp/cargo-target\n"
     else:
-        dependencies += f"RUN bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '10.22.0'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
+        dependencies += f"RUN bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '{PNPM_VERSION}'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
     return base + install + labels + f'ENV PATH="{path}"\n' + dependencies
 
 

@@ -18,11 +18,11 @@ import tomllib
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL,
+    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL, PNPM_VERSION,
     CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_NETWORK_MODE, CONTROLLED_TASK_NETWORK_ENFORCEMENT,
     CONTROLLED_TRANSPORT_NETWORK_MODE, DECISION_POLICY, GO_VERSION, HARBOR_VERSION, HARNESSES, NATIVE_NETWORK_ENFORCEMENT,
     NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT, NATIVE_TRANSPORT_NETWORK_MODE, RETRY_POLICY, RUST_VERSION,
-    Cell, Task, TaskRecord, bytes_digest, campaign_matrix, cell_stage_digest, cell_summary,
+    Cell, Task, TaskRecord, _valid_digest, bytes_digest, campaign_matrix, cell_stage_digest, cell_summary,
     canonical_task_set_digest, cohort_identity, confined_path, digest, fail, file_digest, harbor_reward_value, harness_catalog_digest,
     load_tasks, mcp_identity_digest, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, row_identity, task_corpus_identity,
     task_identity, tree_digest, tree_files, verified_commit, worker_image_tag, write_json,
@@ -48,8 +48,6 @@ def ensure_clean_bench_source() -> None:
         fail(f"Bench source bytes are dirty before stage manifest creation: {', '.join(dirty)}")
 
 
-def _valid_digest(value: object) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 def _smoke_identity() -> dict[str, object]:
     tasks = load_tasks()
@@ -541,7 +539,7 @@ def preflight_worker_images(root: Path, cells: tuple[Cell, ...]) -> dict[str, ob
         "status": "passed",
         "network": "none",
         "filesystem": "read-only-root-tmpfs-tmp",
-        "toolchains": {"go": GO_VERSION, "rustc": RUST_VERSION, "cargo": CARGO_VERSION, "bun": BUN_VERSION, "pnpm": "10.22.0"},
+        "toolchains": {"go": GO_VERSION, "rustc": RUST_VERSION, "cargo": CARGO_VERSION, "bun": BUN_VERSION, "pnpm": PNPM_VERSION},
         "prime_inner_sandbox": "bwrap-user-net",
         "checks": len(results),
         "results": results,

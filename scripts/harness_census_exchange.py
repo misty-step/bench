@@ -9,7 +9,6 @@ from pathlib import Path
 import re
 import subprocess
 import time
-import sys
 from typing import cast
 
 from harness_census_common import (
@@ -154,13 +153,14 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
 
 
 SUPPORTED_RELIABILITY_CODES = {
-    "provider_policy_refused", "provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout",
-    "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
+    "provider_policy_refused", "provider_request_failed", "provider_rate_limited", "provider_authentication_failed", "provider_budget_exceeded", "adapter_timeout", "harbor_timeout",
+    "verifier_reward_missing", "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
     "harbor_job_setup_failed", "harbor_spawn_failed", "harbor_status_failed",
     "harbor_output_failed", "harbor_process_failed", "harbor_trial_missing",
     "harbor_trial_evidence_unreadable", "harbor_trial_malformed",
 }
 RETRYABLE_RELIABILITY_CODES = {"provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout"}
+
 
 
 def _failure_for_code(code: str) -> tuple[str, str, str]:
@@ -329,6 +329,18 @@ def _read_json_or_failure(path: Path) -> tuple[object | None, str | None]:
 def _matches_json_digest(path: Path, expected: str) -> bool:
     value, error = _read_json_or_failure(path)
     return error is None and digest(value) == expected
+
+
+def _verify_staged_context_identity(root: Path, cell: Cell, record: TaskRecord) -> None:
+    instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
+    manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
+    pack_path = confined_path(root, "context", "packs", f"{record.context_pack_digest}.md")
+    if not instruction_path.is_file() or bytes_digest(instruction_path.read_bytes()) != record.context_digest:
+        fail(f"staged instruction identity changed for {record.task_id}")
+    if not _matches_json_digest(manifest_path, record.context_manifest_digest):
+        fail(f"staged context manifest identity changed for {record.task_id}")
+    if not pack_path.is_file() or bytes_digest(pack_path.read_bytes()) != record.context_pack_digest:
+        fail(f"staged context pack identity changed for {record.task_id}")
 
 
 def adapter_identity_payload(cell: Cell, record: TaskRecord, attestation: Attestation, stage_digest: str, context_ref: str, context_manifest_ref: str, context_pack_ref: str, tool_manifest_ref: str | None, authority_hosts: list[str], failure: tuple[str, str, str] | None, harbor_result_path: Path, root: Path) -> dict[str, object]:
@@ -502,15 +514,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
         retryable = failure[2] in RETRYABLE_RELIABILITY_CODES
         result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation) or timestamp_error or "Harbor reliability failure"), "retryable": retryable, "detail": failure_detail}
     exchange_dir = confined_path(root, "exchange", cell.cell_id, task_id)
-    instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
-    manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
-    pack_path = confined_path(root, "context", "packs", f"{record.context_pack_digest}.md")
-    if not instruction_path.is_file() or bytes_digest(instruction_path.read_bytes()) != record.context_digest:
-        fail(f"staged instruction identity changed for {record.task_id}")
-    if not _matches_json_digest(manifest_path, record.context_manifest_digest):
-        fail(f"staged context manifest identity changed for {record.task_id}")
-    if not pack_path.is_file() or bytes_digest(pack_path.read_bytes()) != record.context_pack_digest:
-        fail(f"staged context pack identity changed for {record.task_id}")
+    _verify_staged_context_identity(root, cell, record)
     exchange_dir.mkdir(parents=True, exist_ok=True)
     request_path, result_path, trial_path, grader_path = exchange_dir / "request.json", exchange_dir / "result.json", exchange_dir / "trial.json", exchange_dir / "grader.json"
     write_json(request_path, request)
@@ -535,15 +539,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
 
 def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, paths: ExchangePaths, stage_digest: str, tool_manifest_digest: str | None) -> dict[str, object]:
     db = confined_path(root, "runs", "campaign.sqlite")
-    instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
-    manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
-    pack_path = confined_path(root, "context", "packs", f"{record.context_pack_digest}.md")
-    if not instruction_path.is_file() or bytes_digest(instruction_path.read_bytes()) != record.context_digest:
-        fail(f"staged instruction identity changed for {record.task_id}")
-    if not _matches_json_digest(manifest_path, record.context_manifest_digest):
-        fail(f"staged context manifest identity changed for {record.task_id}")
-    if not pack_path.is_file() or bytes_digest(pack_path.read_bytes()) != record.context_pack_digest:
-        fail(f"staged context pack identity changed for {record.task_id}")
+    _verify_staged_context_identity(root, cell, record)
     db.parent.mkdir(parents=True, exist_ok=True)
     run_id = f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}"
     command = [

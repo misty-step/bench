@@ -23,6 +23,7 @@ GO_VERSION = "1.26.5"
 RUST_VERSION = "1.97.1"
 CARGO_VERSION = "1.97.1"
 BUN_VERSION = "1.3.14"
+PNPM_VERSION = "10.22.0"
 HARBOR_VERSION = "0.13.1"
 CONTROLLED_MODEL = "openrouter/anthropic/claude-opus-5"
 CONTROLLED_EFFORT = "high"
@@ -471,6 +472,10 @@ def task_corpus_identity(task: Task, source_tree_digest: str, grader_digest: str
 
 def bytes_digest(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
+
+
+def _valid_digest(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def file_digest(path: Path) -> str:

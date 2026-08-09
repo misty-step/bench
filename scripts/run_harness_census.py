@@ -12,7 +12,7 @@ from harness_census_common import (
     fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
-from harness_census_resume import cell_receipt_state, pending_task_ids, receipt_task_ids, resolve_resume_cell, staged_bytes_digest, verify_pending_task_sources
+from harness_census_resume import cell_receipt_state, pending_task_ids, receipt_task_ids, staged_bytes_digest, verify_pending_task_sources
 from harness_census_staging import (
     build_cells, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, preflight_worker_images,
     probe_controlled_argv_surfaces, probe_harbor_task_validity, probe_verifier, qualification, require_dir,
@@ -162,7 +162,6 @@ def main() -> None:
             fail("--resume campaign claims complete without 27 quality receipts")
         if campaign.get("completion_status") == "invalid" and "invalid" not in states.values():
             fail("--resume campaign claims invalid without a reliability receipt")
-        resolved_cells = {cell.cell_id: resolve_resume_cell(root, cell, stage_digest) for cell in cells}
         selected = [cell for cell in cells if cell.cell_id in selected_ids]
         if args.cell:
             unknown = sorted(set(args.cell) - {cell.cell_id for cell in selected})
@@ -237,7 +236,6 @@ def main() -> None:
     if not args.resume:
         campaign["harbor"]["observed_version"] = observed_harbor
         write_json(confined_path(root, "campaign.json"), campaign)
-    attempted_tasks = 0
     for cell, prior, run_tasks in run_plan:
         verify_pending_task_sources(root, cell, run_tasks)
         run_cell(root, cell, crucible, harbor, stage_digest, expected_cell_digests[cell.cell_id], task_ids=run_tasks, prior_task_ids=prior)
@@ -256,7 +254,7 @@ def main() -> None:
         campaign["persisted_trials"] = 27
     campaign["current_selected_task_count"] = current_selected_task_count
     write_json(confined_path(root, "campaign.json"), campaign)
-    print(f"run cells={len(selected)} planned_task_set_size={len(cells[0].task_records)} selected_task_count={current_selected_task_count} trials={attempted_tasks} provider_calls=runtime")
+    print(f"run cells={len(selected)} planned_task_set_size={len(cells[0].task_records)} selected_task_count={current_selected_task_count} trials={current_selected_task_count} provider_calls=runtime")
 
 
 if __name__ == "__main__":

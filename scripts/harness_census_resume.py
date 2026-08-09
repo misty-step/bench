@@ -11,6 +11,7 @@ from harness_census_common import (
     TaskRecord,
     agent_allowed_hosts_identity_digest,
     agent_kwargs_identity_digest,
+    _valid_digest,
     bytes_digest,
     campaign_tree_files,
     cell_stage_digest,
@@ -26,12 +27,11 @@ from harness_census_common import (
     tree_digest,
     write_json,
 )
-def _valid_digest(value: object) -> bool:
-    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
 
 
 def _matches_ref(value: object, expected: object) -> bool:
     return value == expected or isinstance(expected, str) and value == f"sha256:{expected}"
+
 
 def staged_bytes_digest(root: Path) -> str:
     files: dict[str, bytes] = {}
