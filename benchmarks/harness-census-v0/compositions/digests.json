@@ -5,7 +5,8 @@
     "sha256": "559cebdef05be6d0d8cc7d97fb47bd17e62296c28e248eec514be310ab552ea2"
   },
   "controlled_enriched": {
-    "path": "controlled_enriched.txt",
-    "sha256": "5c6fc6e1ca7f18685253cfa46b07910a0b129828af3e31cbde9b8fe6468f5f0f"
+    "kind": "generated_context_pack",
+    "source_repo": "misty-step/omp-config",
+    "source_commit": "43f0190225a640835ed1a27759b60844359eee30"
   }
 }

@@ -17,6 +17,7 @@ from harness_census_common import (
     digest, fail, file_digest, harness_catalog_digest, load_tasks, model_roster_digest,
     qualification_harness_records, task_identity, tree_digest, tree_files, write_json,
 )
+from harness_census_gateway import MINT_INTERNAL_BASE_URL, gateway_identity
 from harness_census_staging import validate_stage_manifest
 
 COMPOSITIONS = ("controlled_raw", "controlled_enriched")
@@ -186,6 +187,9 @@ def composition_pack() -> dict[str, dict[str, str]]:
         declaration = manifest.get(name)
         if not isinstance(declaration, dict):
             fail(f"composition declaration is missing: {name}", "harness-census qualification")
+        if name == "controlled_enriched" and declaration.get("kind") == "generated_context_pack":
+            result[name] = {key: str(value) for key, value in declaration.items()}
+            continue
         path = PACKAGE / "compositions" / declaration["path"]
         if not path.is_file() or file_digest(path) != declaration.get("sha256"):
             fail(f"composition digest mismatch: {name}", "harness-census qualification")
@@ -207,11 +211,11 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
         )
         for task in TASKS.values()
     ])
+    gateway = gateway_identity()
     stage = {
         "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "smoke", "bench_commit": None, "crucible_commit": None,
-        "roster_digest": model_roster_digest(), "catalog_digest": harness_catalog_digest(), "crucible_binary_digest": None, "prime_package_digest": None,
-        "dockerfile_digests": [], "package_digests": [], "profile_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-        "harness_digest": harness_catalog_digest(), "adapter_digest": digest([h["adapter"] for h in qualification_harness_records()]), "pack_digest": digest(pack),
+        "roster_digest": model_roster_digest(), "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": digest([entry["adapter"] for entry in qualification_harness_records()]), "pack_digest": digest(pack), "crucible_binary_digest": None, "prime_package_digest": None,
+        "dockerfile_digests": [], "gateway_digests": [gateway["gateway_digest"]], "gateway_dockerfile_digests": [gateway["gateway_dockerfile_digest"]], "compose_digests": [gateway["compose_digest"]], "package_digests": [], "profile_digest": digest({"mint_base_url": MINT_INTERNAL_BASE_URL, "gateway_digests": [gateway["gateway_digest"]], "gateway_dockerfile_digests": [gateway["gateway_dockerfile_digest"]], "compose_digests": [gateway["compose_digest"]]}),
         "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": task_digest, "grader_digest": digest([receipt["reference"]["grader_digest"] for receipt in receipts]),
         "transport_network_mode": {"controlled": NETWORK_POLICY["controlled"]["transport_network_mode"], "native_default": NETWORK_POLICY["native_default"]["transport_network_mode"]},
         "network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["network_enforcement"]},
@@ -224,7 +228,7 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
         "schema_version": "crucible.eval_spec.v1", "id": "harness-census-v0-smoke", "task": CAMPAIGN_ID,
         "inputs": "Three history-free pinned repository repair tasks with deterministic graders.", "outputs": "Nine-cell dry-run staging and task receipt plumbing.",
         "graders": {"graders": [{"id": "harness_census_deterministic", "kind": "deterministic"}]}, "aggregation": "proportion", "uncertainty": {"method": "wilson", "confidence": 0.95},
-        "decision": "Qualify harness identity and task receipt plumbing without paid model quality claims.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": {"agent": "pi", "agent_import_path": "crucible.harbor_agents.pi_agent:PiAgent", "model": "openrouter/deepseek/deepseek-v4-flash-0731", "job_timeout_ms": 900000}, "tasks": [{"task_id": task.id} for task in TASKS.values()]}},
+        "decision": "Qualify harness identity and task receipt plumbing without paid model quality claims.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": {"agent": "pi", "agent_import_path": "crucible.harbor_agents.pi_agent:PiAgent", "model": "openrouter/deepseek/deepseek-v4-flash-0731", "job_timeout_ms": 900000, "agent_kwargs": {"mint_base_url": MINT_INTERNAL_BASE_URL}}, "tasks": [{"task_id": task.id} for task in TASKS.values()]}},
         "smoke_cells": [{**row, "task_ids": list(TASKS)} for row in campaign_matrix()],
     })
 

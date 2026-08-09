@@ -13,11 +13,14 @@ from typing import Mapping, NoReturn, TypedDict
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "benchmarks" / "harness-census-v0"
 CAMPAIGN_ID = "harness-census-v0"
-HARBOR_VERSION = "0.13.1"
+GO_VERSION = "1.26.5"
+RUST_VERSION = "1.97.1"
+CARGO_VERSION = "1.97.1"
 BUN_VERSION = "1.3.14"
+HARBOR_VERSION = "0.13.1"
 CONTROLLED_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
 CONTROLLED_EFFORT = "high"
-AGENT_ALLOWED_HOSTS = ("mint.tail5f5eb4.ts.net",)
+AGENT_ALLOWED_HOSTS = ("mint-gateway",)
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 MANIFEST = json.loads((PACKAGE / "manifest.json").read_text(encoding="utf-8"))
 NETWORK_POLICY = MANIFEST["network_policy"]
@@ -129,12 +132,19 @@ class TaskRecord:
     source_tree_digest: str
     grader_digest: str
     dockerfile_digest: str
+    gateway_digest: str
+    gateway_dockerfile_digest: str
+    compose_digest: str
     prime_package_digest: str | None
     task_dir: str
     allowed_paths: tuple[str, ...]
     immutable_paths: tuple[str, ...]
     network_mode: str
-
+    context_manifest_digest: str
+    context_pack_digest: str
+    skill_digest: str
+    context_digest: str
+    skill_count: int
 
 @dataclass(frozen=True)
 class Cell:
@@ -172,6 +182,9 @@ class Cell:
     package_digest: str
     prime_package_digest: str | None
     dockerfile_digests: tuple[str, ...]
+    gateway_digests: tuple[str, ...]
+    gateway_dockerfile_digests: tuple[str, ...]
+    compose_digests: tuple[str, ...]
     task_records: tuple[TaskRecord, ...]
 
     def resolve_native(self, model: str, effort: str, effort_source: str) -> Cell:
@@ -244,6 +257,11 @@ class Receipt(TypedDict, total=False):
     cohort_id: str | None
     baseline_id: str | None
     profile_digest: str
+    context_digest: str
+    context_manifest_digest: str
+    context_pack_digest: str
+    skill_digest: str
+    skill_count: int
 
 
 @dataclass(frozen=True)
@@ -260,6 +278,19 @@ def canonical(value: object) -> bytes:
 
 def digest(value: object) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
+
+
+def row_identity(model_requested: str | None, effort_requested: str | None, harness: str, composition: str) -> str:
+    return digest([CAMPAIGN_ID, model_requested, effort_requested, harness, composition])
+
+
+def cohort_identity(model_requested: str | None, effort_requested: str | None, provider_route_resolved: str | None, provider_effort_resolved: str | None) -> str:
+    return digest([CAMPAIGN_ID, model_requested, effort_requested, provider_route_resolved, provider_effort_resolved])
+
+
+def canonical_task_set_digest(pairs: list[tuple[str, str]]) -> str:
+    normalized = sorted([[task_id, comparison.removeprefix("sha256:")] for task_id, comparison in pairs])
+    return digest(normalized)
 
 def task_identity(task: Task, source_tree_digest: str, instruction_digest: str, task_manifest_digest: str, grader_digest: str, reference_patch_digest: str) -> str:
     return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "instruction_digest": instruction_digest, "task_manifest_digest": task_manifest_digest, "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest})
@@ -327,4 +358,55 @@ def load_tasks() -> dict[str, Task]:
 
 
 def cell_summary(cell: Cell) -> dict[str, object]:
-    return {"cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "cell_kind": cell.cell_kind, "harness": cell.harness, "composition": cell.composition, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "default_resolution_source": cell.default_resolution_source, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "task_digest": cell.task_digest, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "package_digest": cell.package_digest, "prime_package_digest": cell.prime_package_digest, "dockerfile_digests": list(cell.dockerfile_digests), "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts)}
+    return {
+        "cell_id": cell.cell_id,
+        "cell_run_id": cell.cell_run_id,
+        "cell_kind": cell.cell_kind,
+        "harness": cell.harness,
+        "harness_version": cell.harness_version,
+        "composition": cell.composition,
+        "model_requested": cell.model_requested,
+        "effort_requested": cell.effort_requested,
+        "provider_route_resolved": cell.provider_route_resolved,
+        "provider_effort_resolved": cell.provider_effort_resolved,
+        "default_resolution_source": cell.default_resolution_source,
+        "effort_source": cell.effort_source,
+        "row_id": cell.row_id,
+        "cohort_id": cell.cohort_id,
+        "baseline_id": cell.baseline_id,
+        "profile_digest": cell.profile_digest,
+        "task_digest": cell.task_digest,
+        "task_set_digest": cell.task_set_digest,
+        "task_set_size": cell.task_set_size,
+        "retry_policy_digest": cell.retry_policy_digest,
+        "agent_kwargs_base_digest": cell.agent_kwargs_base_digest,
+        "agent_kwargs_digest": digest(dict(cell.agent_kwargs)),
+        "agent_allowed_hosts_digest": digest(list(cell.agent_allowed_hosts)),
+        "agent_kwargs": dict(cell.agent_kwargs),
+        "composition_digest": cell.composition_digest,
+        "adapter_digest": cell.adapter_digest,
+        "package_digest": cell.package_digest,
+        "prime_package_digest": cell.prime_package_digest,
+        "dockerfile_digests": list(cell.dockerfile_digests),
+        "gateway_digests": list(cell.gateway_digests),
+        "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests),
+        "compose_digests": list(cell.compose_digests),
+        "network_mode": cell.network_mode,
+        "transport_network_mode": cell.transport_network_mode,
+        "network_enforcement": cell.network_enforcement,
+        "task_network_enforcement": cell.task_network_enforcement,
+        "agent_allowed_hosts": list(cell.agent_allowed_hosts),
+        "task_context": [
+            {
+                "task_id": record.task_id,
+                "task_digest": record.task_digest,
+                "comparison_task_digest": record.comparison_task_digest,
+                "context_manifest_digest": record.context_manifest_digest,
+                "context_pack_digest": record.context_pack_digest,
+                "skill_digest": record.skill_digest,
+                "context_digest": record.context_digest,
+                "skill_count": record.skill_count,
+            }
+            for record in cell.task_records
+        ],
+    }

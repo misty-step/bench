@@ -42,6 +42,10 @@ The dry-run prints 9 cells and 27 trials, makes zero provider calls, and records
 the quality and scope probes. Native cells start with null requested and
 resolved identity. A live native cell resolves one common model, effort, and
 effort source from its three adapter attestations.
+Before any provider call, the driver starts the Compose topology. It confirms
+that `main` cannot reach `1.1.1.1` and can reach only `mint-gateway`.
+It also builds all nine harness-task images and runs their hidden references.
+
 
 Select bounded live smoke after the full matrix passes validation:
 
@@ -69,17 +73,27 @@ exchange/<cell>/<task>/{request,result,trial,grader}.json
 Quality outcomes write the numeric Harbor reward as `verifier/reward.json` and the detailed deterministic grader report as `verifier/grader-report.json`. Reliability outcomes write no grader receipt; they persist typed failure fields with null scores and retain transcript and attestation evidence when present.
 
 The driver exports each pinned source SHA without Git history, writes a
-cell-specific Dockerfile, installs Bun with `npm install -g bun@1.3.14`, and
-mounts the hidden content manifest and deterministic grader only through
-`tests/test.sh`. Native Harbor configs omit `model`, `thinking`, and default
-overrides; they carry only `composition=native_default` and the exact Mint
-egress host. Fresh harness settings resolve model and effort. Native Runner
-Exchange candidates keep requested model and reasoning effort null, while
-census payloads carry `effort_source` and receipts carry observed resolved identity
-and the fixed `adapter_attestation:observed-native` model source. Controlled
-requests use Harbor `model` and `thinking` with exactly
+cell-specific Dockerfile, and installs Bun with `npm install -g bun@1.3.14`.
+It mounts the hidden content manifest and deterministic grader only through
+`tests/test.sh`.
+Each staged task also contains a pinned Node Mint gateway and `docker-compose.yaml`.
+The Compose `main` service joins only the internal network. The
+`mint-gateway` sidecar joins the internal and egress networks and forwards
+only `/proxy/https/openrouter.ai/api/v1` to the fixed Mint upstream.
+The sidecar runs as a non-root UID with a read-only root filesystem, all
+Linux capabilities dropped, and `no-new-privileges` enabled.
+Harbor task TOML declares `network_mode = "public"` so Harbor uses the staged
+Compose topology. The internal Compose network enforces worker isolation.
+Every cell passes `mint_base_url=http://mint-gateway:4949/proxy/https/openrouter.ai/api/v1`.
+The adapter accepts this URL or the default Mint URL only.
+Transport mode remains `allowlist`; metadata names enforcement as
+`docker_internal_mint_gateway` and task isolation as `docker_internal_network`.
+Native Harbor configs omit `model`, `thinking`, and default overrides. Fresh
+harness settings resolve model and effort. Native Runner Exchange candidates
+keep requested model and reasoning effort null, while census payloads carry
+`effort_source` and receipts carry observed resolved identity and the fixed
+`adapter_attestation:observed-native` model source.
+Controlled requests use Harbor `model` and `thinking` with exactly
 `openrouter/deepseek/deepseek-v4-flash-0731`.
-
-All task containers use `network_mode = "no-network"` with `docker_no_network`. Agent transport uses `allowlist` with `harbor_agent_allowlist_mint`.
 
 Controlled OMP and Pi expose only read, edit, and write tools. Controlled Prime runs IPython inside a clean `bwrap --unshare-net` sandbox.

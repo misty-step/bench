@@ -3,6 +3,9 @@
   "bench_commit": null,
   "campaign_id": "harness-census-v0",
   "catalog_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
+  "compose_digests": [
+    "2d69d5b51c19918eaa45c136a863095f6e72054a491ae61506ccb6d0b91398a0"
+  ],
   "crucible_binary_digest": null,
   "crucible_commit": null,
   "decision_policy": {
@@ -10,17 +13,23 @@
     "native_default_separate": true
   },
   "dockerfile_digests": [],
+  "gateway_digests": [
+    "d0f47c23dacb9cf8fed99d1e233b823a1aafebbb2911fe117b35c3aac9235f2e"
+  ],
+  "gateway_dockerfile_digests": [
+    "95c0b1efb8e5fa17c2f57fa31371975e1036df4d8935533db7c166cfb5b0c135"
+  ],
   "grader_digest": "a023e5612da51bae0be0d1342a34fb15fef1653e5b6d76f5b882de4798b05288",
   "harness_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
   "network_enforcement": {
-    "controlled": "harbor_agent_allowlist_mint",
-    "native_default": "harbor_agent_allowlist_mint"
+    "controlled": "docker_internal_mint_gateway",
+    "native_default": "docker_internal_mint_gateway"
   },
-  "pack_digest": "1b7833a9def581ba91cf595dc0cc3cfcd3dd5b3f6dbb669d696f2bc77a98dced",
+  "pack_digest": "5dd1beb22bbb7523194b2e5851e9d13eebe0dc69505153a23eadd3398d58abfe",
   "package_digests": [],
   "prime_package_digest": null,
-  "profile_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+  "profile_digest": "1d2f337b185b9b343896fa7ae24557282f98d8c69370d1c25ef914174117cb6e",
   "retry_policy": {
     "product_retry": 0,
     "transport_retry": 0
@@ -28,10 +37,10 @@
   "roster_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
   "schema_version": "harness_census.stage_manifest.v1",
   "stage_id": "smoke",
-  "task_digest": "30744cf4a0eb1d72b75330541f9b6ca0be0846806d6cd9fce7c9aa30540913d9",
+  "task_digest": "3a1652be6fcddcad0957dae749d3aa1b672e7899665f1fa1e964c8e40f146613",
   "task_network_enforcement": {
-    "controlled": "docker_no_network",
-    "native_default": "docker_no_network"
+    "controlled": "docker_internal_network",
+    "native_default": "docker_internal_network"
   },
   "transport_network_mode": {
     "controlled": "allowlist",

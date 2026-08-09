@@ -1,6 +1,0 @@
-Common engineering context:
-- Inspect the existing owning seam before editing.
-- Preserve established behavior outside the requested change.
-- Prefer the smallest coherent repair at the source of the defect.
-- Check boundary cases named by the task.
-- Keep the final tree focused and reviewable.
