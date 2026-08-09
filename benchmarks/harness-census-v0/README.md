@@ -2,6 +2,18 @@
 
 This package qualifies three history-free task images for the model-harness census.
 
+## Decision contract
+
+This pilot decides whether each harness and composition is reliable enough for a larger study.
+It does not select a winning harness or justify deleting agent context.
+Three task buckets can resolve only a one-point paired delta.
+Crucible therefore labels every paired interval as descriptive and non-inferential.
+It reports no winner, directional claim, or deployment recommendation.
+Any reliability failure invalidates the cell.
+All three tasks must hard-pass before a controlled pair enters the descriptive comparison.
+The study must add at least three independent task buckets and pass a prospective power check before any inferential comparison.
+
+
 Run the repository-owned qualification command with the required source root:
 
 ```sh
@@ -45,6 +57,10 @@ effort source from its three adapter attestations.
 Before any provider call, the driver starts the Compose topology. It confirms
 that `main` cannot reach `1.1.1.1` and can reach only `mint-gateway`.
 It also builds all nine harness-task images and runs their hidden references.
+One live cell validates execution and evidence only.
+Run all six controlled cells to produce paired descriptive deltas.
+Native-default cells remain separate observational baselines.
+
 
 
 Select bounded live smoke after the full matrix passes validation:
@@ -58,6 +74,22 @@ python3 scripts/run_harness_census.py --cell omp-controlled_raw --max-cells 1 \
   --prime-package-dir "$PRIME_PACKAGE_DIR" \
   --crucible /path/to/crucible
 ```
+
+Resume the same frozen campaign after an interruption:
+
+```sh
+python3 scripts/run_harness_census.py --resume \
+  --campaign-root "$LIVE_ROOT" \
+  --source-root "$SOURCE_ROOT" \
+  --adapter-root "$ADAPTER_ROOT" \
+  --prime-package-dir "$PRIME_PACKAGE_DIR" \
+  --crucible /path/to/crucible
+```
+
+Resume verifies frozen stage, task, adapter, context, grader, and receipt identities.
+It runs only tasks without a canonical receipt.
+It reconstructs derived cell results from canonical receipts when needed.
+
 
 Each campaign is stored under the explicit `--campaign-root`:
 
@@ -93,7 +125,19 @@ harness settings resolve model and effort. Native Runner Exchange candidates
 keep requested model and reasoning effort null, while census payloads carry
 `effort_source` and receipts carry observed resolved identity and the fixed
 `adapter_attestation:observed-native` model source.
+The process guard also requires the exact internal Mint endpoint and value-free
+OpenRouter marker before launch.
+Native results must report one `openrouter/<model>` identity.
+Controlled results must report the requested model and effort.
+The gateway constrains destination and path, but it does not issue a broker-signed
+receipt for the request body.
+Treat a harness that misreports its OpenRouter request model as a residual pilot risk.
+
 Controlled requests use Harbor `model` and `thinking` with exactly
 `openrouter/deepseek/deepseek-v4-flash-0731`.
 
 Controlled OMP and Pi expose only read, edit, and write tools. Controlled Prime runs IPython inside a clean `bwrap --unshare-net` sandbox.
+The task graders are deterministic and binary.
+Reference patches and independent valid alternatives must score 1.
+Mutants, unchanged sources, syntax failures, and scope violations must score 0.
+The pilot uses no model judge, so it needs no model-judge calibration sample.

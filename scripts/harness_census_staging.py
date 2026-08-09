@@ -7,12 +7,92 @@ import json
 import os
 from pathlib import Path
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import re
 from typing import Mapping
-from dataclasses import replace
 import sqlite3
+_PRIME_FORBIDDEN_NAMES = {".env", ".npmrc", ".yarnrc", ".pnpmrc", "credentials", "credentials.json", "auth.json", "id_rsa", "id_ed25519", "known_hosts"}
+_PRIME_SECRET_PATTERNS = (
+    re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
+    re.compile(rb"(?i)\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s]{12,}"),
+    re.compile(rb"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+    re.compile(rb"\b(?:gh[pousr]|sk)-[A-Za-z0-9_-]{16,}\b"),
+)
+
+
+def _prime_payload(source: Path, metadata: dict[str, object]) -> dict[str, Path]:
+    if source.is_symlink() or not source.is_dir():
+        fail(f"Prime package directory is unsafe: {source}")
+    files: dict[str, Path] = {}
+    for path in sorted(source.rglob("*")):
+        relative = path.relative_to(source).as_posix()
+        parts = relative.split("/")
+        if any(not part or part in {".", ".."} or part.startswith(".") for part in parts):
+            fail(f"Prime package contains an unsafe path: {relative}")
+        if parts[-1].lower() in _PRIME_FORBIDDEN_NAMES:
+            fail(f"Prime package contains a credential-like file: {relative}")
+        info = os.lstat(path)
+        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+            fail(f"Prime package contains a non-regular file: {relative}")
+        value = path.read_bytes()
+        if any(pattern.search(value) for pattern in _PRIME_SECRET_PATTERNS):
+            fail(f"Prime package contains a secret-like value: {relative}")
+        files[relative] = path
+    declared = metadata.get("files", [])
+    if declared is None:
+        declared = []
+    if not isinstance(declared, list) or any(not isinstance(value, str) or not value.strip() for value in declared):
+        fail("Prime package package.json files must be a non-empty string list")
+    binary = metadata.get("bin", {}).get("prime-agent") if isinstance(metadata.get("bin"), dict) else None
+    if not isinstance(binary, str):
+        fail("Prime package bin declaration is invalid")
+    required = {"package.json", binary, "dist/prime-agent-runtime/pyproject.toml", "dist/prime-agent-runtime/src/rlm/__init__.py"}
+    patterns = [*declared, *required]
+    selected = {name: path for name, path in files.items() if name in required or any(name == pattern or name.startswith(pattern.rstrip("/") + "/") for pattern in patterns)}
+    for name in required:
+        if name not in selected:
+            fail(f"Prime package payload is missing: {name}")
+    return selected
+
+
+def _prime_payload_digest(files: Mapping[str, Path]) -> str:
+    return digest([(name, bytes_digest(path.read_bytes())) for name, path in sorted(files.items())])
+
+
+def prime_package_info(path: Path) -> dict[str, str]:
+    metadata_path = path / "package.json"
+    if path.is_symlink() or not path.is_dir() or metadata_path.is_symlink() or not metadata_path.is_file():
+        fail(f"Prime package directory is missing or unsafe: {path}")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"Prime package metadata is invalid: {error}")
+    if not isinstance(metadata, dict) or metadata.get("name") != "prime-agent" or metadata.get("version") != "0.7.0":
+        fail("Prime package must be prime-agent version 0.7.0")
+    binary = metadata.get("bin", {}).get("prime-agent") if isinstance(metadata.get("bin"), dict) else None
+    if binary != "dist/bundle/cli.js":
+        fail("Prime package bin must point to dist/bundle/cli.js")
+    payload = _prime_payload(path, metadata)
+    return {"package": "prime-agent@0.7.0", "version": "0.7.0", "source_kind": "operator_supplied_package", "digest": _prime_payload_digest(payload)}
+
+
+def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
+    info = prime_package_info(source)
+    payload = _prime_payload(source, json.loads((source / "package.json").read_text(encoding="utf-8")))
+    destination = confined_path(root, "packages", f"prime-agent-{info['digest'][:16]}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    if destination.exists() or destination.is_symlink():
+        fail(f"staged Prime package destination already exists: {destination}")
+    for name, source_path in payload.items():
+        target = confined_path(destination, *name.split("/"))
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, target)
+    if _prime_payload_digest({name: confined_path(destination, *name.split("/")) for name in payload}) != info["digest"]:
+        fail("staged Prime package digest changed")
+    return {**info, "path": str(destination)}
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
@@ -21,9 +101,9 @@ from harness_census_common import (
     CONTROLLED_TRANSPORT_NETWORK_MODE, GO_VERSION, HARBOR_VERSION, HARNESSES, NETWORK_POLICY,
     NATIVE_NETWORK_ENFORCEMENT, NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT,
     NATIVE_TRANSPORT_NETWORK_MODE, RUST_VERSION,
-    Cell, Task, TaskRecord, bytes_digest, campaign_matrix, cell_summary,
-    canonical, canonical_task_set_digest, cohort_identity, digest, fail, file_digest, harness_catalog_digest,
-    load_tasks, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping, row_identity, task_corpus_identity,
+    Cell, Task, TaskRecord, agent_allowed_hosts_identity_digest, agent_kwargs_identity_digest, bytes_digest, campaign_matrix, campaign_tree_files, cell_stage_digest, cell_summary,
+    canonical, canonical_task_set_digest, confined_path, digest, fail, file_digest, harness_catalog_digest,
+    load_tasks, mcp_identity_digest, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping, row_identity, task_corpus_identity,
     task_identity, tree_digest, tree_files, verified_commit, write_json,
 )
 from harness_census_gateway import MINT_INTERNAL_BASE_URL, gateway_identity, validate_gateway_contract, write_gateway_assets
@@ -47,7 +127,6 @@ def ensure_clean_bench_source() -> None:
 
 def _valid_digest(value: object) -> bool:
     return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
-
 
 def _smoke_identity() -> dict[str, object]:
     tasks = load_tasks()
@@ -118,11 +197,15 @@ def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
         for cell_id, entry in cells.items():
             if not isinstance(entry, dict) or not isinstance(entry.get("summary"), dict) or entry["summary"].get("cell_id") != cell_id:
                 fail(f"campaign stage manifest cell summary is invalid: {cell_id}")
+            summary = entry["summary"]
+            for key in ("agent_kwargs_digest", "agent_allowed_hosts_digest", "composition_digest", "adapter_digest", "mcp_digest"):
+                if not _valid_digest(summary.get(key)):
+                    fail(f"campaign stage manifest cell summary digest is invalid: {cell_id} {key}")
             tasks = entry.get("tasks")
             if not isinstance(tasks, list) or len(tasks) != len(load_tasks()):
                 fail(f"campaign stage manifest task set is invalid: {cell_id}")
             for task in tasks:
-                required_task_fields = ("task_id", "task_digest", "comparison_task_digest", "reference_hunk_map_digest", "source_cluster", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+                required_task_fields = ("task_id", "task_digest", "comparison_task_digest", "reference_hunk_map_digest", "source_cluster", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest", "grader_digest")
                 if not isinstance(task, dict) or any(not isinstance(task.get(key), str) or not task[key] for key in required_task_fields):
                     fail(f"campaign stage manifest task identity is invalid: {cell_id}")
     for key in ("roster_digest", "catalog_digest", "harness_digest", "adapter_digest", "pack_digest", "mcp_digest", "task_digest", "reference_hunk_map_digest", "grader_digest", "profile_digest"):
@@ -152,7 +235,7 @@ def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
     if stage.get("retry_policy") != {"product_retry": 0, "transport_retry": 0}:
         fail(f"{stage_id} stage manifest retry policy is invalid")
     decision = stage.get("decision_policy")
-    if not isinstance(decision, dict) or decision.get("hard_pass_requires_all_tasks") is not True or decision.get("native_default_separate") is not True:
+    if not isinstance(decision, dict) or decision.get("decision") != "scale_or_repair" or decision.get("task_buckets") != 3 or decision.get("paired_delta_resolvable") != {"point_delta": 1.0} or decision.get("interval_claims") != {"descriptive": True, "inferential": False} or not isinstance(decision.get("forbidden_claims"), list) or not {"winner", "deployment", "context_deletion"}.issubset(decision["forbidden_claims"]) or decision.get("cell_invalidation") != "any_reliability_failure" or decision.get("hard_pass_requires_all_tasks") is not True or decision.get("native_default_separate") is not True:
         fail(f"{stage_id} stage manifest decision policy is invalid")
     if stage_id == "smoke" and any(stage.get(key) != value for key, value in _smoke_identity().items()):
         fail("smoke stage manifest identity is stale")
@@ -257,30 +340,6 @@ def staged_task_toml(task: Task, composition: str) -> tuple[str, str]:
     return text, expected
 
 
-def prime_package_info(path: Path) -> dict[str, str]:
-    metadata_path = path / "package.json"
-    if not path.is_dir() or not metadata_path.is_file():
-        fail(f"Prime package directory is missing: {path}")
-    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    if metadata.get("name") != "prime-agent" or metadata.get("version") != "0.7.0":
-        fail("Prime package must be prime-agent version 0.7.0")
-    binary = metadata.get("bin", {}).get("prime-agent")
-    if binary != "dist/bundle/cli.js" or not (path / binary).is_file():
-        fail("Prime package bin must point to dist/bundle/cli.js")
-    runtime = path / "dist" / "prime-agent-runtime"
-    if not (runtime / "pyproject.toml").is_file() or not (runtime / "src" / "rlm" / "__init__.py").is_file():
-        fail("Prime package must include dist/prime-agent-runtime")
-    return {"package": "prime-agent@0.7.0", "version": "0.7.0", "source_kind": "operator_supplied_package", "digest": tree_digest(path, exclude_git=False)}
-
-
-def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
-    info = prime_package_info(source)
-    destination = root / "packages" / f"prime-agent-{info['digest'][:16]}"
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(source, destination, symlinks=True)
-    if tree_digest(destination, exclude_git=False) != info["digest"]:
-        fail("staged Prime package digest changed")
-    return {**info, "path": str(destination)}
 
 def runtime_package_info(harness: str) -> dict[str, str]:
     spec = HARNESSES[harness]
@@ -491,6 +550,27 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
     instruction_path = task_dir / "instruction.md"
     instruction_path.parent.mkdir(parents=True, exist_ok=True)
     instruction_path.write_text(instruction, encoding="utf-8")
+    root = cell_dir.parents[1]
+    context_dir = root / "context"
+    if composition == "controlled_enriched":
+        context_manifest_digest = context_pack.manifest_digest
+        context_pack_digest = context_pack.pack_digest
+    else:
+        empty_manifest = {"schema_version": "harness_census.context_manifest.v1", "includes": [], "holdouts": []}
+        context_manifest_digest = digest(empty_manifest)
+        context_pack_digest = bytes_digest(b"")
+        target_manifest = context_dir / "manifests" / f"{context_manifest_digest}.json"
+        target_pack = context_dir / "packs" / f"{context_pack_digest}.md"
+        target_manifest.parent.mkdir(parents=True, exist_ok=True)
+        target_pack.parent.mkdir(parents=True, exist_ok=True)
+        if target_manifest.exists() and json.loads(target_manifest.read_text(encoding="utf-8")) != empty_manifest:
+            fail(f"immutable context manifest changed: {target_manifest}")
+        if not target_manifest.exists():
+            write_json(target_manifest, empty_manifest)
+        if target_pack.exists() and target_pack.read_bytes() != b"":
+            fail(f"immutable context pack changed: {target_pack}")
+        if not target_pack.exists():
+            target_pack.write_bytes(b"")
     package_name = "prime-package" if harness == "prime" else "runtime-package"
     shutil.copytree(package["path"], env / package_name, symlinks=True, copy_function=lambda source, destination: Path(destination).hardlink_to(source))
     docker_text = dockerfile(harness, package_name, task.id)
@@ -514,7 +594,7 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
     comparison_task_digest = task_corpus_identity(task, source_digest, grader_digest, file_digest(task.task_dir / "reference.patch"), hunk_map_digest)
     task_digest = task_identity(task, source_digest, file_digest(instruction_path), file_digest(task_dir / "task.toml"), grader_digest, file_digest(task.task_dir / "reference.patch"), hunk_map_digest)
     skill_digest = context_pack.skill_digest if composition == "controlled_enriched" else raw_skill_digest()
-    return TaskRecord(task.id, task_digest, comparison_task_digest, source_digest, grader_digest, hunk_map_digest, bytes_digest(docker_text.encode()), gateway["gateway_digest"], gateway["gateway_dockerfile_digest"], gateway["compose_digest"], package["digest"] if harness == "prime" else None, f"tasks/{task.id}", task.allowed_paths, task.immutable_paths, network_mode, context_pack.manifest_digest, context_pack.pack_digest, skill_digest, file_digest(instruction_path), context_pack.skill_count if composition == "controlled_enriched" else 0)
+    return TaskRecord(task.id, task_digest, comparison_task_digest, source_digest, grader_digest, hunk_map_digest, bytes_digest(docker_text.encode()), gateway["gateway_digest"], gateway["gateway_dockerfile_digest"], gateway["compose_digest"], package["digest"] if harness == "prime" else None, f"tasks/{task.id}", task.allowed_paths, task.immutable_paths, network_mode, context_manifest_digest, context_pack_digest, skill_digest, file_digest(instruction_path), context_pack.skill_count if composition == "controlled_enriched" else 0)
 def preflight_network_enforcement(cell: Cell) -> dict[str, object]:
     """Prove the staged Compose topology blocks direct worker egress."""
     record = cell.task_records[0]
@@ -811,6 +891,7 @@ def immutable_stage_cells(cells: tuple[Cell, ...]) -> dict[str, object]:
                     "gateway_digest": record.gateway_digest,
                     "gateway_dockerfile_digest": record.gateway_dockerfile_digest,
                     "compose_digest": record.compose_digest,
+                    "grader_digest": record.grader_digest,
                     "context_manifest_digest": record.context_manifest_digest,
                     "context_pack_digest": record.context_pack_digest,
                     "context_digest": record.context_digest,
@@ -871,7 +952,7 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
         prime_digest = package["digest"] if harness == "prime" else None
         row_id = row_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, harness, composition) if controlled else None
         cohort_id = cohort_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, CONTROLLED_MODEL, CONTROLLED_EFFORT) if controlled else None
-        baseline_id = digest({"campaign_id": CAMPAIGN_ID, "harness": harness, "version": spec.version, "composition": composition, "task_digest": task_digest, **composition_identity}) if not controlled else None
+        baseline_id = None
         profile = digest({"harness": harness, "version": spec.version, "adapter_digest": adapter_digest, "kwargs": kwargs, "task_digest": task_digest, "composition_digest": composition_digest, "package_digest": package_digest, "prime_package_digest": prime_digest, "dockerfile_digests": list(docker_digests), **composition_identity, "transport_network_mode": transport_mode, "network_enforcement": network_enforcement, "task_network_enforcement": task_enforcement})
         cells.append(
             Cell(
@@ -935,7 +1016,7 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
 
 
 def write_harbor_wrapper(root: Path) -> Path:
-    wrapper = root / "bin" / "harbor"
+    wrapper = confined_path(root, "bin", "harbor")
     wrapper.parent.mkdir(parents=True, exist_ok=True)
     wrapper.write_text(f"#!/bin/sh\nset -eu\nexec uvx --from harbor=={HARBOR_VERSION} harbor \"$@\"\n", encoding="utf-8")
     wrapper.chmod(0o755)
@@ -998,26 +1079,11 @@ def run_scope_probes(root: Path, cell: Cell) -> dict[str, object]:
     return {"unrelated_mutation": {"passed": True, "status": bad_report["status"], "failed_check": bad_report["grader_report"]["failed_check"]}, "allowed_reference": {"passed": True, "status": good_report["status"], "reward": good_reward}}
 
 
-def _cell_static_files(cell_dir: Path, *, include_workspace: bool) -> dict[str, bytes]:
-    files = tree_files(cell_dir, exclude_git=False)
-    selected: dict[str, bytes] = {}
-    for name, value in files.items():
-        parts = name.split("/")
-        if parts[0] in {"results", "request.json", "result.json"}:
-            continue
-        if parts[0] == "tasks" and len(parts) >= 4 and parts[2:4] == ["environment", "repo"] and not include_workspace:
-            continue
-        selected[name] = value
-    return selected
-
-
-def _cell_stage_digest(cell_dir: Path, *, include_workspace: bool) -> str:
-    return digest([(name, bytes_digest(value)) for name, value in sorted(_cell_static_files(cell_dir, include_workspace=include_workspace).items())])
 
 
 def staged_bytes_digest(root: Path) -> str:
     files: dict[str, bytes] = {}
-    for name, value in tree_files(root, exclude_git=False).items():
+    for name, value in campaign_tree_files(root, skip=("cells/*/tasks/*/environment/repo/*", "cells/*/tasks/*/environment/runtime-package/*", "cells/*/request.json", "cells/*/result.json", "cells/*/results/*")).items():
         parts = name.split("/")
         if parts[0] in {"context", "packages"} or name == "bin/harbor":
             files[name] = value
@@ -1030,7 +1096,7 @@ def staged_bytes_digest(root: Path) -> str:
 
 
 def _receipt_rows(root: Path, cell: Cell) -> list[tuple[dict[str, object], int | None]]:
-    db = root / "runs" / "campaign.sqlite"
+    db = confined_path(root, "runs", "campaign.sqlite")
     if not db.is_file():
         return []
     with sqlite3.connect(db) as connection:
@@ -1086,6 +1152,241 @@ def _receipt_identity(receipt: dict[str, object], cell: Cell, stage_digest: str,
     )
 
 
+def _parse_content_ref(value: object, label: str) -> tuple[str, str]:
+    if not isinstance(value, str):
+        fail(f"resume {label} is missing")
+    digest_part, separator, relative = value.partition("@")
+    if not separator or not digest_part.startswith("sha256:") or not _valid_digest(digest_part.removeprefix("sha256:")):
+        fail(f"resume {label} is not a canonical content reference: {value}")
+    parts = relative.split("/")
+    if any(not part or part in {".", ".."} or "\\" in part or ":" in part for part in parts):
+        fail(f"resume {label} has an unsafe content path: {value}")
+    return digest_part.removeprefix("sha256:"), relative
+
+
+def _verify_content_ref(root: Path, value: object, label: str) -> Path:
+    expected, relative = _parse_content_ref(value, label)
+    path = confined_path(root, *relative.split("/"))
+    try:
+        actual = bytes_digest(path.read_bytes())
+    except OSError as error:
+        fail(f"resume {label} content is unreadable: {relative}: {error}")
+    if actual != expected:
+        fail(f"resume {label} content digest mismatch: {relative}")
+    return path
+
+
+def _receipt_attestation(root: Path, cell: Cell, receipt: dict[str, object]) -> dict[str, object]:
+    candidates: list[dict[str, object]] = []
+    for value in receipt.get("evidence_refs", []):
+        try:
+            path = _verify_content_ref(root, value, "evidence ref")
+        except SystemExit:
+            raise
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if isinstance(loaded, dict) and loaded.get("schema_version") == "crucible.adapter_attestation.v1" and loaded.get("adapter") == cell.harness:
+            candidates.append(loaded)
+    if not candidates:
+        fail(f"resume receipt attestation evidence is missing: {cell.cell_id} {receipt.get('task_id')}")
+    passed = [item for item in candidates if item.get("status") == "passed"]
+    return passed[0] if passed else candidates[0]
+
+
+def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[bool, dict[str, str] | None]:
+    if not _receipt_identity(receipt, cell, stage_digest, record.task_id):
+        fail(f"resume receipt identity mismatch: {cell.cell_id} {record.task_id}")
+    status = receipt.get("trial_status")
+    reliability = status == "reliability_failure"
+    for key, expected_value in {"cell_kind": cell.cell_kind, "composition": cell.composition, "harness": cell.harness, "harness_version": cell.harness_version, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved}.items():
+        if key in receipt:
+            if cell.cell_kind == "native_default" and key in {"provider_route_resolved", "provider_effort_resolved"}:
+                if not isinstance(receipt[key], str) or not receipt[key].strip():
+                    fail(f"resume native receipt identity is incomplete: {cell.cell_id} {key}")
+            elif receipt[key] != expected_value:
+                fail(f"resume receipt cell identity mismatch: {cell.cell_id} {key}")
+    for key, expected_value in {"composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "mcp_digest": mcp_identity_digest(), "agent_kwargs_digest": agent_kwargs_identity_digest(cell.agent_kwargs), "agent_allowed_hosts_digest": agent_allowed_hosts_identity_digest(cell)}.items():
+        if key in receipt and receipt[key] not in {expected_value, f"sha256:{expected_value}"}:
+            fail(f"resume receipt digest identity mismatch: {cell.cell_id} {key}")
+    for key, expected_value in {"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)}.items():
+        if key in receipt and receipt[key] != expected_value:
+            fail(f"resume receipt enforcement identity mismatch: {cell.cell_id} {key}")
+    for key, expected_value in {"context_manifest_digest": record.context_manifest_digest, "context_pack_digest": record.context_pack_digest}.items():
+        if receipt.get(key) not in {expected_value, f"sha256:{expected_value}"}:
+            fail(f"resume receipt context identity mismatch: {cell.cell_id} {record.task_id} {key}")
+    if receipt.get("source_cluster") not in {None, load_tasks()[record.task_id].source_cluster}:
+        fail(f"resume receipt source identity mismatch: {cell.cell_id} {record.task_id}")
+    if receipt.get("task_digest") not in {record.task_digest, f"sha256:{record.task_digest}"}:
+        fail(f"resume receipt task digest mismatch: {cell.cell_id} {record.task_id}")
+    if receipt.get("comparison_task_digest") not in {record.comparison_task_digest, f"sha256:{record.comparison_task_digest}"}:
+        fail(f"resume receipt comparison identity mismatch: {cell.cell_id} {record.task_id}")
+    if receipt.get("context_digest") not in {record.context_digest, f"sha256:{record.context_digest}"}:
+        fail(f"resume receipt context digest mismatch: {cell.cell_id} {record.task_id}")
+    if receipt.get("skill_digest") not in {record.skill_digest, f"sha256:{record.skill_digest}"}:
+        fail(f"resume receipt skill digest mismatch: {cell.cell_id} {record.task_id}")
+    if receipt.get("row_id") not in {None, cell.row_id, f"sha256:{cell.row_id}" if cell.row_id else None}:
+        fail(f"resume receipt row identity mismatch: {cell.cell_id}")
+    if receipt.get("cohort_id") not in {None, cell.cohort_id, f"sha256:{cell.cohort_id}" if cell.cohort_id else None}:
+        fail(f"resume receipt cohort identity mismatch: {cell.cell_id}")
+    if receipt.get("profile_digest") not in {None, cell.profile_digest, f"sha256:{cell.profile_digest}"}:
+        fail(f"resume receipt profile identity mismatch: {cell.cell_id}")
+    if trusted is None and not reliability:
+        fail(f"resume quality receipt trust is unavailable: {cell.cell_id} {record.task_id}")
+    if trusted is not None and int(trusted) != 1 and not (int(trusted) == 0 and reliability):
+        fail(f"resume receipt trust is invalid: {cell.cell_id} {record.task_id}")
+    task_exchange = confined_path(root, "exchange", cell.cell_id, record.task_id)
+    allowed_names = {"request.json", "result.json", "trial.json", "grader.json"}
+    names = {path.name for path in task_exchange.iterdir()} if task_exchange.is_dir() else set()
+    if not names.issubset(allowed_names):
+        fail(f"resume exchange contains conflicting artifacts: {cell.cell_id} {record.task_id}")
+    for key in ("runner_exchange_request_ref", "runner_exchange_result_ref"):
+        reference = receipt.get(key)
+        if reference is not None:
+            _verify_content_ref(root, reference, key)
+    for key, name in (("request_ref", "request.json"), ("result_ref", "result.json")):
+        reference = receipt.get(key)
+        if reference is not None:
+            path = task_exchange / name
+            if not path.is_file() or reference != f"sha256:{bytes_digest(path.read_bytes())}@{path.relative_to(root).as_posix()}":
+                fail(f"resume canonical reference mismatch: {cell.cell_id} {record.task_id} {key}")
+    for name in ("request.json", "result.json", "trial.json"):
+        if not (task_exchange / name).is_file():
+            fail(f"resume receipt artifacts are incomplete: {cell.cell_id} {record.task_id}")
+    try:
+        request = json.loads((task_exchange / "request.json").read_text(encoding="utf-8"))
+        result = json.loads((task_exchange / "result.json").read_text(encoding="utf-8"))
+        trial = json.loads((task_exchange / "trial.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"resume exchange artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
+    expected_run = f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}"
+    expected_exchange = f"{expected_run}--{record.task_id}"
+    if not isinstance(request, dict) or request.get("schema_version") != "crucible.runner_exchange_request.v1" or request.get("task_id") != record.task_id or request.get("cell_id") != cell.cell_id or request.get("cell_run_id") != cell.cell_run_id or request.get("exchange_id") != expected_exchange:
+        fail(f"resume request artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    if not isinstance(result, dict) or result.get("schema_version") != "crucible.runner_exchange_result.v1" or result.get("exchange_id") != expected_exchange or result.get("cell_id") != cell.cell_id or result.get("cell_run_id") != cell.cell_run_id:
+        fail(f"resume result artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    if not isinstance(trial, dict) or trial.get("schema_version") != "harness_census.trial_receipt.v1" or trial.get("campaign_id") != CAMPAIGN_ID or trial.get("cell_id") != cell.cell_id or trial.get("cell_run_id") != cell.cell_run_id or trial.get("task_name") != record.task_id or trial.get("trial_id") != f"{cell.cell_id}--{record.task_id}":
+        fail(f"resume trial artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    singular_digests = {"dockerfile_digest": record.dockerfile_digest, "gateway_digest": record.gateway_digest, "gateway_dockerfile_digest": record.gateway_dockerfile_digest, "compose_digest": record.compose_digest}
+    for artifact_name, artifact in (("request", request), ("result", result), ("trial", trial)):
+        if any(artifact.get(key) not in {expected, f"sha256:{expected}"} for key, expected in singular_digests.items()):
+            fail(f"resume {artifact_name} task artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    observation: dict[str, str] | None = None
+    if not reliability:
+        if not (task_exchange / "grader.json").is_file():
+            fail(f"resume quality receipt is missing grader artifact: {cell.cell_id} {record.task_id}")
+        try:
+            grader = json.loads((task_exchange / "grader.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            fail(f"resume grader artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
+        if not isinstance(grader, dict) or grader.get("schema_version") != "harness_census.grader_receipt.v1" or grader.get("campaign_id") != CAMPAIGN_ID or grader.get("task_id") != record.task_id or grader.get("trial_id") != f"{cell.cell_id}--{record.task_id}" or any(grader.get(key) not in {expected, f"sha256:{expected}" if expected else None} for key, expected in {"row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest}.items()) or grader.get("grader_digest") not in {record.grader_digest, f"sha256:{record.grader_digest}"} or grader.get("grader_identity") != "harness_census_deterministic" or not isinstance(grader.get("hard_pass"), bool) or isinstance(grader.get("task_points"), bool) or not isinstance(grader.get("task_points"), (int, float)) or not 0.0 <= float(grader.get("task_points")) <= 1.0:
+            fail(f"resume grader artifact identity mismatch: {cell.cell_id} {record.task_id}")
+        grader_ref = receipt.get("grader_receipt_ref")
+        if grader_ref is not None and _verify_content_ref(root, grader_ref, "grader_receipt_ref") != task_exchange / "grader.json":
+            fail(f"resume grader receipt reference mismatch: {cell.cell_id} {record.task_id}")
+        expected_hard_pass = status == "success"
+        if grader.get("hard_pass") != expected_hard_pass or receipt.get("hard_pass") != expected_hard_pass or receipt.get("task_points") != grader.get("task_points"):
+            fail(f"resume receipt score disagrees with grader: {cell.cell_id} {record.task_id}")
+        attestation = _receipt_attestation(root, cell, receipt)
+        tool_manifest = attestation.get("tool_manifest_digest")
+        config_digest = attestation.get("config_digest")
+        receipt_tool = receipt.get("tool_manifest_digest")
+        if isinstance(tool_manifest, str) and tool_manifest and receipt_tool not in {tool_manifest, f"sha256:{tool_manifest}"}:
+            fail(f"resume receipt tool manifest mismatch: {cell.cell_id} {record.task_id}")
+        if isinstance(receipt_tool, str) and receipt_tool and not _valid_digest(receipt_tool.removeprefix("sha256:")):
+            fail(f"resume receipt tool manifest is invalid: {cell.cell_id} {record.task_id}")
+        if isinstance(config_digest, str) and isinstance(tool_manifest, str) and config_digest and tool_manifest:
+            expected_system = cell.observed_system_identity(config_digest, tool_manifest)
+            if receipt.get("system_identity") not in {expected_system, f"sha256:{expected_system}"}:
+                fail(f"resume receipt system identity mismatch: {cell.cell_id} {record.task_id}")
+            if cell.cell_kind == "native_default":
+                route = receipt.get("provider_route_resolved")
+                effort = receipt.get("provider_effort_resolved")
+                effort_source = receipt.get("effort_source")
+                if not all(isinstance(value, str) and value.strip() for value in (route, effort, effort_source)):
+                    fail(f"resume native receipt identity is incomplete: {cell.cell_id} {record.task_id}")
+                observation = {"model": str(route), "effort": str(effort), "effort_source": str(effort_source), "tool": tool_manifest, "config": config_digest}
+    else:
+        for key in ("failure_class", "failure_stage", "failure_code"):
+            if not isinstance(receipt.get(key), str) or not receipt[key]:
+                fail(f"resume reliability receipt is missing {key}: {cell.cell_id} {record.task_id}")
+        detail_ref = receipt.get("failure_detail_ref")
+        if detail_ref is not None:
+            _verify_content_ref(root, detail_ref, "failure_detail_ref")
+    transcript_ref = receipt.get("transcript_ref")
+    if transcript_ref is not None:
+        _verify_content_ref(root, transcript_ref, "transcript_ref")
+    for value in receipt.get("evidence_refs", []):
+        _verify_content_ref(root, value, "evidence ref")
+    return reliability, observation
+
+
+def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict[str, tuple[dict[str, object], int | None]], resolved: Cell | None) -> dict[str, object]:
+    cell_dir_prefix = f"cells/{cell.cell_id}/"
+    observed_models: list[str] = []
+    observed_efforts: list[str] = []
+    observed_tools: list[str] = []
+    observed_configs: list[str] = []
+    observed_systems: list[str] = []
+    attestations: list[dict[str, object]] = []
+    attestation_digests: list[str] = []
+    compact_receipts: list[dict[str, object]] = []
+    receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+    for record in cell.task_records:
+        receipt, _ = by_task[record.task_id]
+        attestation = _receipt_attestation(root, cell, receipt)
+        tool_manifest = attestation.get("tool_manifest_digest")
+        config_digest = attestation.get("config_digest")
+        if isinstance(tool_manifest, str) and tool_manifest:
+            observed_tools.append(tool_manifest)
+        if isinstance(config_digest, str) and config_digest:
+            observed_configs.append(config_digest)
+            if isinstance(tool_manifest, str) and tool_manifest:
+                observed_systems.append(cell.observed_system_identity(config_digest, tool_manifest))
+        model = receipt.get("response_model_attestation")
+        if isinstance(model, str) and model:
+            observed_models.append(model)
+        effort = receipt.get("provider_effort_resolved")
+        if isinstance(effort, str) and effort:
+            observed_efforts.append(effort)
+        transcript_ref = receipt.get("transcript_ref")
+        if isinstance(transcript_ref, str) and transcript_ref:
+            transcript_cell_ref = transcript_ref.split("@", 1)[1].removeprefix(cell_dir_prefix)
+        else:
+            transcript_cell_ref = None
+        evidence_paths = [value.split("@", 1)[1] for value in receipt.get("evidence_refs", []) if isinstance(value, str) and "@" in value]
+        attestation_path = next((path for path in evidence_paths if path.endswith(".json") and path.removeprefix(cell_dir_prefix).startswith(("results/", "exchange/"))), None)
+        if attestation_path is None:
+            fail(f"resume attestation reference is missing: {cell.cell_id} {record.task_id}")
+        attestation_ref = attestation_path.removeprefix(cell_dir_prefix)
+        attestation_path_obj = confined_path(root, *attestation_path.split("/"))
+        attestations.append({"task_id": record.task_id, "attestation_ref": attestation_ref, "attestation_digest": bytes_digest(attestation_path_obj.read_bytes()), "transcript_ref": transcript_cell_ref, "record": attestation})
+        attestation_digests.append(attestations[-1]["attestation_digest"])
+        compact = {key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
+        compact["receipt_digest"] = digest(compact)
+        compact_receipts.append(compact)
+    summary_cell = resolved if resolved is not None else cell
+    return {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": None, "reconstructed": True, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": summary_cell.provider_route_resolved, "provider_effort_resolved": summary_cell.provider_effort_resolved, "response_model": observed_models[0] if len(observed_models) == 1 else None, "observed_models": sorted(set(observed_models)), "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": sorted(set(observed_efforts)), "observed_tool_manifest_digests": sorted(set(observed_tools)), "observed_config_digests": sorted(set(observed_configs)), "observed_system_identities": sorted(set(observed_systems)), "effort_source": summary_cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": summary_cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestations, "attestation_digests": sorted(attestation_digests), "runner_exchange_receipts": compact_receipts}
+
+
+def _reconcile_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict[str, tuple[dict[str, object], int | None]], resolved: Cell | None) -> None:
+    expected = _derive_cell_result(root, cell, stage_digest, by_task, resolved)
+    result_path = confined_path(root, "cells", cell.cell_id, "result.json")
+    if not result_path.is_file():
+        write_json(result_path, expected)
+        return
+    try:
+        stored = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"resume completed cell result is invalid: {cell.cell_id}: {error}")
+    if not isinstance(stored, dict) or stored.get("cell_id") != cell.cell_id or stored.get("stage_manifest_digest") != stage_digest or stored.get("task_set_digest") != cell.task_set_digest:
+        fail(f"resume completed cell result identity mismatch: {cell.cell_id}")
+    derivable = {"schema_version", "campaign_id", "cell_id", "cell_run_id", "task_set_digest", "task_set_size", "retry_policy_digest", "agent_kwargs_base_digest", "stage_manifest_digest", "model_requested", "effort_requested", "provider_route_resolved", "provider_effort_resolved", "response_model", "observed_models", "response_effort", "observed_efforts", "observed_tool_manifest_digests", "observed_config_digests", "observed_system_identities", "effort_source", "network_mode", "transport_network_mode", "network_enforcement", "task_network_enforcement", "row_id", "cohort_id", "baseline_id", "profile_digest", "agent_kwargs", "agent_allowed_hosts", "attestations", "attestation_digests", "runner_exchange_receipts"}
+    if {key: stored.get(key) for key in derivable} != {key: expected.get(key) for key in derivable}:
+        fail(f"resume completed cell result is stale or mismatched: {cell.cell_id}")
+
+
 def cell_receipt_state(root: Path, cell: Cell, stage_digest: str, expected_stage_digest: str | None = None) -> str:
     rows = _receipt_rows(root, cell)
     by_task: dict[str, tuple[dict[str, object], int | None]] = {}
@@ -1095,132 +1396,61 @@ def cell_receipt_state(root: Path, cell: Cell, stage_digest: str, expected_stage
             fail(f"resume cell has duplicate or missing receipt task identity: {cell.cell_id}")
         by_task[task_id] = (receipt, trusted)
     expected_tasks = {record.task_id for record in cell.task_records}
-    cell_dir = cell.cell_dir
-    exchange_dir = root / "exchange" / cell.cell_id
-    runtime_present = (cell_dir / "request.json").exists() or (cell_dir / "result.json").exists() or (cell_dir / "results").exists() or exchange_dir.exists()
-    if not rows:
-        if runtime_present:
-            fail(f"resume found partial artifacts for cell: {cell.cell_id}")
-        if expected_stage_digest is not None and _cell_stage_digest(cell_dir, include_workspace=False) != expected_stage_digest:
-            fail(f"resume staged bytes changed for cell: {cell.cell_id}")
+    cell_dir = confined_path(root, "cells", cell.cell_id)
+    exchange_dir = confined_path(root, "exchange", cell.cell_id)
+    if expected_stage_digest is not None and cell_stage_digest(cell_dir, include_workspace=False) != expected_stage_digest:
+        fail(f"resume staged bytes changed for cell: {cell.cell_id}")
+    runtime_present = (cell_dir / "result.json").is_file() or (cell_dir / "results").is_dir() or exchange_dir.is_dir()
+    if not rows and not runtime_present:
         return "absent"
-    if set(by_task) != expected_tasks or len(rows) != len(expected_tasks):
-        fail(f"resume found partial receipt set for cell: {cell.cell_id}")
-    if set(path.name for path in exchange_dir.iterdir() if path.is_dir()) != expected_tasks:
+    if not rows:
+        return "partial"
+    exchange_names = {path.name for path in exchange_dir.iterdir() if path.is_dir()} if exchange_dir.is_dir() else set()
+    if not exchange_names.issubset(expected_tasks):
         fail(f"resume cell exchange task set is conflicting: {cell.cell_id}")
     reliability = False
+    observations: list[dict[str, str]] = []
     for record in cell.task_records:
+        if record.task_id not in by_task:
+            continue
         receipt, trusted = by_task[record.task_id]
-        if receipt.get("trial_status") == "reliability_failure":
-            reliability = True
-        if not _receipt_identity(receipt, cell, stage_digest, record.task_id):
-            fail(f"resume receipt identity mismatch: {cell.cell_id} {record.task_id}")
-        for key, expected_value in {"cell_kind": cell.cell_kind, "composition": cell.composition, "harness": cell.harness, "harness_version": cell.harness_version, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved}.items():
-            if key in receipt:
-                if cell.cell_kind == "native_default" and key in {"provider_route_resolved", "provider_effort_resolved"}:
-                    if not isinstance(receipt[key], str) or not receipt[key].strip():
-                        fail(f"resume native receipt identity is incomplete: {cell.cell_id} {key}")
-                elif receipt[key] != expected_value:
-                    fail(f"resume receipt cell identity mismatch: {cell.cell_id} {key}")
-        for key, expected_value in {"composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest}.items():
-            if key in receipt and receipt[key] not in {expected_value, f"sha256:{expected_value}"}:
-                fail(f"resume receipt digest identity mismatch: {cell.cell_id} {key}")
-        for key, expected_value in {"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)}.items():
-            if key in receipt and receipt[key] != expected_value:
-                fail(f"resume receipt enforcement identity mismatch: {cell.cell_id} {key}")
-        if receipt.get("source_cluster") not in {None, load_tasks()[record.task_id].source_cluster}:
-            fail(f"resume receipt source identity mismatch: {cell.cell_id} {record.task_id}")
-        if receipt.get("task_digest") not in {record.task_digest, f"sha256:{record.task_digest}"}:
-            fail(f"resume receipt task digest mismatch: {cell.cell_id} {record.task_id}")
-        if receipt.get("comparison_task_digest") not in {record.comparison_task_digest, f"sha256:{record.comparison_task_digest}"}:
-            fail(f"resume receipt comparison identity mismatch: {cell.cell_id} {record.task_id}")
-        if receipt.get("row_id") not in {None, cell.row_id, f"sha256:{cell.row_id}" if cell.row_id else None}:
-            fail(f"resume receipt row identity mismatch: {cell.cell_id}")
-        if receipt.get("cohort_id") not in {None, cell.cohort_id, f"sha256:{cell.cohort_id}" if cell.cohort_id else None}:
-            fail(f"resume receipt cohort identity mismatch: {cell.cell_id}")
-        if receipt.get("profile_digest") not in {None, cell.profile_digest, f"sha256:{cell.profile_digest}"}:
-            fail(f"resume receipt profile identity mismatch: {cell.cell_id}")
-        if trusted is None and receipt.get("trial_status") != "reliability_failure":
-            fail(f"resume quality receipt trust is unavailable: {cell.cell_id} {record.task_id}")
-        if trusted is not None and int(trusted) != 1 and not (int(trusted) == 0 and receipt.get("trial_status") == "reliability_failure"):
-            fail(f"resume receipt trust is invalid: {cell.cell_id} {record.task_id}")
-        task_exchange = exchange_dir / record.task_id
-        required = [task_exchange / name for name in ("request.json", "result.json", "trial.json")]
-        if any(not path.is_file() for path in required):
-            fail(f"resume receipt artifacts are incomplete: {cell.cell_id} {record.task_id}")
-        names = {path.name for path in task_exchange.iterdir()}
-        if not names.issubset({"request.json", "result.json", "trial.json", "grader.json"}):
-            fail(f"resume exchange contains conflicting artifacts: {cell.cell_id} {record.task_id}")
-        try:
-            request = json.loads((task_exchange / "request.json").read_text(encoding="utf-8"))
-            result = json.loads((task_exchange / "result.json").read_text(encoding="utf-8"))
-            trial = json.loads((task_exchange / "trial.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            fail(f"resume exchange artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
-        for key, path in (("runner_exchange_request_ref", task_exchange / "request.json"), ("runner_exchange_result_ref", task_exchange / "result.json"), ("request_ref", task_exchange / "request.json"), ("result_ref", task_exchange / "result.json")):
-            reference = receipt.get(key)
-            if reference is not None and reference != f"sha256:{bytes_digest(path.read_bytes())}@{path.relative_to(root).as_posix()}":
-                fail(f"resume canonical reference mismatch: {cell.cell_id} {record.task_id} {key}")
-        expected_run = f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}"
-        expected_exchange = f"{expected_run}--{record.task_id}"
-        if not isinstance(request, dict) or request.get("schema_version") != "crucible.runner_exchange_request.v1" or request.get("task_id") != record.task_id or request.get("cell_id") != cell.cell_id or request.get("cell_run_id") != cell.cell_run_id or request.get("exchange_id") != expected_exchange:
-            fail(f"resume request artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        if not isinstance(result, dict) or result.get("schema_version") != "crucible.runner_exchange_result.v1" or result.get("exchange_id") != expected_exchange or result.get("cell_id") != cell.cell_id or result.get("cell_run_id") != cell.cell_run_id:
-            fail(f"resume result artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        if not isinstance(trial, dict) or trial.get("schema_version") != "harness_census.trial_receipt.v1" or trial.get("campaign_id") != CAMPAIGN_ID or trial.get("cell_id") != cell.cell_id or trial.get("cell_run_id") != cell.cell_run_id or trial.get("task_name") != record.task_id or trial.get("trial_id") != f"{cell.cell_id}--{record.task_id}":
-            fail(f"resume trial artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        singular_digests = {"dockerfile_digest": record.dockerfile_digest, "gateway_digest": record.gateway_digest, "gateway_dockerfile_digest": record.gateway_dockerfile_digest, "compose_digest": record.compose_digest}
-        for artifact_name, artifact in (("request", request), ("result", result), ("trial", trial)):
-            if any(artifact.get(key) not in {expected, f"sha256:{expected}"} for key, expected in singular_digests.items()):
-                fail(f"resume {artifact_name} task artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        if receipt.get("trial_status") != "reliability_failure":
-            try:
-                grader = json.loads((task_exchange / "grader.json").read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as error:
-                fail(f"resume grader artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
-            if not isinstance(grader, dict) or grader.get("schema_version") != "harness_census.grader_receipt.v1" or grader.get("campaign_id") != CAMPAIGN_ID or grader.get("task_id") != record.task_id or grader.get("trial_id") != f"{cell.cell_id}--{record.task_id}" or any(grader.get(key) not in {expected, f"sha256:{expected}" if expected else None} for key, expected in {"row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest}.items()) or grader.get("grader_digest") not in {record.grader_digest, f"sha256:{record.grader_digest}"} or not isinstance(grader.get("hard_pass"), bool) or isinstance(grader.get("task_points"), bool) or not isinstance(grader.get("task_points"), (int, float)) or not 0.0 <= float(grader["task_points"]) <= 1.0 or grader["hard_pass"] != (float(grader["task_points"]) == 1.0):
-                fail(f"resume grader artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        if receipt.get("trial_status") != "reliability_failure" and not (task_exchange / "grader.json").is_file():
-            fail(f"resume quality receipt is missing grader artifact: {cell.cell_id} {record.task_id}")
-    result_path = cell_dir / "result.json"
-    if not result_path.is_file():
-        fail(f"resume completed cell result is missing: {cell.cell_id}")
-    try:
-        result = json.loads(result_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        fail(f"resume completed cell result is invalid: {cell.cell_id}")
-    if not isinstance(result, dict) or result.get("cell_id") != cell.cell_id or result.get("stage_manifest_digest") != stage_digest or result.get("task_set_digest") != cell.task_set_digest:
-        fail(f"resume completed cell result identity mismatch: {cell.cell_id}")
-    if cell.cell_kind == "native_default" and result.get("baseline_id") is not None:
-        native_route, native_effort = result.get("provider_route_resolved"), result.get("provider_effort_resolved")
-        native_tools = result.get("observed_tool_manifest_digests")
-        native_configs = result.get("observed_config_digests")
-        native_systems = result.get("observed_system_identities")
-        effort_source = result.get("effort_source")
-        if not isinstance(native_route, str) or not native_route.strip() or not isinstance(native_effort, str) or not native_effort.strip() or not isinstance(effort_source, str) or not effort_source.strip() or not isinstance(native_tools, list) or len(native_tools) != 1 or not isinstance(native_tools[0], str) or not isinstance(native_configs, list) or len(native_configs) != 1 or not isinstance(native_configs[0], str) or not isinstance(native_systems, list) or len(native_systems) != 1 or not isinstance(native_systems[0], str):
-            fail(f"resume native result identity is incomplete: {cell.cell_id}")
-        resolved = cell.resolve_native(native_route, native_effort, effort_source, native_tools[0], native_configs[0])
-        if result.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"} or native_systems[0] != cell.observed_system_identity(native_configs[0], native_tools[0]):
-            fail(f"resume native baseline identity mismatch: {cell.cell_id}")
-        receipt_digests: list[str] = []
-        receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+        task_reliability, observation = _verified_task_receipt(root, cell, record, stage_digest, receipt, trusted)
+        reliability = reliability or task_reliability
+        if observation is not None:
+            observations.append(observation)
+    if set(by_task) != expected_tasks or len(rows) != len(expected_tasks):
+        return "partial"
+    resolved: Cell | None = None
+    if cell.cell_kind == "native_default" and not reliability:
+        if len(observations) != 3:
+            fail(f"resume native observation is incomplete: {cell.cell_id}")
+        if len({tuple(sorted(observation.items())) for observation in observations}) != 1:
+            fail(f"resume native receipts disagree on observation: {cell.cell_id}")
+        observation = observations[0]
+        resolved = cell.resolve_native(observation["model"], observation["effort"], observation["effort_source"], observation["tool"], observation["config"])
         for receipt, _ in by_task.values():
-            if receipt.get("provider_route_resolved") != native_route or receipt.get("provider_effort_resolved") != native_effort or receipt.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
-                fail(f"resume native receipt identities disagree: {cell.cell_id}")
-            compact = {key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
-            receipt_digests.append(digest(compact))
-        summary_path = root / "baselines" / str(resolved.baseline_id) / "summary.json"
+            if receipt.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
+                fail(f"resume native receipt baseline mismatch: {cell.cell_id}")
+        summary_path = confined_path(root, "baselines", str(resolved.baseline_id), "summary.json")
         try:
             summary = json.loads(summary_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
             fail(f"resume native baseline summary is invalid: {cell.cell_id}: {error}")
-        if not isinstance(summary, dict) or any(summary.get(key) != expected for key, expected in {"schema_version": "harness_census.native_baseline_summary.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "baseline_id": resolved.baseline_id, "harness": cell.harness, "harness_version": cell.harness_version, "profile_digest": cell.profile_digest, "task_set_digest": cell.task_set_digest, "observed_model": native_route, "observed_effort": native_effort, "effort_source": effort_source, "tool_manifest_digest": native_tools[0], "config_digest": native_configs[0], "system_identity": native_systems[0]}.items()):
+        receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+        receipt_digests: list[str] = []
+        for receipt, _ in by_task.values():
+            compact = {key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
+            receipt_digests.append(digest(compact))
+        if not isinstance(summary, dict) or summary.get("schema_version") != "harness_census.native_baseline_summary.v1" or summary.get("cell_id") != cell.cell_id or summary.get("stage_manifest_digest") != stage_digest or summary.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"} or summary.get("observed_model") != observation["model"] or summary.get("observed_effort") != observation["effort"] or summary.get("effort_source") != observation["effort_source"] or summary.get("tool_manifest_digest") not in {observation["tool"], f"sha256:{observation['tool']}"} or summary.get("config_digest") not in {observation["config"], f"sha256:{observation['config']}"} or summary.get("system_identity") != cell.observed_system_identity(observation["config"], observation["tool"]) or not isinstance(summary.get("receipt_digests"), list) or sorted(summary["receipt_digests"]) != sorted(receipt_digests) or summary.get("status") != "valid":
             fail(f"resume native baseline summary identity mismatch: {cell.cell_id}")
-        if not isinstance(summary.get("receipt_digests"), list) or sorted(summary["receipt_digests"]) != sorted(receipt_digests) or summary.get("status") not in {"valid", "invalid"} or (summary.get("status") == "valid") != (not reliability and all(receipt.get("trial_status") == "success" for receipt, _ in by_task.values())):
-            fail(f"resume native baseline summary receipts disagree: {cell.cell_id}")
+    _reconcile_cell_result(root, cell, stage_digest, by_task, resolved)
     return "invalid" if reliability else "complete"
 
 
+def pending_task_ids(root: Path, cell: Cell) -> list[str]:
+    rows = _receipt_rows(root, cell)
+    verified = {receipt.get("task_id") or receipt.get("task_name") for receipt, _ in rows}
+    return [record.task_id for record in cell.task_records if record.task_id not in verified]
 def resume_staged_cells(root: Path, source_root: Path, adapter_root: Path, prime_source: Path) -> tuple[tuple[Cell, ...], dict[str, str], dict[str, str], dict[str, str]]:
     assets, composition_digests = load_compositions()
     with tempfile.TemporaryDirectory(prefix="harness-census-resume-") as temporary:
@@ -1230,7 +1460,7 @@ def resume_staged_cells(root: Path, source_root: Path, adapter_root: Path, prime
         write_json(staged / "prime-package.json", {key: prime_package[key] for key in ("package", "version", "source_kind", "digest")})
         write_harbor_wrapper(staged)
         expected_digest = staged_bytes_digest(staged)
-        expected_cell_digests = {cell.cell_id: _cell_stage_digest(cell.cell_dir, include_workspace=False) for cell in expected}
+        expected_cell_digests = {cell.cell_id: cell_stage_digest(cell.cell_dir, include_workspace=False) for cell in expected}
     if staged_bytes_digest(root) != expected_digest:
         fail("immutable staged bytes do not match the frozen campaign")
     cells = tuple(replace(cell, cell_dir=root / "cells" / cell.cell_id, spec_path=root / "cells" / cell.cell_id / "eval.json") for cell in expected)

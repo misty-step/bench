@@ -13,8 +13,9 @@ from typing import cast
 
 from harness_census_common import (
     CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
-    AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, bytes_digest,
-    digest, fail, load_tasks, tree_files, write_json,
+    AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, agent_allowed_hosts_identity_digest,
+    agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, digest, fail, load_tasks,
+    mcp_identity_digest, write_json,
 )
 
 RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
@@ -41,16 +42,6 @@ def safe_runtime_environment(harbor: Path | None = None) -> dict[str, str]:
     return environment
 
 
-def cell_static_digest(cell_dir: Path) -> str:
-    selected: dict[str, bytes] = {}
-    for name, value in tree_files(cell_dir, exclude_git=False).items():
-        parts = name.split("/")
-        if parts[0] in {"results", "request.json", "result.json"}:
-            continue
-        if parts[0] == "tasks" and len(parts) >= 4 and parts[2:4] == ["environment", "repo"]:
-            continue
-        selected[name] = value
-    return digest([(name, bytes_digest(value)) for name, value in sorted(selected.items())])
 
 def model_parts(identity: str) -> dict[str, str]:
     provider, name = identity.split("/", 1)
@@ -243,6 +234,66 @@ def _matches_json_digest(path: Path, expected: str) -> bool:
     return error is None and digest(value) == expected
 
 
+def adapter_identity_payload(cell: Cell, record: TaskRecord, attestation: Attestation, stage_digest: str, context_ref: str, context_manifest_ref: str, context_pack_ref: str, tool_manifest_ref: str | None, authority_hosts: list[str], failure: tuple[str, str, str] | None, harbor_result_path: Path, root: Path) -> dict[str, object]:
+    config_digest = attestation.get("config_digest")
+    tool_digest = attestation.get("tool_manifest_digest")
+    payload: dict[str, object] = {
+        "trial_id": f"{cell.cell_id}--{record.task_id}",
+        "crucible_run_id": f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}",
+        "cell_id": cell.cell_id,
+        "cell_run_id": cell.cell_run_id,
+        "campaign_id": CAMPAIGN_ID,
+        "stage_manifest_digest": sha256_ref(stage_digest),
+        "source_cluster": load_tasks()[record.task_id].source_cluster,
+        "task_id": record.task_id,
+        "task_digest": sha256_ref(record.task_digest),
+        "comparison_task_digest": sha256_ref(record.comparison_task_digest),
+        "cell_kind": cell.cell_kind,
+        "composition": cell.composition,
+        "composition_digest": sha256_ref(cell.composition_digest),
+        "adapter_digest": sha256_ref(cell.adapter_digest),
+        "mcp_digest": sha256_ref(mcp_identity_digest()),
+        "agent_kwargs": dict(cell.agent_kwargs),
+        "agent_kwargs_digest": sha256_ref(agent_kwargs_identity_digest(cell.agent_kwargs)),
+        "agent_allowed_hosts": authority_hosts,
+        "agent_allowed_hosts_digest": sha256_ref(agent_allowed_hosts_identity_digest(cell)),
+        "task_set_digest": sha256_ref(cell.task_set_digest),
+        "task_set_size": cell.task_set_size,
+        "retry_policy_digest": sha256_ref(cell.retry_policy_digest),
+        "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest),
+        "context_digest": context_ref,
+        "context_manifest_digest": context_manifest_ref,
+        "context_pack_digest": context_pack_ref,
+        "skill_digest": sha256_ref(record.skill_digest),
+        "tool_manifest_digest": tool_manifest_ref,
+        "network_mode": cell.network_mode,
+        "transport_network_mode": cell.transport_network_mode,
+        "network_enforcement": cell.network_enforcement,
+        "task_network_enforcement": cell.task_network_enforcement,
+        "gateway_digests": list(cell.gateway_digests),
+        "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests),
+        "compose_digests": list(cell.compose_digests),
+        "dockerfile_digest": sha256_ref(record.dockerfile_digest),
+        "gateway_digest": sha256_ref(record.gateway_digest),
+        "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest),
+        "compose_digest": sha256_ref(record.compose_digest),
+        "row_id": sha256_ref(cell.row_id) if cell.row_id else None,
+        "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None,
+        "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None,
+        "profile_digest": sha256_ref(cell.profile_digest),
+        "provider_route_resolved": cell.provider_route_resolved,
+        "provider_effort_resolved": cell.provider_effort_resolved,
+        "default_resolution_source": cell.default_resolution_source,
+        "effort_source": cell.effort_source,
+        "response_effort_attestation": attestation.get("effort"),
+    }
+    if isinstance(config_digest, str) and isinstance(tool_digest, str) and config_digest and tool_digest:
+        payload["config_digest"] = sha256_ref(config_digest)
+        payload["system_identity"] = cell.observed_system_identity(config_digest, tool_digest)
+    if failure is not None:
+        payload.update({"failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail_ref": f"sha256:{bytes_digest(harbor_result_path.read_bytes())}@{harbor_result_path.relative_to(root).as_posix()}"})
+    return {key: value for key, value in payload.items() if value is not None}
+
 def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Path, attestation_entry: AttestationEntry, stage_digest: str) -> ExchangePaths:
     task_id = record.task_id
     generated_grader_path = cell.cell_dir / record.task_dir / "tests" / "verify.py"
@@ -271,34 +322,25 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
         failure = ("harness", "grade", "grader_report_missing")
     elif failure is None and (report_error == "invalid" or not isinstance(report_raw, dict)):
         failure = ("harness", "grade", "grader_report_invalid")
-    grader_digest = bytes_digest(generated_grader_path.read_bytes()) if generated_grader_path.is_file() else None
+    grader_digest = record.grader_digest
     trial_id, run_id = f"{cell.cell_id}--{task_id}", f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}"
     instruction_file = cell.cell_dir / record.task_dir / "instruction.md"
     instruction_bytes = instruction_file.read_bytes()
     stage_ref = sha256_ref(stage_digest)
     context_ref = sha256_ref(bytes_digest(instruction_bytes))
-    skill_ref = sha256_ref(record.skill_digest)
     context_manifest_ref = sha256_ref(record.context_manifest_digest)
     context_pack_ref = sha256_ref(record.context_pack_digest)
-    mcp_ref = sha256_ref(digest({"identity": "none", "tools": [], "network": "denied"}))
+    skill_ref = sha256_ref(record.skill_digest)
     raw_tool_manifest = attestation.get("tool_manifest_digest")
     tool_manifest_ref = sha256_ref(raw_tool_manifest) if isinstance(raw_tool_manifest, str) and raw_tool_manifest else None
-    payload: dict[str, object] = {"trial_id": trial_id, "crucible_run_id": run_id, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_ref, "source_cluster": load_tasks()[task_id].source_cluster, "task_digest": sha256_ref(record.task_digest), "cell_kind": cell.cell_kind, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "profile_digest": sha256_ref(cell.profile_digest), "composition": cell.composition, "composition_digest": sha256_ref(cell.composition_digest), "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "context_digest": context_ref, "context_manifest_digest": context_manifest_ref, "context_pack_digest": context_pack_ref, "skill_digest": skill_ref, "skill_count": record.skill_count, "mcp_digest": mcp_ref, "tool_manifest_digest": tool_manifest_ref, "system_identity": f"{cell.harness}@{cell.harness_version}", "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "agent_kwargs_digest": sha256_ref(digest(cell.agent_kwargs)), "agent_allowed_hosts_digest": sha256_ref(digest(list(cell.agent_allowed_hosts))), "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_effort_attestation": attestation.get("effort"), "default_resolution_source": cell.default_resolution_source}
-    payload["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
-    payload = {key: value for key, value in payload.items() if value is not None}
-    payload.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
-    payload.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
-    if failure is not None:
-        payload.update({"failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail_ref": f"sha256:{bytes_digest(harbor_result_path.read_bytes())}@{harbor_result_path.relative_to(root).as_posix()}"})
-    if cell.cell_kind == "native_default":
-        payload["effort_source"] = cell.effort_source
+    authority_network = "allowlist" if cell.network_enforcement == NATIVE_NETWORK_ENFORCEMENT else "deny"
+    authority_hosts = list(cell_allowed_hosts(cell)) if authority_network == "allowlist" else []
+    payload = adapter_identity_payload(cell, record, attestation, stage_digest, context_ref, context_manifest_ref, context_pack_ref, tool_manifest_ref, authority_hosts, failure, harbor_result_path, root)
     cell_prefix = f"cells/{cell.cell_id}"
     workspace_path = f"{cell_prefix}/{record.task_dir}/environment/repo"
     instruction_path = f"{cell_prefix}/{record.task_dir}/instruction.md"
     model_requested, effort_requested = cell.model_requested, cell.effort_requested
     candidate = {"kind": "agent", "harness": cell.harness, "harness_version": cell.harness_version, "model": model_parts(model_requested) if model_requested is not None else None, "reasoning_effort": effort_requested, "toolset_hash": tool_manifest_ref}
-    authority_network = "allowlist" if cell.network_enforcement == NATIVE_NETWORK_ENFORCEMENT else "deny"
-    authority_hosts = list(cell.agent_allowed_hosts) if authority_network == "allowlist" else []
     request = {"schema_version": "crucible.runner_exchange_request.v1", "exchange_id": f"{run_id}--{task_id}", "task_id": task_id, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "adapter": {"name": f"crucible.harbor_agents.{cell.harness}", "version": cell.harness_version, "digest": sha256_ref(cell.adapter_digest)}, "candidate": candidate, "capabilities": ["workspace_edit", "transcript", "usage"], "input": {"workspace": workspace_path, "instruction": instruction_path, "context": [], "digest": sha256_ref(bytes_digest((root / instruction_path).read_bytes()))}, "authority": {"filesystem_roots": [workspace_path, instruction_path], "network": authority_network, "allowed_hosts": authority_hosts, "credential_refs": []}, "limits": {"timeout_ms": 900000, "max_output_bytes": 1048576, "cpu_millicores": 1000, "memory_mb": 1024, "storage_mb": 2048}, "provenance": {"repo": load_tasks()[task_id].source_repository, "git_sha": load_tasks()[task_id].source_sha, "invocation_id": f"{run_id}--{task_id}"}, "trust": {"required_evidence_kinds": ["final_state", "transcript"], "require_transcript": True, "require_usage": True, "require_cost": False, "require_response_model": model_requested is not None}, "adapter_payload": payload}
     request.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
     request.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
@@ -343,10 +385,10 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     else:
         retryable = failure[2] in {"provider_request_failed", "provider_rate_limited", "adapter_timeout", "transport_request_failed"}
         result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation)) or "Harbor reliability failure", "retryable": retryable, "detail": reliability_detail(trial_raw, attestation, failure)}
-    exchange_dir = root / "exchange" / cell.cell_id / task_id
-    instruction_path = cell.cell_dir / record.task_dir / "instruction.md"
-    manifest_path = root / "context" / "manifests" / f"{record.context_manifest_digest}.json"
-    pack_path = root / "context" / "packs" / f"{record.context_pack_digest}.md"
+    exchange_dir = confined_path(root, "exchange", cell.cell_id, task_id)
+    instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
+    manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
+    pack_path = confined_path(root, "context", "packs", f"{record.context_pack_digest}.md")
     if not instruction_path.is_file() or bytes_digest(instruction_path.read_bytes()) != record.context_digest:
         fail(f"staged instruction identity changed for {record.task_id}")
     if not _matches_json_digest(manifest_path, record.context_manifest_digest):
@@ -376,10 +418,10 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
 
 
 def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, paths: ExchangePaths, stage_digest: str, tool_manifest_digest: str | None) -> dict[str, object]:
-    db = root / "runs" / "campaign.sqlite"
-    instruction_path = cell.cell_dir / record.task_dir / "instruction.md"
-    manifest_path = root / "context" / "manifests" / f"{record.context_manifest_digest}.json"
-    pack_path = root / "context" / "packs" / f"{record.context_pack_digest}.md"
+    db = confined_path(root, "runs", "campaign.sqlite")
+    instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
+    manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
+    pack_path = confined_path(root, "context", "packs", f"{record.context_pack_digest}.md")
     if not instruction_path.is_file() or bytes_digest(instruction_path.read_bytes()) != record.context_digest:
         fail(f"staged instruction identity changed for {record.task_id}")
     if not _matches_json_digest(manifest_path, record.context_manifest_digest):
@@ -417,7 +459,7 @@ def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, path
         "--composition", cell.composition,
         "--context-digest", sha256_ref(record.context_digest),
         "--skill-digest", sha256_ref(record.skill_digest),
-        "--mcp-digest", sha256_ref(digest({"identity": "none", "tools": [], "network": "denied"})),
+        "--mcp-digest", sha256_ref(mcp_identity_digest()),
     ]
     if tool_manifest_digest is not None:
         command += ["--tool-manifest-digest", sha256_ref(tool_manifest_digest)]
@@ -446,39 +488,44 @@ def compact_receipt(value: Receipt) -> dict[str, object]:
     return compact
 
 
-def normalized_request(cell: Cell, stage_digest: str) -> dict[str, object]:
-    authority_hosts = list(cell.agent_allowed_hosts)
-    request: dict[str, object] = {"schema_version": "harness_census.normalized_request.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "cell_kind": cell.cell_kind, "harness": cell.harness, "harness_version": cell.harness_version, "composition": cell.composition, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "default_resolution_source": cell.default_resolution_source, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": authority_hosts, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "authority": {"network": "allowlist" if authority_hosts else "deny", "allowed_hosts": authority_hosts}, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "task_digest": cell.task_digest, "composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "profile_digest": cell.profile_digest}
-    request["task_context"] = [{"task_id": record.task_id, "context_manifest_digest": record.context_manifest_digest, "context_pack_digest": record.context_pack_digest, "context_digest": record.context_digest, "skill_digest": record.skill_digest, "skill_count": record.skill_count} for record in cell.task_records]
-    request["comparison_task_digests"] = {record.task_id: record.comparison_task_digest for record in cell.task_records}
-    request.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
-    return request
 
 
-def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str, expected_cell_digest: str | None = None) -> None:
-    if expected_cell_digest is not None and cell_static_digest(cell.cell_dir) != expected_cell_digest:
+def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str, expected_cell_digest: str | None = None, task_ids: list[str] | None = None) -> None:
+    if expected_cell_digest is not None and cell_stage_digest(cell.cell_dir, include_workspace=False) != expected_cell_digest:
         fail(f"staged cell bytes changed before run: {cell.cell_id}")
+    declared = {record.task_id for record in cell.task_records}
+    if task_ids is not None:
+        if not set(task_ids) or set(task_ids) - declared or len(set(task_ids)) != len(task_ids):
+            fail(f"task selection is invalid for cell: {cell.cell_id}")
+    selected = [record for record in cell.task_records if task_ids is None or record.task_id in task_ids]
+    if not selected:
+        fail(f"no tasks are selected for cell: {cell.cell_id}")
     output = cell.cell_dir / "results"
     output.mkdir(exist_ok=True)
     command = [str(crucible), "run", str(cell.spec_path), "--out", str(output), "--json"]
-    request = normalized_request(cell, stage_digest)
+    if task_ids is not None and set(task_ids) != declared:
+        for task_id in task_ids:
+            command += ["--task", task_id]
     environment = safe_runtime_environment(harbor)
     result_run = subprocess.run(command, cwd=cell.cell_dir, env=environment, text=True, capture_output=True, check=False)
     # A non-zero Crucible run still leaves per-task failure evidence when the Harbor executor can continue.
     # Missing task artifacts are materialized by collect_attestations as denominator-excluded attempts.
-    attestations = collect_attestations(output, cell)
-    observation = native_observation(cell, attestations)
+    all_attestations = collect_attestations(output, cell)
+    by_task = {entry["task_id"]: entry for entry in all_attestations}
+    selected_attestations = [by_task[record.task_id] for record in selected if record.task_id in by_task]
+    if len(selected_attestations) != len(selected):
+        fail(f"staged cell run left tasks without evidence: {cell.cell_id}")
+    observation = native_observation(cell, selected_attestations)
     observed_identity: dict[str, str] = {}
     if observation is not None:
         cell, observed_identity = observation
-    normalized_request(cell, stage_digest)
-    passed = [entry for entry in attestations if entry["record"].get("status") == "passed"]
+    passed = [entry for entry in selected_attestations if entry["record"].get("status") == "passed"]
     receipts: list[dict[str, object]] = []
-    for record, attestation in zip(cell.task_records, attestations):
+    for record, attestation in zip(selected, selected_attestations):
         raw_tool_manifest = attestation["record"].get("tool_manifest_digest")
         tool_manifest_digest = raw_tool_manifest if isinstance(raw_tool_manifest, str) and raw_tool_manifest else None
         paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest)
-        if expected_cell_digest is not None and cell_static_digest(cell.cell_dir) != expected_cell_digest:
+        if expected_cell_digest is not None and cell_stage_digest(cell.cell_dir, include_workspace=False) != expected_cell_digest:
             fail(f"staged cell bytes changed before ingest: {cell.cell_id}")
         receipts.append(ingest_task(crucible, root, cell, record, paths, stage_digest, tool_manifest_digest))
     observed = sorted({entry["record"]["observed_identities"][0] for entry in passed if entry["record"].get("observed_identities")})
@@ -486,11 +533,12 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
     observed_tools = sorted({entry["record"]["tool_manifest_digest"] for entry in passed if entry["record"].get("tool_manifest_digest")})
     observed_configs = sorted({entry["record"]["config_digest"] for entry in passed if entry["record"].get("config_digest")})
     observed_systems = sorted({cell.observed_system_identity(entry["record"]["config_digest"], entry["record"]["tool_manifest_digest"]) for entry in passed if isinstance(entry["record"].get("config_digest"), str) and isinstance(entry["record"].get("tool_manifest_digest"), str)})
-    if len(passed) == len(attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
+    if len(passed) == len(selected_attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
         fail(f"cell observed model or effort identity is not singular: {cell.cell_id}")
-    attestation_receipts = [{"task_id": entry["task_id"], "attestation_ref": entry["attestation_ref"], "attestation_digest": entry["attestation_digest"], "transcript_ref": entry["transcript_ref"], "record": entry["record"]} for entry in attestations]
+    attestation_receipts = [{"task_id": entry["task_id"], "attestation_ref": entry["attestation_ref"], "attestation_digest": entry["attestation_digest"], "transcript_ref": entry["transcript_ref"], "record": entry["record"]} for entry in selected_attestations]
     compact_receipts = [compact_receipt(cast(Receipt, receipt)) for receipt in receipts]
     if cell.cell_kind == "native_default" and observation is not None:
         baseline_summary = {"schema_version": "harness_census.native_baseline_summary.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "baseline_id": cell.baseline_id, "harness": cell.harness, "harness_version": cell.harness_version, "profile_digest": cell.profile_digest, "task_set_digest": cell.task_set_digest, "observed_model": observed_identity["model"], "observed_effort": observed_identity["effort"], "effort_source": observed_identity["effort_source"], "tool_manifest_digest": observed_identity["tool_manifest_digest"], "config_digest": observed_identity["config_digest"], "system_identity": observed_identity["system_identity"], "receipt_digests": [receipt["receipt_digest"] for receipt in compact_receipts], "status": "valid" if len(compact_receipts) == len(cell.task_records) and all(receipt.get("trial_status") == "success" for receipt in compact_receipts) else "invalid"}
-        write_json(root / "baselines" / str(cell.baseline_id) / "summary.json", baseline_summary)
-    write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "observed_tool_manifest_digests": observed_tools, "observed_config_digests": observed_configs, "observed_system_identities": observed_systems, "effort_source": cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in attestations], "runner_exchange_receipts": compact_receipts})
+        write_json(confined_path(root, "baselines", str(cell.baseline_id), "summary.json"), baseline_summary)
+    if len(selected) == len(cell.task_records):
+        write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "observed_tool_manifest_digests": observed_tools, "observed_config_digests": observed_configs, "observed_system_identities": observed_systems, "effort_source": cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in selected_attestations], "runner_exchange_receipts": compact_receipts})

@@ -154,24 +154,40 @@ def run_test(repo: Path, test: str) -> tuple[int, str]:
             test_path.unlink(missing_ok=True)
 
 
+_COMPILE_FAILURE_MARKERS = ("cannot find package", "build failed", "# command-line-arguments", "undefined:", "syntax error:", "expected declaration")
+
+
+def _compile_failure(output: str) -> bool:
+    return any(marker in output for marker in _COMPILE_FAILURE_MARKERS)
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit("usage: grader.py REPOSITORY")
     repo = Path(sys.argv[1]).resolve()
     source = repo / "prs.go"
     if not source.is_file():
-        fail("invalid-syntax", "target prs.go is missing")
+        fail("checkruns-array", "target prs.go is missing")
     code, output = run_test(repo, TEST)
-    passed_checks = sum(f"HARNESS_CENSUS_PASS:{check}" in output for check in CHECKS)
     if code:
-        failed = "failing-output-decode" if 'failing checks = "[\\"' in output else "invalid-syntax"
-        for check, marker in (("gh-api-query", "missing instrumented gh api/query"), ("failing-output-decode", "alternate failing checks"), ("empty-array-safe", "empty "), ("multiple-failures", "failing checks ="), ("checkruns-array", "rollup =")):
+        failed = "invalid-syntax"
+        for check, marker in (
+            ("gh-api-query", "missing instrumented gh api/query"),
+            ("failing-output-decode", "alternate failing checks"),
+            ("failing-output-decode", r'failing checks = "[\"'),
+            ("empty-array-safe", "empty "),
+            ("multiple-failures", "failing checks ="),
+            ("checkruns-array", "rollup ="),
+        ):
             if failed == "invalid-syntax" and marker in output:
                 failed = check
                 break
-        fail(failed, output, passed_checks)
-    if passed_checks != len(CHECKS):
-        fail("invalid-syntax", output, passed_checks)
+        if failed == "invalid-syntax" and not _compile_failure(output):
+            failed = "behavior-mismatch"
+        fail(failed, output)
+    passed = sum(f"HARNESS_CENSUS_PASS:{check}" in output for check in CHECKS)
+    if passed != len(CHECKS):
+        fail("behavior-mismatch", output)
     total_checks = len(CHECKS)
     print(json.dumps({"passed": True, "hard_pass": True, "passed_checks": total_checks, "total_checks": total_checks, "task_points": 1.0, "checks": list(CHECKS)}, sort_keys=True))
 

@@ -24,7 +24,7 @@
     }
   ],
   "comment_only_image": {
-    "intended_failure": "device-hook",
+    "intended_failure": "hydration-snapshot",
     "passed": false
   },
   "exposure": {
@@ -39,7 +39,7 @@
     "tree_digest": "5b7cfda43941cd928397b81f78412e7a8f2cfaf211c05a91849f764c0e1535bc"
   },
   "invalid_syntax_image": {
-    "intended_failure": "invalid-syntax",
+    "intended_failure": "render-path",
     "passed": false
   },
   "mutants": [
@@ -47,7 +47,7 @@
       "changed_paths": [
         "apps/web/components/library/empty-state.tsx"
       ],
-      "failure_check": "server-desktop",
+      "failure_check": "desktop-server-lane",
       "id": "wrong-server-snapshot",
       "patch_digest": "5a9b0a71da5ff71f69f876171044786dd3f1f0837599f13b55d68034b63d8cb9"
     },
@@ -55,7 +55,7 @@
       "changed_paths": [
         "apps/web/components/library/empty-state.tsx"
       ],
-      "failure_check": "device-hook",
+      "failure_check": "hydration-snapshot",
       "id": "no-external-store",
       "patch_digest": "e21a60d29bfa47c757a6ea4c7c898f1d796f6bf31ff8975c3535d6fdc258f533"
     },
@@ -74,7 +74,7 @@
     "changed_paths": [
       "apps/web/components/library/empty-state.tsx"
     ],
-    "grader_digest": "9d854424964cd5b0b896bd0256844d9dfea8b4cd857996150997cc0e75472d4d",
+    "grader_digest": "ed3d61dd6cf0de29bd11eba58405d73d406d79ce6b25a90636f08a4ba4d023c2",
     "hard_pass": true,
     "passed": true,
     "passed_checks": 9,
@@ -114,7 +114,7 @@
   "source_sha": "4a2a3d29831e4c8d22dc28130a062bda8f51b601",
   "task_id": "sploot-hydration-device-lane",
   "unchanged_image": {
-    "intended_failure": "device-hook",
+    "intended_failure": "hydration-snapshot",
     "passed": false
   }
 }

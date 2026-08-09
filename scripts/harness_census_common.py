@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from dataclasses import dataclass, replace
 from pathlib import Path
 import re
@@ -240,15 +241,7 @@ class Cell:
     task_records: tuple[TaskRecord, ...]
 
     def observed_system_identity(self, config_digest: str, tool_manifest_digest: str) -> str:
-        return digest({
-            "adapter_digest": self.adapter_digest,
-            "package_digest": self.package_digest,
-            "prime_package_digest": self.prime_package_digest,
-            "harness": self.harness,
-            "harness_version": self.harness_version,
-            "config_digest": config_digest,
-            "tool_manifest_digest": tool_manifest_digest,
-        })
+        return digest({"config_digest": config_digest, "tool_manifest_digest": tool_manifest_digest})
 
     def native_baseline_id(self, model: str, effort: str, effort_source: str, tool_manifest_digest: str, config_digest: str) -> str:
         system_identity = self.observed_system_identity(config_digest, tool_manifest_digest)
@@ -351,6 +344,70 @@ def canonical(value: object) -> bytes:
 def digest(value: object) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
 
+def mcp_identity_digest() -> str:
+    return digest({"identity": "none", "tools": [], "network": "denied"})
+
+
+def agent_kwargs_identity_digest(agent_kwargs: Mapping[str, object]) -> str:
+    if any(not isinstance(value, str) for value in agent_kwargs.values()):
+        fail("agent kwargs identity values must be strings")
+    return digest(dict(agent_kwargs))
+
+
+def cell_allowed_hosts(cell: Cell) -> list[str]:
+    return list(cell.agent_allowed_hosts) if cell.network_enforcement == NATIVE_NETWORK_ENFORCEMENT else []
+
+
+def agent_allowed_hosts_identity_digest(cell: Cell) -> str:
+    return digest(cell_allowed_hosts(cell))
+
+
+def confined_path(root: Path, *parts: str) -> Path:
+    root = root.expanduser()
+    try:
+        root_info = os.lstat(root)
+    except FileNotFoundError:
+        fail(f"campaign root is missing: {root}")
+    if stat.S_ISLNK(root_info.st_mode):
+        fail(f"campaign root must not be a symlink: {root}")
+    root_real = root.resolve()
+    if not root_real.is_dir():
+        fail(f"campaign root is not a directory: {root}")
+    current = root_real
+    for index, part in enumerate(parts):
+        if not isinstance(part, str) or not part or part in {".", ".."} or Path(part).is_absolute() or "/" in part:
+            fail(f"campaign path is unsafe: {'/'.join(parts)}")
+        current = current / part
+        try:
+            info = os.lstat(current)
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode):
+            fail(f"campaign path must not be a symlink: {current}")
+        resolved = current.resolve()
+        if not resolved.is_relative_to(root_real):
+            fail(f"campaign path escapes root: {current}")
+        if index < len(parts) - 1 and not stat.S_ISDIR(info.st_mode):
+            fail(f"campaign path parent is not a directory: {current}")
+    return current
+
+
+def ensure_campaign_root(path: Path) -> Path:
+    raw = path.expanduser()
+    if raw.is_symlink():
+        fail(f"campaign root must not be a symlink: {raw}")
+    if raw.exists() and not raw.is_dir():
+        fail(f"campaign root is not a directory: {raw}")
+    raw.mkdir(parents=True, exist_ok=True)
+    root = raw.resolve()
+    confined_path(root)
+    return root
+
+
+def ensure_campaign_layout(root: Path) -> None:
+    for name in ("stage-manifest.json", "campaign.json", "worker-preflight.json", "prime-package.json", "baselines", "context", "packages", "bin", "cells", "runs", "exchange"):
+        confined_path(root, name)
+
 
 def row_identity(model_requested: str | None, effort_requested: str | None, harness: str, composition: str) -> str:
     return digest([CAMPAIGN_ID, model_requested, effort_requested, harness, composition])
@@ -397,8 +454,78 @@ def tree_digest(root: Path, *, exclude_git: bool) -> str:
     return digest([(name, bytes_digest(value)) for name, value in tree_files(root, exclude_git=exclude_git).items()])
 
 
+def _skip_match(name: str, patterns: tuple[str, ...]) -> bool:
+    for pattern in patterns:
+        if pattern.endswith("*"):
+            if name.startswith(pattern[:-1]):
+                return True
+        elif name == pattern or name.startswith(pattern + "/"):
+            return True
+    return False
+
+
+def campaign_tree_files(root: Path, *, skip: tuple[str, ...] = ()) -> dict[str, bytes]:
+    try:
+        root_info = os.lstat(root)
+    except FileNotFoundError:
+        fail(f"campaign tree is missing: {root}")
+    if stat.S_ISLNK(root_info.st_mode) or not stat.S_ISDIR(root_info.st_mode):
+        fail(f"campaign tree root is unsafe: {root}")
+    real = root.resolve()
+    selected: dict[str, bytes] = {}
+    for directory, dir_names, file_names in os.walk(root, topdown=True, followlinks=False):
+        relative_dir = Path(directory).relative_to(root).as_posix()
+        relative_dir = "" if relative_dir == "." else relative_dir
+        keep_dirs: list[str] = []
+        for name in dir_names:
+            relative = f"{relative_dir}/{name}" if relative_dir else name
+            if _skip_match(relative, skip):
+                continue
+            entry = Path(directory) / name
+            try:
+                info = os.lstat(entry)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISDIR(info.st_mode):
+                fail(f"campaign tree contains an unsafe entry: {relative}")
+            if not entry.resolve().is_relative_to(real):
+                fail(f"campaign tree entry escapes root: {relative}")
+            keep_dirs.append(name)
+        dir_names[:] = keep_dirs
+        for name in sorted(file_names):
+            relative = f"{relative_dir}/{name}" if relative_dir else name
+            if _skip_match(relative, skip):
+                continue
+            entry = Path(directory) / name
+            try:
+                info = os.lstat(entry)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+                fail(f"campaign tree contains an unsafe entry: {relative}")
+            if not entry.resolve().is_relative_to(real):
+                fail(f"campaign tree entry escapes root: {relative}")
+            selected[relative] = entry.read_bytes()
+    return selected
+
+
 def fail(message: str, prefix: str = "harness-census driver") -> NoReturn:
     raise SystemExit(f"{prefix}: {message}")
+
+
+def cell_stage_digest(cell_dir: Path, *, include_workspace: bool) -> str:
+    selected: dict[str, bytes] = {}
+    skip_prefixes = ["results", "request.json", "result.json", "tasks/*/environment/runtime-package/*"]
+    if not include_workspace:
+        skip_prefixes.append("tasks/*/environment/repo/*")
+    for name, value in campaign_tree_files(cell_dir, skip=tuple(skip_prefixes)).items():
+        parts = name.split("/")
+        if parts[0] in {"results", "request.json", "result.json"}:
+            continue
+        if parts[0] == "tasks" and len(parts) >= 4 and parts[2:4] == ["environment", "repo"] and not include_workspace:
+            continue
+        selected[name] = value
+    return digest([(name, bytes_digest(value)) for name, value in sorted(selected.items())])
 
 
 def write_json(path: Path, value: object) -> None:
@@ -463,6 +590,11 @@ def cell_summary(cell: Cell) -> dict[str, object]:
         "cohort_id": cell.cohort_id,
         "baseline_id": cell.baseline_id,
         "profile_digest": cell.profile_digest,
+        "agent_kwargs_digest": agent_kwargs_identity_digest(cell.agent_kwargs),
+        "agent_allowed_hosts_digest": agent_allowed_hosts_identity_digest(cell),
+        "composition_digest": cell.composition_digest,
+        "adapter_digest": cell.adapter_digest,
+        "mcp_digest": mcp_identity_digest(),
         "task_digest": cell.task_digest,
         "task_set_digest": cell.task_set_digest,
         "task_set_size": cell.task_set_size,

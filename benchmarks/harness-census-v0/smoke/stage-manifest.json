@@ -9,8 +9,23 @@
   "crucible_binary_digest": null,
   "crucible_commit": null,
   "decision_policy": {
+    "cell_invalidation": "any_reliability_failure",
+    "decision": "scale_or_repair",
+    "forbidden_claims": [
+      "winner",
+      "deployment",
+      "context_deletion"
+    ],
     "hard_pass_requires_all_tasks": true,
-    "native_default_separate": true
+    "interval_claims": {
+      "descriptive": true,
+      "inferential": false
+    },
+    "native_default_separate": true,
+    "paired_delta_resolvable": {
+      "point_delta": 1.0
+    },
+    "task_buckets": 3
   },
   "dockerfile_digests": [],
   "gateway_digests": [
@@ -19,7 +34,7 @@
   "gateway_dockerfile_digests": [
     "95c0b1efb8e5fa17c2f57fa31371975e1036df4d8935533db7c166cfb5b0c135"
   ],
-  "grader_digest": "c866fc242dd953192223da353e23888d9e6c234e1383dfc6e7f952852b474f6a",
+  "grader_digest": "f370edc0790e86277a8c90c22d4937be21bc239490fa9bbb0aa0639bfc8ac710",
   "harness_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
   "network_enforcement": {
@@ -38,7 +53,7 @@
   "roster_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
   "schema_version": "harness_census.stage_manifest.v1",
   "stage_id": "smoke",
-  "task_digest": "70e2f48fc987ca6478dd614420a73e250d71910c83fd9ef176be9813a51c12c6",
+  "task_digest": "4366cf33f479e0975f922c61c3473656bdc7a2d3dccf80884d9c90fadf5a5b45",
   "task_network_enforcement": {
     "controlled": "docker_internal_network",
     "native_default": "docker_internal_network"

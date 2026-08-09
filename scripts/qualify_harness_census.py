@@ -247,7 +247,7 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
         "transport_network_mode": {"controlled": NETWORK_POLICY["controlled"]["transport_network_mode"], "native_default": NETWORK_POLICY["native_default"]["transport_network_mode"]},
         "network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["network_enforcement"]},
         "task_network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["task_network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["task_network_enforcement"]},
-        "retry_policy": {"product_retry": 0, "transport_retry": 0}, "decision_policy": {"hard_pass_requires_all_tasks": True, "native_default_separate": True},
+        "retry_policy": {"product_retry": 0, "transport_retry": 0}, "decision_policy": {"decision": "scale_or_repair", "task_buckets": 3, "paired_delta_resolvable": {"point_delta": 1.0}, "interval_claims": {"descriptive": True, "inferential": False}, "forbidden_claims": ["winner", "deployment", "context_deletion"], "cell_invalidation": "any_reliability_failure", "hard_pass_requires_all_tasks": True, "native_default_separate": True},
     }
     validate_stage_manifest(stage, stage_id="smoke")
     write_json(PACKAGE / "smoke" / "stage-manifest.json", stage)

@@ -210,14 +210,14 @@ def run_oracle(text: str, exported: list[str]) -> dict[str, object]:
             check=False,
         )
         if result.returncode:
-            fail("device-hook", (result.stdout + result.stderr)[-4000:])
+            fail("render-path", (result.stdout + result.stderr)[-4000:])
         lines = [line for line in result.stdout.splitlines() if line.strip()]
         try:
             report = json.loads(lines[-1])
         except (IndexError, json.JSONDecodeError) as error:
-            fail("invalid-syntax", f"behavior oracle did not return JSON: {error}")
+            fail("render-path", f"behavior oracle did not return JSON: {error}")
         if not isinstance(report, dict):
-            fail("invalid-syntax", "behavior oracle returned a non-object report")
+            fail("render-path", "behavior oracle returned a non-object report")
         return report
 
 
@@ -227,8 +227,8 @@ def require_output(report: dict[str, object], key: str, expected: str, check: st
         fail(check, f"missing {key} render")
     if value.get("error"):
         detail = str(value["error"])
-        if check == "server-desktop" or "window" in detail.lower():
-            fail("server-desktop", detail)
+        if check == "desktop-server-lane" or "window" in detail.lower():
+            fail("hydration-snapshot", detail)
     text = str(value.get("text", ""))
     if expected not in text:
         fail(check, f"{key} render did not expose {expected!r}: {text}")
@@ -256,7 +256,7 @@ def main() -> None:
     repo = Path(sys.argv[1]).resolve()
     source = repo / "apps/web/components/library/empty-state.tsx"
     if not source.is_file():
-        fail("invalid-syntax", "target TSX source is missing")
+        fail("render-path", "target TSX source is missing")
     source_text = source.read_text(encoding="utf-8")
     require_semantic_tokens(source_text)
     with tempfile.TemporaryDirectory(prefix="harness-census-build-") as temporary:
@@ -268,28 +268,28 @@ def main() -> None:
             check=False,
         )
     if syntax.returncode:
-        fail("invalid-syntax", (syntax.stdout + syntax.stderr)[-4000:])
+        fail("render-path", (syntax.stdout + syntax.stderr)[-4000:])
     executable, exported = executable_source(source_text)
     report = run_oracle(executable, exported)
     server = report.get("server")
     hydrate = report.get("hydrate")
     if not isinstance(server, dict) or not isinstance(hydrate, dict):
-        fail("server-desktop", "hydration renders are missing")
+        fail("hydration-snapshot", "hydration renders are missing")
     if server.get("error"):
-        fail("server-desktop", str(server["error"]))
+        fail("desktop-server-lane", str(server["error"]))
     if hydrate.get("error"):
-        fail("server-desktop", str(hydrate["error"]))
+        fail("hydration-snapshot", str(hydrate["error"]))
     server_text = str(server.get("text", ""))
     hydrate_text = str(hydrate.get("text", ""))
     if "chrome extension" not in server_text or "share sheet" in server_text or "iphone shortcut" in server_text:
-        fail("server-desktop", f"server render was not the desktop lane: {server_text}")
+        fail("desktop-server-lane", f"server render was not the desktop lane: {server_text}")
     if hydrate_text != server_text:
-        check = "render-path" if int(hydrate.get("externalStoreCalls", 0)) else "device-hook"
+        check = "render-path" if int(hydrate.get("externalStoreCalls", 0)) else "hydration-snapshot"
         fail(check, f"server and hydration renders diverged: {server_text!r} != {hydrate_text!r}")
-    require_output(report, "android", "share sheet", "browser-device")
-    require_output(report, "ios", "iphone shortcut", "browser-device")
-    require_output(report, "ipad", "iphone shortcut", "browser-device")
-    require_output(report, "desktop", "chrome extension", "browser-device")
+    require_output(report, "android", "share sheet", "android-device")
+    require_output(report, "ios", "iphone shortcut", "ios-device")
+    require_output(report, "ipad", "iphone shortcut", "ipad-device")
+    require_output(report, "desktop", "chrome extension", "desktop-device")
     total_checks = len(CHECKS)
     print(json.dumps({"passed": True, "hard_pass": True, "passed_checks": total_checks, "total_checks": total_checks, "task_points": 1.0, "checks": list(CHECKS)}, sort_keys=True))
 

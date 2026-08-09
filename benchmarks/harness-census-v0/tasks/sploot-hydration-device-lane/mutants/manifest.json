@@ -5,12 +5,12 @@
     {
       "id": "wrong-server-snapshot",
       "path": "wrong-server-snapshot.patch",
-      "failure_marker": "server-desktop"
+      "failure_marker": "desktop-server-lane"
     },
     {
       "id": "no-external-store",
       "path": "no-external-store.patch",
-      "failure_marker": "device-hook"
+      "failure_marker": "hydration-snapshot"
     },
     {
       "id": "dead-render-hook",
