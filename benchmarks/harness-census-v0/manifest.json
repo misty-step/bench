@@ -7,15 +7,15 @@
   "network_policy": {
     "native_default": {
       "network_mode": "no-network",
-      "transport_network_mode": "no-network",
-      "network_enforcement": "host_allowlist_mint",
-      "task_network_enforcement": "host_allowlist_mint"
+      "transport_network_mode": "allowlist",
+      "network_enforcement": "harbor_agent_allowlist_mint",
+      "task_network_enforcement": "docker_no_network"
     },
     "controlled": {
-      "network_mode": "public",
-      "transport_network_mode": "public",
-      "network_enforcement": "tool_surface_no_network_tool",
-      "task_network_enforcement": "tool_surface_no_network_tool"
+      "network_mode": "no-network",
+      "transport_network_mode": "allowlist",
+      "network_enforcement": "harbor_agent_allowlist_mint",
+      "task_network_enforcement": "docker_no_network"
     }
   },
   "grader_visibility": "outside-worker-image",
@@ -50,7 +50,7 @@
   ],
   "qualification": {
     "unchanged_image": "must_fail_intended_check",
-    "mutants_per_task": 2,
+    "mutants_per_task_minimum": 2,
     "scope": "allowed_paths_only",
     "future_history": "denied",
     "stable_digests": true

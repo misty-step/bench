@@ -4,13 +4,18 @@
   "mutants": [
     {
       "id": "no-origin-check",
-      "path": "only-first-pagination.patch",
-      "failure_marker": "scheme-check"
+      "path": "no-origin-check.patch",
+      "failure_marker": "host-check"
     },
     {
       "id": "host-only-check",
       "path": "host-only-check.patch",
       "failure_marker": "scheme-check"
+    },
+    {
+      "id": "apps-only-pagination",
+      "path": "apps-only-pagination.patch",
+      "failure_marker": "pagination-use"
     }
   ]
 }

@@ -1,0 +1,33 @@
+--- a/src/collect/digitalocean.rs
++++ b/src/collect/digitalocean.rs
+@@ -207,6 +207,21 @@
+         .await?)
+ }
+ 
++fn validated_next(base: &str, next: String) -> anyhow::Result<String> {
++    if next.starts_with('/') && !next.starts_with("//") {
++        return Ok(next);
++    }
++    let base = url::Url::parse(base)?;
++    let candidate = url::Url::parse(&next)?;
++    let same_origin = candidate.scheme() == base.scheme()
++        && candidate.host_str() == base.host_str()
++        && candidate.port_or_known_default() == base.port_or_known_default();
++    if !same_origin {
++        anyhow::bail!("digitalocean pagination next URL is cross-origin");
++    }
++    Ok(candidate.into())
++}
++
+ async fn fetch_droplets(
+     client: &reqwest::Client,
+     base: &str,
+@@ -239,7 +254,7 @@
+             .and_then(|links| links.pages)
+             .and_then(|pages| pages.next)
+         {
+-            Some(next) => path = next,
++            Some(next) => path = validated_next(base, next)?,
+             None => return Ok(all),
+         }
+     }

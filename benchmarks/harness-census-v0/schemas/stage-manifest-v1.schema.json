@@ -23,10 +23,10 @@
     "dockerfile_digests": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
     "package_digests": {"type": "array", "items": {"type": "string", "pattern": "^[0-9a-f]{64}$"}},
     "profile_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "network_enforcement": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "tool_surface_no_network_tool"}, "native_default": {"const": "host_allowlist_mint"}}},
-    "transport_network_mode": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "public"}, "native_default": {"const": "no-network"}}},
-    "task_network_enforcement": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "tool_surface_no_network_tool"}, "native_default": {"const": "host_allowlist_mint"}}},
-    "controlled_tool_surface_probe": {"type": "object", "additionalProperties": true, "required": ["status", "network_enforcement", "adapters"], "properties": {"status": {"const": "passed"}, "network_enforcement": {"const": "tool_surface_no_network_tool"}, "adapters": {"type": "array", "minItems": 3}}},
+    "network_enforcement": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "harbor_agent_allowlist_mint"}, "native_default": {"const": "harbor_agent_allowlist_mint"}}},
+    "transport_network_mode": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "allowlist"}, "native_default": {"const": "allowlist"}}},
+    "task_network_enforcement": {"type": "object", "additionalProperties": false, "required": ["controlled", "native_default"], "properties": {"controlled": {"const": "docker_no_network"}, "native_default": {"const": "docker_no_network"}}},
+    "controlled_tool_surface_probe": {"type": "object", "additionalProperties": true, "required": ["status", "task_network", "adapters"], "properties": {"status": {"const": "passed"}, "task_network": {"const": "denied_by_tool_and_sandbox"}, "adapters": {"type": "array", "minItems": 3}}},
     "retry_policy": {"type": "object", "required": ["product_retry", "transport_retry"], "properties": {"product_retry": {"const": 0}, "transport_retry": {"type": "integer", "minimum": 0}}},
     "decision_policy": {"type": "object", "required": ["hard_pass_requires_all_tasks", "native_default_separate"], "properties": {"hard_pass_requires_all_tasks": {"const": true}, "native_default_separate": {"const": true}}}
   }

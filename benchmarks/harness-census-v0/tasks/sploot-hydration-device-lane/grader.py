@@ -15,142 +15,262 @@ def fail(check: str, detail: str) -> None:
     raise SystemExit(1)
 
 
-def extract_function(text: str, name: str) -> str | None:
-    match = re.search(rf"\bfunction\s+{re.escape(name)}\s*\(", text)
-    if match is None:
-        return None
-    opening = text.find("{", match.end())
-    if opening < 0:
-        return None
-    depth = 0
-    quote: str | None = None
-    escaped = False
-    line_comment = False
-    block_comment = False
-    index = opening
-    while index < len(text):
-        char = text[index]
-        next_char = text[index + 1] if index + 1 < len(text) else ""
-        if line_comment:
-            if char == "\n":
-                line_comment = False
-        elif block_comment:
-            if char == "*" and next_char == "/":
-                block_comment = False
-                index += 1
-        elif quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-        elif char in "'\"`":
-            quote = char
-        elif char == "/" and next_char == "/":
-            line_comment = True
-            index += 1
-        elif char == "/" and next_char == "*":
-            block_comment = True
-            index += 1
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return text[match.start() : index + 1]
-        index += 1
-    return None
-
-
-def imported_external_store(text: str) -> str | None:
-    for match in re.finditer(r"(?ms)^[ \t]*import\b(?P<clause>[^;]*?)\bfrom\s*['\"]react['\"]\s*;", text):
-        named = re.search(r"\{([^}]*)\}", match.group("clause"), re.S)
-        if named is None:
-            continue
-        for item in named.group(1).split(","):
-            binding = re.fullmatch(r"\s*useSyncExternalStore(?:\s+as\s+(\w+))?\s*", item)
-            if binding:
-                return binding.group(1) or "useSyncExternalStore"
-    return None
-
+def executable_source(text: str) -> tuple[str, list[str]]:
+    """Remove module edges while retaining the candidate's executable component."""
+    exported = re.findall(r"\bexport\s+(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(", text)
+    text = re.sub(r"(?m)^[ \t]*['\"]use client['\"];?[ \t]*\n?", "", text, count=1)
+    text = re.sub(r"(?ms)^[ \t]*import(?:\s+type)?\b.*?;[ \t]*(?:\n|$)", "", text)
+    text = re.sub(r"\bexport\s+(?=(?:async\s+)?function|const|let|var|class)\b", "", text)
+    text = re.sub(r"(?ms)^[ \t]*export\s+type\b.*?;[ \t]*(?:\n|$)", "", text)
+    return text, exported
 
 
 ORACLE_PREFIX = r'''
-type CaptureDevice = 'ios' | 'android' | 'desktop';
-const isIosBrowser = (userAgent: string, maxTouchPoints = 0): boolean =>
-  /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && maxTouchPoints > 1);
+const __state = {
+  phase: 'server',
+  userAgent: '',
+  touchPoints: 0,
+  hooks: [],
+  cursor: 0,
+  effects: [],
+  collectEffects: true,
+  dirty: false,
+  externalStoreCalls: 0,
+};
+function __window(present, userAgent, touchPoints) {
+  if (present) {
+    globalThis.window = { navigator: { userAgent, maxTouchPoints: touchPoints } };
+  } else {
+    delete globalThis.window;
+  }
+}
+function useState(initial) {
+  const index = __state.cursor++;
+  if (!(index in __state.hooks)) {
+    __state.hooks[index] = typeof initial === 'function' ? initial() : initial;
+  }
+  const setValue = (next) => {
+    const value = typeof next === 'function' ? next(__state.hooks[index]) : next;
+    if (!Object.is(value, __state.hooks[index])) {
+      __state.hooks[index] = value;
+      __state.dirty = true;
+    }
+  };
+  return [__state.hooks[index], setValue];
+}
+function useRef(value) {
+  const index = __state.cursor++;
+  if (!(index in __state.hooks)) __state.hooks[index] = { current: value };
+  return __state.hooks[index];
+}
+function useCallback(callback) {
+  __state.cursor++;
+  return callback;
+}
+function useEffect(effect) {
+  __state.cursor++;
+  if (__state.collectEffects) __state.effects.push(effect);
+}
+function useLayoutEffect(effect) { useEffect(effect); }
+function useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
+  __state.cursor++;
+  __state.externalStoreCalls++;
+  return __state.phase === 'server' || __state.phase === 'hydrate'
+    ? getServerSnapshot()
+    : getSnapshot();
+}
+const React = {
+  Fragment: Symbol('Fragment'),
+  createElement(type, props, ...children) {
+    const nextProps = { ...(props || {}), children: children.length === 1 ? children[0] : children };
+    if (typeof type === 'function') return type(nextProps);
+    return { type, props: nextProps, children };
+  },
+};
+function cn(...values) { return values.filter(Boolean).join(' '); }
+function trackEmptyStateRender() {}
+function useRouter() { return { push() {} }; }
+function usePwaInstallPrompt() {
+  return { installable: false, installed: false, requiresManualInstall: false, promptInstall() {} };
+}
+function isIosBrowser(userAgent, maxTouchPoints = 0) {
+  return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && maxTouchPoints > 1);
+}
+function logger() {}
+logger.logError = () => {};
+logger.logInfo = () => {};
+function Button(props) { return React.createElement('button', props, props.children); }
+function Link(props) { return React.createElement('a', props, props.children); }
+function MemeCell(props) { return React.createElement('div', props, props.children); }
+function StickerTab(props) { return React.createElement('div', props, props.children); }
+function __text(value) {
+  if (value == null || typeof value === 'boolean') return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(__text).join('');
+  if (typeof value === 'object') return __text(value.children);
+  return '';
+}
+function __render(name, phase, userAgent, touchPoints, runEffects) {
+  __state.phase = phase;
+  __state.userAgent = userAgent;
+  __state.touchPoints = touchPoints;
+  __window(phase !== 'server', userAgent, touchPoints);
+  __state.hooks = [];
+  __state.cursor = 0;
+  __state.effects = [];
+  __state.collectEffects = true;
+  __state.dirty = false;
+  __state.externalStoreCalls = 0;
+  try {
+    let tree = __exports[name]({ variant: 'first-use', showUploadButton: false });
+    let text = __text(tree);
+    if (runEffects) {
+      const effects = __state.effects.slice();
+      __state.effects = [];
+      for (const effect of effects) effect();
+      if (__state.dirty) {
+        __state.dirty = false;
+        __state.cursor = 0;
+        __state.collectEffects = false;
+        tree = __exports[name]({ variant: 'first-use', showUploadButton: false });
+        text = __text(tree);
+      }
+    }
+    return { text, externalStoreCalls: __state.externalStoreCalls };
+  } catch (error) {
+    return { error: String(error && error.message ? error.message : error), text: '', externalStoreCalls: __state.externalStoreCalls };
+  }
+}
+function __hasLane(text) {
+  return text.includes('chrome extension') || text.includes('share sheet') || text.includes('iphone shortcut');
+}
 '''
+
 
 ORACLE_SUFFIX = r'''
-const observed = useCaptureDevice();
-if (observed.server !== 'desktop' || observed.client !== 'android') {
-  throw new Error(`hydration snapshots were ${JSON.stringify(observed)}`);
+const __rootCandidates = Object.keys(__exports);
+let __root = null;
+let __serverError = null;
+for (const candidate of __rootCandidates) {
+  const probe = __render(candidate, 'server', 'Mozilla/5.0 (Android)', 0, false);
+  if (__hasLane(probe.text)) {
+    __root = candidate;
+    break;
+  }
+  if (probe.error && __serverError === null) __serverError = { candidate, error: probe.error };
 }
-if (detectCaptureDevice('Mozilla/5.0 (iPhone)', 0) !== 'ios') throw new Error('iOS detection failed');
-if (detectCaptureDevice('Mozilla/5.0 (Android)', 0) !== 'android') throw new Error('Android detection failed');
-if (detectCaptureDevice('Mozilla/5.0 (Macintosh)', 0) !== 'desktop') throw new Error('desktop detection failed');
+if (__root === null && __serverError !== null) __root = __serverError.candidate;
+if (__root === null) throw new Error('capture surface is not reachable from the rendered component');
+const __result = {
+  root: __root,
+  server: __render(__root, 'server', 'Mozilla/5.0 (Android)', 0, false),
+  hydrate: __render(__root, 'hydrate', 'Mozilla/5.0 (Android)', 0, false),
+  android: __render(__root, 'client', 'Mozilla/5.0 (Android)', 0, true),
+  ios: __render(__root, 'client', 'Mozilla/5.0 (iPhone)', 0, true),
+  ipad: __render(__root, 'client', 'Mozilla/5.0 (Macintosh)', 2, true),
+  desktop: __render(__root, 'client', 'Mozilla/5.0 (Macintosh)', 0, true),
+};
+console.log(JSON.stringify(__result));
 '''
 
 
-def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit("usage: grader.py REPOSITORY")
-    source = Path(sys.argv[1]).resolve() / "apps/web/components/library/empty-state.tsx"
-    if not source.is_file():
-        fail("invalid-syntax", "target TSX source is missing")
-    text = source.read_text(encoding="utf-8")
-    external_store_name = imported_external_store(text)
-    detect = extract_function(text, "detectCaptureDevice")
-    hook = extract_function(text, "useCaptureDevice")
-    capture = extract_function(text, "CaptureSurfaces")
-    if detect is None:
-        fail("external-store-import", "device classification is missing")
-    if hook is None:
-        check = "device-hook" if external_store_name is not None else "external-store-import"
-        fail(check, "external-store hook is missing")
-    if external_store_name is None:
-        if re.search(r"\buseSyncExternalStore\s*\(", hook) is not None:
-            fail("device-hook", "useCaptureDevice calls an external-store hook without its production import")
-        fail("external-store-import", "production source does not import useSyncExternalStore from react")
-    if re.search(rf"\b{re.escape(external_store_name)}\s*\(", hook) is None:
-        fail("device-hook", "useCaptureDevice does not call the imported external-store hook")
-    if capture is None or re.search(r"\buseCaptureDevice\s*\(", re.sub(r"/\*.*?\*/|//[^\n]*", "", capture, flags=re.S)) is None:
-        fail("render-path", "CaptureSurfaces does not invoke useCaptureDevice on its render path")
+def run_oracle(text: str, exported: list[str]) -> dict[str, object]:
+    if not exported:
+        fail("render-path", "no exported component is available to exercise")
+    exports = ", ".join(f"{name}: {name}" for name in exported)
+    body = ORACLE_PREFIX + text + f"\nconst __exports = {{{exports}}};\n" + ORACLE_SUFFIX
     with tempfile.TemporaryDirectory(prefix="harness-census-ts-") as temporary:
-        root = Path(temporary)
-        candidate = root / "candidate.ts"
-        compiled = root / "candidate.js"
-        candidate.write_text(
-            ORACLE_PREFIX
-            + detect
-            + "\nconst noopSubscribe = () => () => {};\n"
-            + f"const {external_store_name} = (_subscribe: unknown, getSnapshot: () => CaptureDevice, getServerSnapshot: () => CaptureDevice) => {{\n"
-            + "  const server = getServerSnapshot();\n"
-            + "  delete (globalThis as { window?: unknown }).window;\n"
-            + "  (globalThis as { window?: unknown }).window = { navigator: { userAgent: 'Mozilla/5.0 (Android)', maxTouchPoints: 0 } };\n"
-            + "  return { server, client: getSnapshot() };\n"
-            + "};\n"
-            + hook
-            + ORACLE_SUFFIX,
+        candidate = Path(temporary) / "candidate.tsx"
+        candidate.write_text(body, encoding="utf-8")
+        runtime = candidate.parent / "node_modules" / "react"
+        runtime.mkdir(parents=True)
+        (runtime / "package.json").write_text('{"type":"module"}', encoding="utf-8")
+        (runtime / "jsx-dev-runtime.js").write_text(
+            "export const Fragment = Symbol('Fragment');\n"
+            "export function jsxDEV(type, props) {\n"
+            "  if (typeof type === 'function') return type(props || {});\n"
+            "  const children = props && props.children;\n"
+            "  return { type, children: Array.isArray(children) ? children : [children] };\n"
+            "}\n",
             encoding="utf-8",
         )
-        syntax = subprocess.run(
-            ["bun", "build", "--target", "browser", "--outfile", str(compiled), str(source), "--external=*"],
+        (runtime / "jsx-runtime.js").write_text(
+            "export { Fragment, jsxDEV as jsx } from './jsx-dev-runtime.js';\n",
+            encoding="utf-8",
+        )
+        result = subprocess.run(
+            ["bun", "run", str(candidate)],
             text=True,
             capture_output=True,
             timeout=120,
             check=False,
         )
-        if syntax.returncode:
-            fail("invalid-syntax", (syntax.stdout + syntax.stderr)[-4000:])
-        result = subprocess.run(["bun", "run", str(candidate)], text=True, capture_output=True, timeout=120, check=False)
         if result.returncode:
-            output = (result.stdout + result.stderr)[-4000:]
-            if "hydration snapshots" in output or "window is not defined" in output:
-                fail("server-desktop", output)
-            fail("device-hook", output)
-    print(json.dumps({"passed": True, "checks": ["external-store-import", "device-hook", "server-desktop", "browser-device", "hydration-lane"]}, sort_keys=True))
+            fail("device-hook", (result.stdout + result.stderr)[-4000:])
+        lines = [line for line in result.stdout.splitlines() if line.strip()]
+        try:
+            report = json.loads(lines[-1])
+        except (IndexError, json.JSONDecodeError) as error:
+            fail("invalid-syntax", f"behavior oracle did not return JSON: {error}")
+        if not isinstance(report, dict):
+            fail("invalid-syntax", "behavior oracle returned a non-object report")
+        return report
+
+
+def require_output(report: dict[str, object], key: str, expected: str, check: str) -> None:
+    value = report.get(key)
+    if not isinstance(value, dict):
+        fail(check, f"missing {key} render")
+    if value.get("error"):
+        detail = str(value["error"])
+        if check == "server-desktop" or "window" in detail.lower():
+            fail("server-desktop", detail)
+        fail(check, detail)
+    text = str(value.get("text", ""))
+    if expected not in text:
+        fail(check, f"{key} render did not expose {expected!r}: {text}")
+
+
+def main() -> None:
+    if len(sys.argv) != 2:
+        raise SystemExit("usage: grader.py REPOSITORY")
+    repo = Path(sys.argv[1]).resolve()
+    source = repo / "apps/web/components/library/empty-state.tsx"
+    if not source.is_file():
+        fail("invalid-syntax", "target TSX source is missing")
+    source_text = source.read_text(encoding="utf-8")
+    with tempfile.TemporaryDirectory(prefix="harness-census-build-") as temporary:
+        syntax = subprocess.run(
+            ["bun", "build", "--target", "browser", "--outfile", str(Path(temporary) / "empty-state.js"), str(source), "--external=*"],
+            text=True,
+            capture_output=True,
+            timeout=120,
+            check=False,
+        )
+    if syntax.returncode:
+        fail("invalid-syntax", (syntax.stdout + syntax.stderr)[-4000:])
+    executable, exported = executable_source(source_text)
+    report = run_oracle(executable, exported)
+    server = report.get("server")
+    hydrate = report.get("hydrate")
+    if not isinstance(server, dict) or not isinstance(hydrate, dict):
+        fail("server-desktop", "hydration renders are missing")
+    if server.get("error"):
+        fail("server-desktop", str(server["error"]))
+    if hydrate.get("error"):
+        fail("server-desktop", str(hydrate["error"]))
+    server_text = str(server.get("text", ""))
+    hydrate_text = str(hydrate.get("text", ""))
+    if "chrome extension" not in server_text or "share sheet" in server_text or "iphone shortcut" in server_text:
+        fail("server-desktop", f"server render was not the desktop lane: {server_text}")
+    if hydrate_text != server_text:
+        check = "render-path" if int(hydrate.get("externalStoreCalls", 0)) else "device-hook"
+        fail(check, f"server and hydration renders diverged: {server_text!r} != {hydrate_text!r}")
+    require_output(report, "android", "share sheet", "browser-device")
+    require_output(report, "ios", "iphone shortcut", "browser-device")
+    require_output(report, "ipad", "iphone shortcut", "browser-device")
+    require_output(report, "desktop", "chrome extension", "browser-device")
+    print(json.dumps({"passed": True, "checks": ["hydration-snapshot", "desktop-server-lane", "android-device", "ios-device", "ipad-device", "desktop-device", "render-path"]}, sort_keys=True))
 
 
 if __name__ == "__main__":

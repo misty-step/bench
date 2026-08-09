@@ -1,7 +1,6 @@
-diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
 --- a/src/collect/digitalocean.rs
 +++ b/src/collect/digitalocean.rs
-@@ -171,6 +171,14 @@ async fn get_json<T: serde::de::DeserializeOwned(
+@@ -207,6 +207,14 @@
          .await?)
  }
  
@@ -16,7 +15,7 @@ diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
  async fn fetch_droplets(
      client: &reqwest::Client,
      base: &str,
-@@ -186,7 +193,7 @@ async fn fetch_droplets(
+@@ -222,7 +230,7 @@
              .and_then(|links| links.pages)
              .and_then(|pages| pages.next)
          {
@@ -25,7 +24,7 @@ diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
              None => return Ok(all),
          }
      }
-@@ -203,7 +210,7 @@ async fn fetch_apps(client: &reqwest::Client, base: &str, token: &str) -> anyhow
+@@ -239,7 +247,7 @@
              .and_then(|links| links.pages)
              .and_then(|pages| pages.next)
          {

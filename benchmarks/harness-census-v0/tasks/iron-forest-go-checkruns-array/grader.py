@@ -26,7 +26,7 @@ import (
 
 func TestHarnessCensusCheckRuns(t *testing.T) {
 	failing, err := failingChecks("owner/repo", "sha")
-	if err != nil || failing != "lint: FAILURE" {
+	if err != nil || failing != "lint: FAILURE\ne2e: CANCELLED" {
 		t.Fatalf("failing checks = %q, err = %v", failing, err)
 	}
 	rollup, err := checkRollup("owner/repo", "sha")
@@ -35,6 +35,10 @@ func TestHarnessCensusCheckRuns(t *testing.T) {
 	}
 	if err := os.Setenv("HARNESS_CENSUS_EMPTY_CHECKS", "1"); err != nil {
 		t.Fatal(err)
+	}
+	emptyFailing, err := failingChecks("owner/repo", "sha")
+	if err != nil || emptyFailing != "" {
+		t.Fatalf("empty failing checks = %q, err = %v", emptyFailing, err)
 	}
 	empty, err := checkRollup("owner/repo", "sha")
 	if err != nil || empty != "" {
@@ -48,18 +52,20 @@ func TestHarnessCensusCheckRuns(t *testing.T) {
 
 GH = r'''#!/bin/sh
 set -eu
+array_query=false
 if printf '%s\n' "$*" | grep -Eq -- '-q[[:space:]]*\['; then
   array_query=true
 fi
 if [ "${HARNESS_CENSUS_EMPTY_CHECKS:-}" = 1 ]; then
   if $array_query; then printf '%s\n' '[]'; else exit 0; fi
 elif printf '%s\n' "$*" | grep -q select; then
-  if $array_query; then printf '%s\n' '["lint: FAILURE"]'; else printf '%s\n' 'lint: FAILURE'; fi
+  if $array_query; then printf '%s\n' '["lint: FAILURE","e2e: CANCELLED"]'; else printf '%s\n' '"lint: FAILURE"' '"e2e: CANCELLED"'; fi
 elif $array_query; then
-  printf '%s\n' '[{"status":"COMPLETED","conclusion":"FAILURE","name":"lint"},{"status":"COMPLETED","conclusion":"SUCCESS","name":"tests"}]'
+  printf '%s\n' '[{"status":"COMPLETED","conclusion":"FAILURE","name":"lint"},{"status":"COMPLETED","conclusion":"SUCCESS","name":"tests"},{"status":"COMPLETED","conclusion":"CANCELLED","name":"e2e"}]'
 else
   printf '%s\n' '{"status":"COMPLETED","conclusion":"FAILURE","name":"lint"}'
   printf '%s\n' '{"status":"COMPLETED","conclusion":"SUCCESS","name":"tests"}'
+  printf '%s\n' '{"status":"COMPLETED","conclusion":"CANCELLED","name":"e2e"}'
 fi
 '''
 
@@ -107,7 +113,7 @@ def main() -> None:
         if "rollup =" in output:
             fail("failing-checks-array", output)
         fail("invalid-syntax", output)
-    print(json.dumps({"passed": True, "checks": ["checkruns-array", "empty-array-safe", "failing-output-decode"]}, sort_keys=True))
+    print(json.dumps({"passed": True, "checks": ["checkruns-array", "multiple-failures", "empty-array-safe", "failing-output-decode"]}, sort_keys=True))
 
 
 if __name__ == "__main__":

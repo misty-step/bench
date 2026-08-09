@@ -2,7 +2,7 @@ diff --git a/src/collect/digitalocean.rs b/src/collect/digitalocean.rs
 index 93c9233..2eb29b7 100644
 --- a/src/collect/digitalocean.rs
 +++ b/src/collect/digitalocean.rs
-@@ -171,6 +171,21 @@ async fn get_json<T: serde::de::DeserializeOwned(
+@@ -171,6 +171,21 @@ async fn get_json<T: serde::de::DeserializeOwned>(
          .await?)
  }
  

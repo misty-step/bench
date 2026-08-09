@@ -15,17 +15,13 @@
   "exposure": {
     "future_git_objects_exposed": false,
     "grader_and_reference_hidden_from_worker": true,
-    "private_source_bytes_checked_in": false
+    "private_source_bytes_checked_in": true
   },
   "fixture": {
     "git_history_in_image": false,
     "history_free": true,
     "stable_repeated_digest": true,
     "tree_digest": "227dbc72e7219a0e4d3fc7a9e7f69ddb91ec5d00dcf2cbb2e22f9864e4a59768"
-  },
-  "harbor_permissions": {
-    "reward_file_mode": "0644",
-    "verifier_dir_mode": "0755"
   },
   "invalid_syntax_image": {
     "intended_failure": "invalid-syntax",
@@ -55,9 +51,10 @@
     "changed_paths": [
       "prs.go"
     ],
-    "grader_digest": "a5a995f062bf83d38cc5e477fda16be4f8e64cc6c48f76c14d55398a4baabb0d",
+    "grader_digest": "3dfe6f46753ab134cb9857e5cd4cc778c21bd5928820ef44496b013a3f05a55f",
     "passed": true,
-    "patch_digest": "50585d1c8eac0c904f029fdbcac2d0a4929d1776e39a436b8224b5daf8efcf6f"
+    "patch_digest": "50585d1c8eac0c904f029fdbcac2d0a4929d1776e39a436b8224b5daf8efcf6f",
+    "reference_commit_verified": true
   },
   "reference_sha": "520c629d4987720e9533ae63e4478cd9479c6b78",
   "schema_version": "harness_census.qualification_receipt.v1",

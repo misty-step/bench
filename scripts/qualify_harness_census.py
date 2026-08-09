@@ -13,10 +13,11 @@ from typing import Mapping
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    CAMPAIGN_ID, NETWORK_POLICY, PACKAGE, ROSTER, Task,
-    digest, fail, file_digest, load_tasks, qualification_harness_records,
-    task_identity, tree_digest, tree_files, write_json,
+    CAMPAIGN_ID, NETWORK_POLICY, PACKAGE, Task, campaign_matrix,
+    digest, fail, file_digest, harness_catalog_digest, load_tasks, model_roster_digest,
+    qualification_harness_records, task_identity, tree_digest, tree_files, write_json,
 )
+from harness_census_staging import validate_stage_manifest
 
 COMPOSITIONS = ("controlled_raw", "controlled_enriched")
 TASKS = load_tasks()
@@ -118,6 +119,15 @@ def qualify_task(task: Task, source_root: Path) -> dict[str, object]:
             fail(f"{task.id} reference grader {infrastructure} failure: {reference_report}", "harness-census qualification")
         if reference_code != 0 or reference_report.get("passed") is not True:
             fail(f"{task.id} reference failed: {reference_report}", "harness-census qualification")
+        reference_commit = work / "reference-commit"
+        archive_task(repo_path(source_root, task), task.reference_sha, reference_commit)
+        mismatched = [
+            path
+            for path in task.allowed_paths
+            if (reference / path).read_bytes() != (reference_commit / path).read_bytes()
+        ]
+        if mismatched:
+            fail(f"{task.id} reference patch does not reproduce reference_sha paths: {mismatched}", "harness-census qualification")
         alternatives: list[dict[str, object]] = []
         for patch in sorted((task.task_dir / "alternatives").glob("*.patch")):
             alternative = work / f"alternative-{patch.stem}"
@@ -153,12 +163,12 @@ def qualify_task(task: Task, source_root: Path) -> dict[str, object]:
             "schema_version": "harness_census.qualification_receipt.v1", "package_id": CAMPAIGN_ID, "task_id": task.id,
             "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha,
             "source_cluster": task.source_cluster, "fixture": {"history_free": True, "tree_digest": fixture_digest, "stable_repeated_digest": True, "git_history_in_image": False},
-            "reference": {"patch_digest": file_digest(task.task_dir / "reference.patch"), "grader_digest": file_digest(task.task_dir / "grader.py"), "passed": True, "changed_paths": changed},
+            "reference": {"patch_digest": file_digest(task.task_dir / "reference.patch"), "grader_digest": file_digest(task.task_dir / "grader.py"), "reference_commit_verified": True, "passed": True, "changed_paths": changed},
             "alternatives": alternatives, "unchanged_image": {"passed": False, "intended_failure": unchanged_report["failed_check"]},
             "comment_only_image": {"passed": False, "intended_failure": comment_report.get("failed_check")}, "invalid_syntax_image": {"passed": False, "intended_failure": invalid_report.get("failed_check")},
             "mutants": mutants, "scope": {"allowed_paths": list(task.allowed_paths), "changed_paths": changed, "passed": True},
-            "exposure": {"private_source_bytes_checked_in": False, "future_git_objects_exposed": False, "grader_and_reference_hidden_from_worker": True},
-            "harbor_permissions": {"verifier_dir_mode": "0755", "reward_file_mode": "0644"}, "qualified": True,
+            "exposure": {"private_source_bytes_checked_in": True, "future_git_objects_exposed": False, "grader_and_reference_hidden_from_worker": True},
+            "qualified": True,
         }
     receipt_path = PACKAGE / "receipts" / f"{task.id}.json"
     write_json(receipt_path, receipt)
@@ -198,23 +208,24 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
         for task in TASKS.values()
     ])
     stage = {
-        "schema_version": "harness-census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "smoke", "bench_commit": None, "crucible_commit": None,
-        "roster_digest": digest(ROSTER), "catalog_digest": digest(ROSTER), "crucible_binary_digest": None, "prime_package_digest": None,
+        "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "smoke", "bench_commit": None, "crucible_commit": None,
+        "roster_digest": model_roster_digest(), "catalog_digest": harness_catalog_digest(), "crucible_binary_digest": None, "prime_package_digest": None,
         "dockerfile_digests": [], "package_digests": [], "profile_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-        "harness_digest": digest(qualification_harness_records()), "adapter_digest": digest([h["adapter"] for h in qualification_harness_records()]), "pack_digest": digest(pack),
+        "harness_digest": harness_catalog_digest(), "adapter_digest": digest([h["adapter"] for h in qualification_harness_records()]), "pack_digest": digest(pack),
         "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": task_digest, "grader_digest": digest([receipt["reference"]["grader_digest"] for receipt in receipts]),
         "transport_network_mode": {"controlled": NETWORK_POLICY["controlled"]["transport_network_mode"], "native_default": NETWORK_POLICY["native_default"]["transport_network_mode"]},
         "network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["network_enforcement"]},
         "task_network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["task_network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["task_network_enforcement"]},
         "retry_policy": {"product_retry": 0, "transport_retry": 0}, "decision_policy": {"hard_pass_requires_all_tasks": True, "native_default_separate": True},
     }
+    validate_stage_manifest(stage, stage_id="smoke")
     write_json(PACKAGE / "smoke" / "stage-manifest.json", stage)
     write_json(PACKAGE / "smoke" / "harness-census-v0.json", {
         "schema_version": "crucible.eval_spec.v1", "id": "harness-census-v0-smoke", "task": CAMPAIGN_ID,
         "inputs": "Three history-free pinned repository repair tasks with deterministic graders.", "outputs": "Nine-cell dry-run staging and task receipt plumbing.",
         "graders": {"graders": [{"id": "harness_census_deterministic", "kind": "deterministic"}]}, "aggregation": "proportion", "uncertainty": {"method": "wilson", "confidence": 0.95},
         "decision": "Qualify harness identity and task receipt plumbing without paid model quality claims.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": {"agent": "pi", "agent_import_path": "crucible.harbor_agents.pi_agent:PiAgent", "model": "openrouter/deepseek/deepseek-v4-flash-0731", "job_timeout_ms": 900000}, "tasks": [{"task_id": task.id} for task in TASKS.values()]}},
-        "smoke_cells": [{"cell_id": f"{harness['id']}-{composition}", "harness": harness["id"], "composition": composition, "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731" if composition != "native_default" else None, "effort_requested": "high" if composition != "native_default" else None, "task_ids": [task.id for task in TASKS.values()]} for harness in qualification_harness_records() for composition in ("native_default", "controlled_raw", "controlled_enriched")],
+        "smoke_cells": [{**row, "task_ids": list(TASKS)} for row in campaign_matrix()],
     })
 
 

@@ -1,0 +1,28 @@
+diff --git a/apps/web/components/library/empty-state.tsx b/apps/web/components/library/empty-state.tsx
+--- a/apps/web/components/library/empty-state.tsx
++++ b/apps/web/components/library/empty-state.tsx
+@@ -95,16 +95,15 @@
+ // Hydration-safe device detection: the server (and the hydration render)
+ // always see 'desktop'; the real device swaps in after mount. Branching on
+ // navigator during render was a guaranteed hydration failure (full tree
+ // regeneration) on phones.
+-const noopSubscribe = () => () => {};
+-function useCaptureDevice(): CaptureDevice {
+-  return useSyncExternalStore(
+-    noopSubscribe,
+-    () => detectCaptureDevice(window.navigator.userAgent, window.navigator.maxTouchPoints ?? 0),
+-    () => 'desktop' as CaptureDevice
+-  );
+-}
++function useDeviceLane(): CaptureDevice {
++  const [device, setDevice] = useState<CaptureDevice>('desktop');
++  useEffect(() => {
++    setDevice(detectCaptureDevice(window.navigator.userAgent, window.navigator.maxTouchPoints ?? 0));
++  }, []);
++  return device;
++}
+ 
+ function CaptureSurfaces() {
+-  const device = useCaptureDevice();
++  const device = useDeviceLane();
+   const { installable, installed, requiresManualInstall, promptInstall } = usePwaInstallPrompt();

@@ -16,14 +16,119 @@ from harness_census_archive import archive_git_tree
 from harness_census_common import (
     AGENT_ALLOWED_HOSTS, BUN_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL,
     CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_NETWORK_MODE, CONTROLLED_TASK_NETWORK_ENFORCEMENT,
-    CONTROLLED_TRANSPORT_NETWORK_MODE, HARBOR_VERSION, HARNESSES,
+    CONTROLLED_TRANSPORT_NETWORK_MODE, HARBOR_VERSION, HARNESSES, NETWORK_POLICY,
     NATIVE_NETWORK_ENFORCEMENT, NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT,
-    NATIVE_TRANSPORT_NETWORK_MODE, Cell, Task, TaskRecord, bytes_digest, canonical, digest,
-    fail, file_digest, load_tasks, task_corpus_identity, task_identity, tree_digest, tree_files, verified_commit, write_json,
+    NATIVE_TRANSPORT_NETWORK_MODE, Cell, Task, TaskRecord, bytes_digest, campaign_matrix,
+    canonical, digest, fail, file_digest, harness_catalog_digest, load_tasks, model_roster_digest,
+    qualification_harness_records, task_corpus_identity, task_identity, tree_digest, tree_files,
+    verified_commit, write_json,
 )
 
 QUALIFIER = Path(__file__).resolve().with_name("qualify_harness_census.py")
 PACKAGE = Path(__file__).resolve().parents[1] / "benchmarks" / "harness-census-v0"
+ROOT = PACKAGE.parents[1]
+def ensure_clean_bench_source() -> None:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "status", "--porcelain=v1", "--untracked-files=all", "--", "scripts", "benchmarks/harness-census-v0"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode:
+        fail(f"Bench source status probe failed: {(result.stderr or result.stdout).strip()}")
+    dirty = [line[3:] if len(line) >= 4 else line for line in result.stdout.splitlines() if line.strip()]
+    if dirty:
+        fail(f"Bench source bytes are dirty before stage manifest creation: {', '.join(dirty)}")
+
+
+def _valid_digest(value: object) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
+
+
+def _smoke_identity() -> dict[str, object]:
+    tasks = load_tasks()
+    receipts: dict[str, dict[str, object]] = {}
+    for task_id in tasks:
+        path = PACKAGE / "receipts" / f"{task_id}.json"
+        if not path.is_file():
+            fail(f"smoke receipt is missing: {task_id}")
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        if receipt.get("task_id") != task_id or receipt.get("qualified") is not True:
+            fail(f"smoke receipt is invalid: {task_id}")
+        receipts[task_id] = receipt
+    task_digest = digest([
+        task_identity(
+            task,
+            str(receipts[task.id]["fixture"]["tree_digest"]),
+            file_digest(task.task_dir / "instruction.md"),
+            file_digest(task.task_dir / "task.toml"),
+            file_digest(task.task_dir / "grader.py"),
+            file_digest(task.task_dir / "reference.patch"),
+        )
+        for task in tasks.values()
+    ])
+    pack_manifest = json.loads((PACKAGE / "compositions" / "digests.json").read_text(encoding="utf-8"))
+    pack = {name: pack_manifest[name] for name in ("controlled_raw", "controlled_enriched")}
+    return {
+        "roster_digest": model_roster_digest(),
+        "catalog_digest": harness_catalog_digest(),
+        "harness_digest": harness_catalog_digest(),
+        "adapter_digest": digest([entry["adapter"] for entry in qualification_harness_records()]),
+        "pack_digest": digest(pack),
+        "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}),
+        "task_digest": task_digest,
+        "grader_digest": digest([receipts[task_id]["reference"]["grader_digest"] for task_id in tasks]),
+    }
+
+
+def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
+    if not isinstance(stage, dict):
+        fail(f"{stage_id} stage manifest must be an object")
+    schema = json.loads((PACKAGE / "schemas" / "stage-manifest-v1.schema.json").read_text(encoding="utf-8"))
+    properties = schema.get("properties", {})
+    required = set(schema.get("required", []))
+    missing = sorted(required - set(stage))
+    unknown = sorted(set(stage) - set(properties))
+    if missing or unknown:
+        fail(f"{stage_id} stage manifest keys are invalid: missing={missing} unknown={unknown}")
+    for key, rule in properties.items():
+        if isinstance(rule, dict) and "const" in rule and key in stage and stage[key] != rule["const"]:
+            fail(f"{stage_id} stage manifest field is invalid: {key}")
+    if stage.get("campaign_id") != CAMPAIGN_ID or stage.get("stage_id") != stage_id:
+        fail(f"{stage_id} stage manifest identity is invalid")
+    for key in ("roster_digest", "catalog_digest", "harness_digest", "adapter_digest", "pack_digest", "mcp_digest", "task_digest", "grader_digest", "profile_digest"):
+        if not _valid_digest(stage.get(key)):
+            fail(f"{stage_id} stage manifest digest is invalid: {key}")
+    for key in ("crucible_binary_digest", "prime_package_digest"):
+        if stage.get(key) is not None and not _valid_digest(stage.get(key)):
+            fail(f"{stage_id} stage manifest digest is invalid: {key}")
+    for key in ("dockerfile_digests", "package_digests"):
+        values = stage.get(key)
+        if not isinstance(values, list) or any(not _valid_digest(value) for value in values):
+            fail(f"{stage_id} stage manifest digest list is invalid: {key}")
+    probe = stage.get("controlled_tool_surface_probe")
+    if probe is not None and (not isinstance(probe, dict) or probe.get("status") != "passed" or probe.get("task_network") != "denied_by_tool_and_sandbox" or not isinstance(probe.get("adapters"), list) or len(probe["adapters"]) < 3):
+        fail(f"{stage_id} controlled tool surface probe is invalid")
+    for field, policy_key in {
+        "transport_network_mode": "transport_network_mode",
+        "network_enforcement": "network_enforcement",
+        "task_network_enforcement": "task_network_enforcement",
+    }.items():
+        expected = {name: NETWORK_POLICY[name][policy_key] for name in ("controlled", "native_default")}
+        if stage.get(field) != expected:
+            fail(f"{stage_id} stage manifest network contract is stale: {field}")
+        schema_network = properties[field].get("properties", {})
+        if {name: schema_network[name].get("const") for name in expected} != expected:
+            fail(f"stage manifest schema network contract is stale: {field}")
+    if stage.get("retry_policy") != {"product_retry": 0, "transport_retry": 0}:
+        fail(f"{stage_id} stage manifest retry policy is invalid")
+    decision = stage.get("decision_policy")
+    if not isinstance(decision, dict) or decision.get("hard_pass_requires_all_tasks") is not True or decision.get("native_default_separate") is not True:
+        fail(f"{stage_id} stage manifest decision policy is invalid")
+    if stage_id == "smoke" and any(stage.get(key) != value for key, value in _smoke_identity().items()):
+        fail("smoke stage manifest identity is stale")
+
+
 
 
 def require_dir(path: Path, label: str) -> Path:
@@ -75,10 +180,13 @@ def validate_smoke() -> dict[str, str]:
     path = PACKAGE / "smoke" / "harness-census-v0.json"
     smoke = json.loads(path.read_text(encoding="utf-8"))
     cells = smoke.get("smoke_cells", [])
-    if len(cells) != 9 or sum(len(cell.get("task_ids", [])) for cell in cells) != 27:
-        fail("smoke artifact is not exactly 9 cells and 27 trials")
+    expected = [{**row, "task_ids": list(load_tasks())} for row in campaign_matrix()]
+    if cells != expected:
+        fail("smoke cells do not match the canonical nine-cell matrix")
     if "blocked_sentinels" in smoke or any("row_id" in cell or "provider_route_resolved" in cell for cell in cells):
         fail("smoke artifact contains synthetic availability claims")
+    stage_path = PACKAGE / "smoke" / "stage-manifest.json"
+    validate_stage_manifest(json.loads(stage_path.read_text(encoding="utf-8")), stage_id="smoke")
     return {"smoke_digest": bytes_digest(path.read_bytes())}
 
 
@@ -130,20 +238,60 @@ def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
         fail("staged Prime package digest changed")
     return {**info, "path": str(destination)}
 
+def runtime_package_info(harness: str) -> dict[str, str]:
+    spec = HARNESSES[harness]
+    path = PACKAGE / "packages" / harness
+    metadata_path, lock_path = path / "package.json", path / "package-lock.json"
+    if not metadata_path.is_file() or not lock_path.is_file():
+        fail(f"locked runtime package is missing for {harness}")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    expected = {spec.package.rsplit("@", 1)[0]: spec.version, "bun": BUN_VERSION}
+    if metadata.get("private") is not True or metadata.get("dependencies") != expected:
+        fail(f"locked runtime package dependencies are invalid for {harness}")
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    root = lock.get("packages", {}).get("", {})
+    if lock.get("lockfileVersion") != 3 or root.get("dependencies") != expected:
+        fail(f"runtime package lock does not bind the declared dependencies for {harness}")
+    unpinned = [
+        name
+        for name, value in lock.get("packages", {}).items()
+        if name and isinstance(value, dict) and not value.get("link") and not value.get("integrity")
+    ]
+    if unpinned:
+        fail(f"runtime package lock has entries without integrity for {harness}: {unpinned}")
+    return {
+        "package": spec.package,
+        "version": spec.version,
+        "source_kind": "checked_in_npm_lock",
+        "digest": tree_digest(path, exclude_git=False),
+        "path": str(path),
+    }
 
-def dockerfile(harness: str, prime_package_name: str | None = None) -> str:
+
+def harness_package_info(harness: str, prime_package: dict[str, str] | None) -> dict[str, str]:
+    if harness != "prime":
+        return runtime_package_info(harness)
+    if prime_package is None:
+        fail("Prime package metadata is missing")
+    return prime_package
+
+
+
+
+def dockerfile(harness: str, package_name: str) -> str:
     spec = HARNESSES[harness]
     base = "FROM node:22.19.0-bookworm-slim\nWORKDIR /workspace\nRUN node --version | grep -Eq '^v(22\\.(19|[2-9][0-9])\\.|2[3-9]\\.)'\n"
     packages = "python3 ca-certificates unzip" + (" bwrap coreutils ipython3 python3-pip" if harness == "prime" else "")
     install = f"RUN apt-get update && apt-get install -y --no-install-recommends {packages} && rm -rf /var/lib/apt/lists/*\n"
     labels = f'LABEL org.misty-step.harness="{harness}"\nLABEL org.misty-step.agent-package="{spec.package}"\n'
     if harness == "prime":
-        if not prime_package_name:
-            fail("Prime package staging name is missing")
-        install += f"COPY {prime_package_name}/ /opt/prime-agent/\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
+        install += f"COPY {package_name}/ /opt/prime-agent/\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
+        path = "/root/.bun/bin:${PATH}"
     else:
-        install += f"RUN npm install -g bun@{BUN_VERSION} && bun --version | grep -Fx '{BUN_VERSION}' && bun add --global {spec.package}\n"
-    return base + install + labels + 'ENV PATH="/root/.bun/bin:${PATH}"\nCOPY repo/ /workspace/\n'
+        binary = "omp" if harness == "omp" else "pi"
+        install += f"COPY {package_name}/ /opt/harness/\nRUN cd /opt/harness && npm ci --omit=dev\nRUN /opt/harness/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}'\nRUN ln -sf /opt/harness/node_modules/.bin/{binary} /usr/local/bin/{binary}\n"
+        path = "/opt/harness/node_modules/.bin:${PATH}"
+    return base + install + labels + f'ENV PATH="{path}"\nCOPY repo/ /workspace/\n'
 
 
 def verifier_source(grader: Path, source_manifest: dict[str, str], allowed_paths: tuple[str, ...]) -> str:
@@ -187,8 +335,14 @@ def scope_check(workspace):
     deleted = sorted(set(before) - set(after))
     changed = sorted(name for name in set(before) & set(after) if before[name] != after[name])
     outside = sorted(name for name in changed if name not in MANIFEST["allowed_paths"])
-    if added or deleted or outside:
-        reward({{"passed": False, "failed_check": "scope", "added_paths": added, "deleted_paths": deleted, "changed_outside_allowed_paths": outside}}, 0.0, "scope_failure")
+    root = workspace.resolve()
+    unsafe = sorted(
+        name
+        for name in MANIFEST["allowed_paths"]
+        if (workspace / name).is_symlink() or not (workspace / name).resolve().is_relative_to(root)
+    )
+    if added or deleted or outside or unsafe:
+        reward({{"passed": False, "failed_check": "scope", "added_paths": added, "deleted_paths": deleted, "changed_outside_allowed_paths": outside, "unsafe_allowed_paths": unsafe}}, 0.0, "scope_failure")
         return False
     return True
 def main():
@@ -225,18 +379,14 @@ if __name__ == "__main__":
 '''
 
 
-def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, assets: Mapping[str, str], source_root: Path, prime_package: dict[str, str] | None) -> TaskRecord:
+def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, assets: Mapping[str, str], source_root: Path, package: dict[str, str]) -> TaskRecord:
     task_dir = cell_dir / "tasks" / task.id
     env, source = task_dir / "environment", task_dir / "environment" / "repo"
     archive_git_tree(source_repo(source_root, task), task.source_sha, source)
     (task_dir / "instruction.md").write_text(task_prompt(task, composition, assets), encoding="utf-8")
-    prime_name = None
-    if harness == "prime":
-        if prime_package is None:
-            fail("Prime package metadata is missing")
-        prime_name = "prime-package"
-        shutil.copytree(prime_package["path"], env / prime_name, symlinks=True, copy_function=lambda source, destination: Path(destination).hardlink_to(source))
-    docker_text = dockerfile(harness, prime_name)
+    package_name = "prime-package" if harness == "prime" else "runtime-package"
+    shutil.copytree(package["path"], env / package_name, symlinks=True, copy_function=lambda source, destination: Path(destination).hardlink_to(source))
+    docker_text = dockerfile(harness, package_name)
     (env / "Dockerfile").write_text(docker_text, encoding="utf-8")
     task_toml, network_mode = staged_task_toml(task, composition)
     (task_dir / "task.toml").write_text(task_toml, encoding="utf-8")
@@ -252,8 +402,9 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
         fail(f"staged task leaks qualification material: {task.id}")
     source_digest = tree_digest(source, exclude_git=False)
     grader_digest = file_digest(task.task_dir / "grader.py")
+    comparison_task_digest = task_corpus_identity(task, source_digest, grader_digest, file_digest(task.task_dir / "reference.patch"))
     task_digest = task_identity(task, source_digest, file_digest(task_dir / "instruction.md"), file_digest(task_dir / "task.toml"), grader_digest, file_digest(task.task_dir / "reference.patch"))
-    return TaskRecord(task.id, task_digest, source_digest, digest(source_manifest), grader_digest, bytes_digest(docker_text.encode()), prime_package["digest"] if prime_package else None, f"tasks/{task.id}", str(task.task_dir), task.allowed_paths, task.immutable_paths, network_mode)
+    return TaskRecord(task.id, task_digest, comparison_task_digest, source_digest, grader_digest, bytes_digest(docker_text.encode()), package["digest"] if harness == "prime" else None, f"tasks/{task.id}", task.allowed_paths, task.immutable_paths, network_mode)
 
 
 def probe_harbor_task_validity(cells: tuple[Cell, ...]) -> dict[str, object]:
@@ -261,7 +412,7 @@ def probe_harbor_task_validity(cells: tuple[Cell, ...]) -> dict[str, object]:
     task_ids = {path.name for path in task_paths}
     controlled = [record for cell in cells if cell.cell_kind == "controlled" for record in cell.task_records]
     if not controlled or {record.network_mode for record in controlled} != {CONTROLLED_NETWORK_MODE}:
-        fail("controlled staged tasks do not use Harbor public transport mode")
+        fail("controlled staged tasks do not use configured task network mode")
     if task_ids != set(load_tasks()):
         fail(f"staged Harbor task set is invalid: {sorted(task_ids)}")
     check = """from pathlib import Path
@@ -290,7 +441,8 @@ def copy_adapters(campaign_root: Path, adapter_root: Path) -> str:
         fail(f"pinned harbor_agents package is missing: {source}")
     destination = campaign_root / "cells" / "harbor_agents"
     shutil.copytree(source, destination)
-    if not {"__init__.py", "prime_agent.py", "omp_agent.py", "pi_agent.py"}.issubset(path.name for path in destination.iterdir()):
+    required = {"__init__.py", "prime_agent.py", "prime_kernel_wrapper.sh", "omp_agent.py", "pi_agent.py"}
+    if not required.issubset(path.name for path in destination.iterdir()):
         fail("pinned harbor_agents package is incomplete")
     return tree_digest(destination, exclude_git=False)
 
@@ -311,6 +463,11 @@ def probe_controlled_argv_surfaces(adapter_root: Path) -> dict[str, object]:
     build_argv = getattr(module, "build_argv", None)
     if not callable(build_argv):
         fail("adapter command contract does not expose build_argv")
+    wrapper_path = source / "prime_kernel_wrapper.sh"
+    wrapper = wrapper_path.read_text(encoding="utf-8") if wrapper_path.is_file() else ""
+    if "env -i" not in wrapper or "--unshare-net" not in wrapper:
+        fail("Prime IPython wrapper does not clear ambient credentials and deny network")
+    prime_guard = {"kind": "bwrap_unshare_net_clean_env", "digest": file_digest(wrapper_path)}
     expected_tools = {"prime": "ipython", "omp": "read,edit,write", "pi": "read,edit,write"}
     required_flags = {"prime": ("--no-context-files", "--no-extensions", "--no-prompt-templates", "--no-skills", "--no-themes"), "omp": ("--no-extensions", "--no-rules", "--no-skills"), "pi": ("--no-context-files", "--no-extensions", "--no-prompt-templates", "--no-skills", "--no-themes")}
     enabled_context_flags = {"--context", "--context-file", "--extension", "--extensions", "--mcp", "--rule", "--rules", "--skill", "--skills", "--theme", "--themes", "--prompt-template", "--prompt-templates"}
@@ -325,8 +482,11 @@ def probe_controlled_argv_surfaces(adapter_root: Path) -> dict[str, object]:
             fail(f"controlled {name} argv has no declared tool surface: {command}")
         if tools != expected_tools[name]:
             fail(f"controlled {name} argv tool surface is {tools!r}, expected {expected_tools[name]!r}")
-        records.append({"adapter": name, "tool_surface": tools, "argv_digest": digest(command), "context_flags": list(required_flags[name])})
-    return {"status": "passed", "network_enforcement": CONTROLLED_NETWORK_ENFORCEMENT, "adapters": records}
+        record: dict[str, object] = {"adapter": name, "tool_surface": tools, "argv_digest": digest(command), "context_flags": list(required_flags[name])}
+        if name == "prime":
+            record["tool_network_guard"] = prime_guard
+        records.append(record)
+    return {"status": "passed", "task_network": "denied_by_tool_and_sandbox", "adapters": records}
 
 
 def row_identity(harness: str, composition: str, model: str, effort: str, task_digest: str, composition_digest: str) -> str:
@@ -341,45 +501,99 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
     tasks = load_tasks()
     adapter_digest = copy_adapters(root, adapter_root)
     cells: list[Cell] = []
-    for harness, spec in HARNESSES.items():
-        for composition in ("native_default", "controlled_raw", "controlled_enriched"):
-            cell_id, cell_dir = f"{harness}-{composition}", root / "cells" / f"{harness}-{composition}"
-            cell_dir.mkdir(parents=True, exist_ok=True)
-            records = tuple(stage_task(cell_dir, tasks[task_id], harness, composition, assets, source_root, prime_package) for task_id in tasks)
-            task_digest = digest([record.task_digest for record in records])
-            corpus_digest = digest([
-                task_corpus_identity(
-                    tasks[record.task_id],
-                    record.source_tree_digest,
-                    record.grader_digest,
-                    file_digest(tasks[record.task_id].task_dir / "reference.patch"),
-                )
-                for record in records
-            ])
-            controlled = composition != "native_default"
-            network_mode = CONTROLLED_NETWORK_MODE if controlled else NATIVE_NETWORK_MODE
-            network_enforcement = CONTROLLED_NETWORK_ENFORCEMENT if controlled else NATIVE_NETWORK_ENFORCEMENT
-            transport_mode = CONTROLLED_TRANSPORT_NETWORK_MODE if controlled else NATIVE_TRANSPORT_NETWORK_MODE
-            task_enforcement = CONTROLLED_TASK_NETWORK_ENFORCEMENT if controlled else NATIVE_TASK_NETWORK_ENFORCEMENT
-            model, effort = (CONTROLLED_MODEL, CONTROLLED_EFFORT) if controlled else (None, None)
-            kwargs: Mapping[str, object] = {"composition": composition, "thinking": CONTROLLED_EFFORT} if controlled else {"composition": "native_default"}
-            config: dict[str, object] = {"agent": harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "agent_kwargs": dict(kwargs)}
-            if controlled:
-                config["model"] = CONTROLLED_MODEL
-            else:
-                config["agent_allowed_hosts"] = list(AGENT_ALLOWED_HOSTS)
-            spec_json = {"schema_version": "crucible.eval_spec.v1", "id": cell_id, "task": CAMPAIGN_ID, "inputs": "Three history-free pinned repository repair tasks with deterministic graders.", "outputs": "Harbor verifier reward per task.", "graders": {"graders": [{"id": "harness_census_deterministic", "kind": "deterministic"}]}, "aggregation": "proportion", "uncertainty": {"method": "wilson", "confidence": 0.95}, "decision": "Native defaults remain separate from controlled comparisons.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": config, "tasks": [{"task_id": record.task_id, "task_dir": record.task_dir} for record in records]}}}
-            spec_path = cell_dir / "eval.json"
-            write_json(spec_path, spec_json)
-            composition_digest = composition_digests.get(composition, digest({"composition": "native_default"}))
-            docker_digests = tuple(sorted({record.dockerfile_digest for record in records}))
-            package_digest = digest({"package": spec.package, "version": spec.version})
-            prime_digest = prime_package["digest"] if prime_package else None
-            row_id = row_identity(harness, composition, CONTROLLED_MODEL, CONTROLLED_EFFORT, task_digest, composition_digest) if controlled else None
-            cohort_id = cohort_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, corpus_digest) if controlled else None
-            baseline_id = digest({"campaign_id": CAMPAIGN_ID, "harness": harness, "version": spec.version, "composition": composition, "task_digest": task_digest}) if not controlled else None
-            profile = digest({"harness": harness, "version": spec.version, "adapter_digest": adapter_digest, "kwargs": kwargs, "task_digest": task_digest, "composition_digest": composition_digest, "package_digest": package_digest, "prime_package_digest": prime_digest, "dockerfile_digests": list(docker_digests), "transport_network_mode": transport_mode, "network_enforcement": network_enforcement, "task_network_enforcement": task_enforcement})
-            cells.append(Cell(cell_id, cell_dir, spec_path, "controlled" if controlled else "native_default", harness, spec.version, composition, model, effort, model, effort, CONTROLLED_MODEL if controlled else None, None, row_id, cohort_id, baseline_id, profile, kwargs, tuple(() if controlled else AGENT_ALLOWED_HOSTS), tuple(() if controlled else AGENT_ALLOWED_HOSTS), network_mode, transport_mode, network_enforcement, task_enforcement, task_digest, composition_digest, adapter_digest, package_digest, prime_digest, docker_digests, records))
+    packages = {harness: harness_package_info(harness, prime_package) for harness in HARNESSES}
+    for row in campaign_matrix():
+        harness, composition = str(row["harness"]), str(row["composition"])
+        spec, package = HARNESSES[harness], packages[harness]
+        cell_id, cell_dir = str(row["cell_id"]), root / "cells" / str(row["cell_id"])
+        cell_dir.mkdir(parents=True, exist_ok=True)
+        records = tuple(stage_task(cell_dir, tasks[task_id], harness, composition, assets, source_root, package) for task_id in tasks)
+        task_digest = digest([record.task_digest for record in records])
+        task_set = sorted(([record.task_id, record.comparison_task_digest] for record in records), key=lambda value: value[0])
+        task_set_digest = digest(task_set)
+        task_set_size = len(task_set)
+        cell_run_id = f"{CAMPAIGN_ID}--{cell_id}"
+        retry_policy_digest = digest({"product_retry": 0, "transport_retry": 0})
+        corpus_digest = digest([
+            task_corpus_identity(
+                tasks[record.task_id],
+                record.source_tree_digest,
+                record.grader_digest,
+                file_digest(tasks[record.task_id].task_dir / "reference.patch"),
+            )
+            for record in records
+        ])
+        controlled = composition != "native_default"
+        network_mode = CONTROLLED_NETWORK_MODE if controlled else NATIVE_NETWORK_MODE
+        network_enforcement = CONTROLLED_NETWORK_ENFORCEMENT if controlled else NATIVE_NETWORK_ENFORCEMENT
+        transport_mode = CONTROLLED_TRANSPORT_NETWORK_MODE if controlled else NATIVE_TRANSPORT_NETWORK_MODE
+        task_enforcement = CONTROLLED_TASK_NETWORK_ENFORCEMENT if controlled else NATIVE_TASK_NETWORK_ENFORCEMENT
+        allowed_hosts = AGENT_ALLOWED_HOSTS if network_enforcement == NETWORK_POLICY["native_default"]["network_enforcement"] else ()
+        model, effort = row["model_requested"], row["effort_requested"]
+        kwargs: Mapping[str, object] = {"composition": composition, "thinking": CONTROLLED_EFFORT} if controlled else {"composition": "native_default"}
+        agent_kwargs_base_digest = digest({key: value for key, value in kwargs.items() if key not in {"composition", "thinking", "reasoning_effort"}})
+        config: dict[str, object] = {"agent": harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "agent_kwargs": dict(kwargs)}
+        if controlled:
+            config["model"] = CONTROLLED_MODEL
+        if allowed_hosts:
+            config["agent_allowed_hosts"] = list(allowed_hosts)
+        spec_json = {"schema_version": "crucible.eval_spec.v1", "id": cell_id, "task": CAMPAIGN_ID, "inputs": "Three history-free pinned repository repair tasks with deterministic graders.", "outputs": "Harbor verifier reward per task.", "graders": {"graders": [{"id": "harness_census_deterministic", "kind": "deterministic"}]}, "aggregation": "proportion", "uncertainty": {"method": "wilson", "confidence": 0.95}, "decision": "Native defaults remain separate from controlled comparisons.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": config, "tasks": [{"task_id": record.task_id, "task_dir": record.task_dir} for record in records]}}}
+        spec_path = cell_dir / "eval.json"
+        write_json(spec_path, spec_json)
+        composition_digest = composition_digests.get(composition, digest({"composition": "native_default"}))
+        docker_digests = tuple(sorted({record.dockerfile_digest for record in records}))
+        package_digest = package["digest"]
+        prime_digest = package["digest"] if harness == "prime" else None
+        row_id = row_identity(
+            harness,
+            composition,
+            CONTROLLED_MODEL,
+            CONTROLLED_EFFORT,
+            task_digest,
+            composition_digest,
+        ) if controlled else None
+        cohort_id = cohort_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, corpus_digest) if controlled else None
+        baseline_id = digest({"campaign_id": CAMPAIGN_ID, "harness": harness, "version": spec.version, "composition": composition, "task_digest": task_digest}) if not controlled else None
+        profile = digest({"harness": harness, "version": spec.version, "adapter_digest": adapter_digest, "kwargs": kwargs, "task_digest": task_digest, "composition_digest": composition_digest, "package_digest": package_digest, "prime_package_digest": prime_digest, "dockerfile_digests": list(docker_digests), "transport_network_mode": transport_mode, "network_enforcement": network_enforcement, "task_network_enforcement": task_enforcement})
+        cells.append(
+            Cell(
+                cell_id=cell_id,
+                cell_run_id=cell_run_id,
+                task_set_digest=task_set_digest,
+                task_set_size=task_set_size,
+                retry_policy_digest=retry_policy_digest,
+                agent_kwargs_base_digest=agent_kwargs_base_digest,
+                cell_dir=cell_dir,
+                spec_path=spec_path,
+                cell_kind="controlled" if controlled else "native_default",
+                harness=harness,
+                harness_version=spec.version,
+                composition=composition,
+                model_requested=model if isinstance(model, str) else None,
+                effort_requested=effort if isinstance(effort, str) else None,
+                provider_route_resolved=model if isinstance(model, str) else None,
+                provider_effort_resolved=effort if isinstance(effort, str) else None,
+                default_resolution_source=None,
+                effort_source="requested" if controlled else None,
+                row_id=row_id,
+                cohort_id=cohort_id,
+                baseline_id=baseline_id,
+                profile_digest=profile,
+                agent_kwargs=kwargs,
+                agent_allowed_hosts=tuple(allowed_hosts),
+                network_mode=network_mode,
+                transport_network_mode=transport_mode,
+                network_enforcement=network_enforcement,
+                task_network_enforcement=task_enforcement,
+                task_digest=task_digest,
+                composition_digest=composition_digest,
+                adapter_digest=adapter_digest,
+                package_digest=package_digest,
+                prime_package_digest=prime_digest,
+                dockerfile_digests=docker_digests,
+                task_records=records,
+            )
+        )
     if len(cells) != 9 or sum(len(cell.task_records) for cell in cells) != 27:
         fail("driver matrix is not exactly 9 cells and 27 trials")
     controlled = [cell for cell in cells if cell.cell_kind == "controlled"]
@@ -392,8 +606,8 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
             expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "agent_kwargs": {"composition": "native_default"}, "agent_allowed_hosts": list(AGENT_ALLOWED_HOSTS)}
             valid = config == expected and cell.network_mode == NATIVE_NETWORK_MODE and cell.transport_network_mode == NATIVE_TRANSPORT_NETWORK_MODE and cell.network_enforcement == NATIVE_NETWORK_ENFORCEMENT and cell.task_network_enforcement == NATIVE_TASK_NETWORK_ENFORCEMENT and cell.agent_allowed_hosts == AGENT_ALLOWED_HOSTS and cell.model_requested is None and cell.effort_requested is None and cell.provider_route_resolved is None and cell.provider_effort_resolved is None and cell.default_resolution_source is None
         else:
-            expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "model": CONTROLLED_MODEL, "agent_kwargs": {"composition": cell.composition, "thinking": CONTROLLED_EFFORT}}
-            valid = config == expected and cell.network_mode == CONTROLLED_NETWORK_MODE and cell.transport_network_mode == CONTROLLED_TRANSPORT_NETWORK_MODE and cell.network_enforcement == CONTROLLED_NETWORK_ENFORCEMENT and cell.task_network_enforcement == CONTROLLED_TASK_NETWORK_ENFORCEMENT and not cell.agent_allowed_hosts and cell.model_requested == CONTROLLED_MODEL and cell.effort_requested == CONTROLLED_EFFORT and cell.provider_route_resolved == CONTROLLED_MODEL and cell.provider_effort_resolved == CONTROLLED_EFFORT
+            expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "model": CONTROLLED_MODEL, "agent_kwargs": {"composition": cell.composition, "thinking": CONTROLLED_EFFORT}, "agent_allowed_hosts": list(AGENT_ALLOWED_HOSTS)}
+            valid = config == expected and cell.network_mode == CONTROLLED_NETWORK_MODE and cell.transport_network_mode == CONTROLLED_TRANSPORT_NETWORK_MODE and cell.network_enforcement == CONTROLLED_NETWORK_ENFORCEMENT and cell.task_network_enforcement == CONTROLLED_TASK_NETWORK_ENFORCEMENT and cell.agent_allowed_hosts == AGENT_ALLOWED_HOSTS and cell.model_requested == CONTROLLED_MODEL and cell.effort_requested == CONTROLLED_EFFORT and cell.provider_route_resolved == CONTROLLED_MODEL and cell.provider_effort_resolved == CONTROLLED_EFFORT
         if not valid:
             fail(f"staged config or metadata shape is invalid: {cell.cell_id}")
     return tuple(cells)

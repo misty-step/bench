@@ -9,14 +9,15 @@ from pathlib import Path
 import subprocess
 
 from harness_census_common import (
-    CAMPAIGN_ID, CONTROLLED_MODEL, HARBOR_VERSION, BUN_VERSION,
-    HARNESSES, cell_summary, digest, fail, runtime_harness_records, verified_commit, write_json,
+    BUN_VERSION, CAMPAIGN_ID, CONTROLLED_MODEL, HARBOR_VERSION,
+    HARNESSES, cell_summary, digest, fail, harness_catalog_digest,
+    model_roster_digest, runtime_harness_records, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell
 from harness_census_staging import (
-    build_cells, crucible_identity, load_compositions, probe_controlled_argv_surfaces,
-    probe_harbor_task_validity, probe_verifier, qualification, require_dir,
-    run_scope_probes, stage_prime_package, validate_smoke, write_harbor_wrapper,
+    build_cells, crucible_identity, ensure_clean_bench_source, load_compositions, probe_controlled_argv_surfaces,
+    probe_harbor_task_validity, probe_verifier, qualification, require_dir, run_scope_probes,
+    stage_prime_package, validate_smoke, validate_stage_manifest, write_harbor_wrapper,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +58,7 @@ def main() -> None:
     if root.exists() and any(root.iterdir()):
         fail(f"campaign root must be empty: {root}")
     root.mkdir(parents=True, exist_ok=True)
+    ensure_clean_bench_source()
     qualification(source_root)
     assets, composition_digests = load_compositions()
     smoke = validate_smoke()
@@ -64,6 +66,7 @@ def main() -> None:
     cells = build_cells(root, assets, composition_digests, source_root, adapter_root, prime_package)
     write_json(root / "prime-package.json", {key: prime_package[key] for key in ("package", "version", "source_kind", "digest")})
     harbor = write_harbor_wrapper(root)
+    ensure_clean_bench_source()
     commit_result = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True, capture_output=True, check=False)
     if commit_result.returncode:
         fail("Bench commit identity could not be observed")
@@ -73,8 +76,8 @@ def main() -> None:
     profile_digest = digest(sorted((cell.cell_id, cell.profile_digest) for cell in cells))
     stage = {
         "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "campaign", "bench_commit": bench_commit,
-        "crucible_commit": crucible_meta["commit"], "crucible_binary_digest": crucible_meta["binary_digest"], "roster_digest": digest(sorted(HARNESSES)),
-        "catalog_digest": digest(sorted(HARNESSES)), "harness_digest": digest(runtime_harness_records()), "adapter_digest": cells[0].adapter_digest,
+        "crucible_commit": crucible_meta["commit"], "crucible_binary_digest": crucible_meta["binary_digest"], "roster_digest": model_roster_digest(),
+        "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": cells[0].adapter_digest,
         "pack_digest": digest({"compositions": composition_digests, "prime_package": prime_package["digest"]}), "prime_package_digest": prime_package["digest"],
         "dockerfile_digests": dockerfile_digests, "package_digests": package_digests, "profile_digest": profile_digest,
         "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})),
@@ -85,6 +88,7 @@ def main() -> None:
         "controlled_tool_surface_probe": controlled_tool_surface_probe, "retry_policy": {"product_retry": 0, "transport_retry": 0},
         "decision_policy": {"hard_pass_requires_all_tasks": True, "native_default_separate": True, "controlled_model_identity": CONTROLLED_MODEL, "bun_version": BUN_VERSION, "harbor_version": HARBOR_VERSION},
     }
+    validate_stage_manifest(stage, stage_id="campaign")
     write_json(root / "stage-manifest.json", stage)
     stage_digest = digest(stage)
     probe = probe_verifier(root, cells[0])

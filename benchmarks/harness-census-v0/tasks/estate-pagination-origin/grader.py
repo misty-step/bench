@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-import re
 import subprocess
 import sys
 import tempfile
@@ -16,110 +15,241 @@ def fail(check: str, detail: str) -> None:
     raise SystemExit(1)
 
 
-def extract_function(text: str, name: str) -> str | None:
-    match = re.search(rf"\b(?:async\s+)?fn\s+{re.escape(name)}\s*\(", text)
-    if match is None:
-        return None
-    opening = text.find("{", match.end())
-    if opening < 0:
-        return None
-    depth = 0
-    quote: str | None = None
-    escaped = False
-    line_comment = False
-    block_comment = False
-    index = opening
-    while index < len(text):
-        char = text[index]
-        next_char = text[index + 1] if index + 1 < len(text) else ""
-        if line_comment:
-            if char == "\n":
-                line_comment = False
-        elif block_comment:
-            if char == "*" and next_char == "/":
-                block_comment = False
-                index += 1
-        elif quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-        elif char in "'\"`":
-            quote = char
-        elif char == "/" and next_char == "/":
-            line_comment = True
-            index += 1
-        elif char == "/" and next_char == "*":
-            block_comment = True
-            index += 1
-        elif char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return text[match.start() : index + 1]
-        index += 1
-    return None
-
-
-def has_pagination_validation(body: str) -> bool:
-    extractions = list(re.finditer(r"\.\s*next\b", body))
-    if not extractions:
-        return False
-    for index, extraction in enumerate(extractions):
-        end = extractions[index + 1].start() if index + 1 < len(extractions) else len(body)
-        segment = body[extraction.end() : end]
-        call = re.search(r"\bvalidated_next\s*\([^;{}]*\bnext\b[^;{}]*\)", segment)
-        if call is None:
-            return False
-        statement_start = max(segment.rfind(";", 0, call.start()), segment.rfind("{", 0, call.start()), segment.rfind("}", 0, call.start()))
-        statement_end = segment.find(";", call.end())
-        if statement_end < 0:
-            statement_end = len(segment)
-        statement = segment[statement_start + 1 : statement_end]
-        if re.search(r"\bpath\s*=", statement):
-            continue
-        binding = re.search(r"\b(?:let|const|var)\s+(\w+)\s*=\s*validated_next\b", statement)
-        if binding is None or re.search(rf"\bpath\s*=\s*{re.escape(binding.group(1))}\b", segment[call.end() :]) is None:
-            return False
-    return True
-
-
-
-
 ORACLE = r'''
-
 #[cfg(test)]
 mod harness_census_pagination_oracle {
-    #[test]
-    fn validates_relative_and_exact_origin_links() {
-        let base = "https://api.digitalocean.com";
-        assert_eq!(
-            super::validated_next(base, "/v2/apps?page=2".into()).unwrap(),
-            "/v2/apps?page=2"
-        );
-        assert!(super::validated_next(
-            base,
-            "https://api.digitalocean.com/v2/apps?page=2".into()
-        )
-        .is_ok());
-        for hostile in [
-            "https://attacker.invalid/steal",
-            "//attacker.invalid/steal",
-            "http://api.digitalocean.com/v2/apps?page=2",
-            "https://api.digitalocean.com:8443/v2/apps?page=2",
-        ] {
-            assert!(
-                super::validated_next(base, hostile.into()).is_err(),
-                "accepted hostile pagination link: {hostile}"
-            );
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    fn serve_json(
+        listener: TcpListener,
+        bodies: Vec<String>,
+        hits: Arc<AtomicUsize>,
+    ) -> thread::JoinHandle<()> {
+        thread::spawn(move || {
+            listener.set_nonblocking(true).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(2);
+            for body in bodies {
+                'request: loop {
+                    match listener.accept() {
+                        Ok((mut stream, _)) => {
+                            hits.fetch_add(1, Ordering::SeqCst);
+                            let mut request = [0_u8; 4096];
+                            let _ = stream.read(&mut request);
+                            let response = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                                body.len(),
+                                body
+                            );
+                            let _ = stream.write_all(response.as_bytes());
+                            break 'request;
+                        }
+                        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                            if Instant::now() >= deadline {
+                                break 'request;
+                            }
+                            thread::sleep(Duration::from_millis(10));
+                        }
+                        Err(error) => panic!("pagination oracle listener failed: {error}"),
+                    }
+                }
+            }
+        })
+    }
+
+    fn app_page(next: Option<&str>) -> String {
+        match next {
+            Some(next) => format!(
+                r#"{{"apps":[],"links":{{"pages":{{"next":"{next}"}}}}}}"#
+            ),
+            None => r#"{"apps":[],"links":{"pages":{}}}"#.into(),
         }
+    }
+
+    fn droplet_page(next: Option<&str>) -> String {
+        match next {
+            Some(next) => format!(
+                r#"{{"droplets":[],"links":{{"pages":{{"next":"{next}"}}}}}}"#
+            ),
+            None => r#"{"droplets":[],"links":{"pages":{}}}"#.into(),
+        }
+    }
+
+    async fn run_apps(
+        base: TcpListener,
+        bodies: Vec<String>,
+        attacker: Option<TcpListener>,
+    ) -> (bool, usize, usize) {
+        let base_hits = Arc::new(AtomicUsize::new(0));
+        let attacker_hits = Arc::new(AtomicUsize::new(0));
+        let base_url = base_url(base.try_clone().unwrap());
+        let base_thread = serve_json(base, bodies, base_hits.clone());
+        let attacker_thread = attacker.map(|listener| serve_json(listener, vec![app_page(None)], attacker_hits.clone()));
+        let result = super::fetch_apps(&reqwest::Client::new(), &base_url, "token").await;
+        base_thread.join().unwrap();
+        if let Some(thread) = attacker_thread {
+            thread.join().unwrap();
+        }
+        (
+            result.is_ok(),
+            base_hits.load(Ordering::SeqCst),
+            attacker_hits.load(Ordering::SeqCst),
+        )
+    }
+
+    fn base_url(listener: TcpListener) -> String {
+        format!("http://{}", listener.local_addr().unwrap())
+    }
+
+    async fn run_droplets(
+        base: TcpListener,
+        bodies: Vec<String>,
+        attacker: Option<TcpListener>,
+    ) -> (bool, usize, usize) {
+        let base_hits = Arc::new(AtomicUsize::new(0));
+        let attacker_hits = Arc::new(AtomicUsize::new(0));
+        let base_url = base_url(base.try_clone().unwrap());
+        let base_thread = serve_json(base, bodies, base_hits.clone());
+        let attacker_thread = attacker.map(|listener| serve_json(listener, vec![droplet_page(None)], attacker_hits.clone()));
+        let result = super::fetch_droplets(&reqwest::Client::new(), &base_url, "token").await;
+        base_thread.join().unwrap();
+        if let Some(thread) = attacker_thread {
+            thread.join().unwrap();
+        }
+        (
+            result.is_ok(),
+            base_hits.load(Ordering::SeqCst),
+            attacker_hits.load(Ordering::SeqCst),
+        )
+    }
+
+    #[tokio::test]
+    async fn accepts_relative_and_exact_origin_pagination() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some("/v2/apps?page=2")), app_page(None)],
+            None,
+        )
+        .await;
+        assert!(ok, "relative-path: relative pagination failed");
+        assert_eq!(base_hits, 2, "relative-path: second page was not requested");
+        assert_eq!(attacker_hits, 0);
+
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = base_url(base.try_clone().unwrap());
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some(&format!("{url}/v2/apps?page=2"))), app_page(None)],
+            None,
+        )
+        .await;
+        assert!(ok, "request-path: exact-origin pagination failed");
+        assert_eq!(base_hits, 2, "request-path: exact-origin page was not requested");
+        assert_eq!(attacker_hits, 0);
+    }
+
+    #[tokio::test]
+    async fn rejects_cross_origin_host_before_request() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let attacker = TcpListener::bind("127.0.0.1:0").unwrap();
+        let hostile = format!("http://localhost:{}/steal", attacker.local_addr().unwrap().port());
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some(&hostile))],
+            Some(attacker),
+        )
+        .await;
+        assert_eq!(base_hits, 1, "host-check: base page was not requested");
+        assert!(!ok, "host-check: accepted a cross-origin pagination link");
+        assert_eq!(attacker_hits, 0, "host-check: attacker request was issued");
+    }
+
+    #[tokio::test]
+    async fn rejects_scheme_mismatch_before_request() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = base_url(base.try_clone().unwrap());
+        let hostile = url.replacen("http://", "https://", 1) + "/v2/apps?page=2";
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some(&hostile)), app_page(None)],
+            None,
+        )
+        .await;
+        assert_eq!(base_hits, 1, "scheme-check: mismatched scheme was requested");
+        assert!(!ok, "scheme-check: accepted a mismatched scheme");
+        assert_eq!(attacker_hits, 0);
+    }
+
+    #[tokio::test]
+    async fn rejects_effective_port_mismatch_before_request() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let attacker = TcpListener::bind("127.0.0.1:0").unwrap();
+        let hostile = format!("http://{}/steal", attacker.local_addr().unwrap());
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some(&hostile))],
+            Some(attacker),
+        )
+        .await;
+        assert_eq!(base_hits, 1, "port-check: base page was not requested");
+        assert!(!ok, "port-check: accepted a mismatched effective port");
+        assert_eq!(attacker_hits, 0, "port-check: mismatched port was requested");
+    }
+
+    #[tokio::test]
+    async fn rejects_schema_relative_links_before_request() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some("//attacker.invalid/steal")), app_page(None)],
+            None,
+        )
+        .await;
+        assert_eq!(base_hits, 1, "scheme-check: schema-relative link was requested");
+        assert!(!ok, "scheme-check: accepted a schema-relative link");
+        assert_eq!(attacker_hits, 0);
+    }
+
+    #[tokio::test]
+    async fn validates_every_apps_pagination_link() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let attacker = TcpListener::bind("127.0.0.1:0").unwrap();
+        let hostile = format!("http://{}/steal", attacker.local_addr().unwrap());
+        let (ok, base_hits, attacker_hits) = run_apps(
+            base,
+            vec![app_page(Some("/v2/apps?page=2")), app_page(Some(&hostile))],
+            Some(attacker),
+        )
+        .await;
+        assert_eq!(base_hits, 2, "pagination-use: first next page was not requested");
+        assert!(!ok, "pagination-use: accepted a later cross-origin link");
+        assert_eq!(attacker_hits, 0, "pagination-use: later link reached attacker");
+    }
+
+    #[tokio::test]
+    async fn validates_droplet_pagination_links() {
+        let base = TcpListener::bind("127.0.0.1:0").unwrap();
+        let attacker = TcpListener::bind("127.0.0.1:0").unwrap();
+        let hostile = format!("http://{}/steal", attacker.local_addr().unwrap());
+        let (ok, base_hits, attacker_hits) = run_droplets(
+            base,
+            vec![droplet_page(Some(&hostile))],
+            Some(attacker),
+        )
+        .await;
+        assert_eq!(base_hits, 1, "pagination-use: droplet page was not requested");
+        assert!(!ok, "pagination-use: accepted a droplet cross-origin link");
+        assert_eq!(attacker_hits, 0, "pagination-use: droplet link reached attacker");
     }
 }
 '''
-
 
 def main() -> None:
     if len(sys.argv) != 2:
@@ -129,15 +259,9 @@ def main() -> None:
     if not source.is_file() or not (repo / "Cargo.toml").is_file():
         fail("invalid-syntax", "target Rust source or Cargo manifest is missing")
     try:
-        text = source.read_text(encoding="utf-8")
+        source.read_text(encoding="utf-8")
     except UnicodeDecodeError as error:
         fail("invalid-syntax", str(error))
-    if extract_function(text, "validated_next") is None:
-        fail("origin-helper", "validated_next helper is missing")
-    for function_name in ("fetch_droplets", "fetch_apps"):
-        body = extract_function(text, function_name)
-        if body is None or not has_pagination_validation(body):
-            fail("pagination-use", f"{function_name} does not validate every pagination next link")
     original = source.read_bytes()
     try:
         source.write_bytes(original + ORACLE.encode("utf-8"))
@@ -162,12 +286,13 @@ def main() -> None:
         source.write_bytes(original)
     if result.returncode:
         output = (result.stdout + result.stderr)[-5000:]
-        if "accepted hostile pagination link" in output:
-            fail("scheme-check", output)
+        for marker in ("relative-path", "request-path", "host-check", "scheme-check", "port-check", "pagination-use"):
+            if marker in output:
+                fail(marker, output)
         if "could not find" in output or "cannot find function" in output:
-            fail("origin-helper", output)
+            fail("invalid-syntax", output)
         fail("invalid-syntax", output)
-    print(json.dumps({"passed": True, "checks": ["relative-path", "scheme-check", "host-check", "port-check", "pagination-use"]}, sort_keys=True))
+    print(json.dumps({"passed": True, "checks": ["relative-path", "scheme-check", "host-check", "port-check", "pagination-use", "request-path"]}, sort_keys=True))
 
 
 if __name__ == "__main__":

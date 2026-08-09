@@ -2,7 +2,7 @@
   "adapter_digest": "fb7b215edd6e3713b81a1a6f9fdbebbf7c51c6cbe36d13ad5d85414a64f6b4d7",
   "bench_commit": null,
   "campaign_id": "harness-census-v0",
-  "catalog_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
+  "catalog_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "crucible_binary_digest": null,
   "crucible_commit": null,
   "decision_policy": {
@@ -10,12 +10,12 @@
     "native_default_separate": true
   },
   "dockerfile_digests": [],
-  "grader_digest": "f581c8b314642f3b72a07fd5982d4ac9889c5b6770a71f4d85d1afb24bbbcc8c",
-  "harness_digest": "f965d97f0cc94e1b5e5651573ed7a8b7339058c9ef2f3e1ba9431e3751e80707",
+  "grader_digest": "a023e5612da51bae0be0d1342a34fb15fef1653e5b6d76f5b882de4798b05288",
+  "harness_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
   "network_enforcement": {
-    "controlled": "tool_surface_no_network_tool",
-    "native_default": "host_allowlist_mint"
+    "controlled": "harbor_agent_allowlist_mint",
+    "native_default": "harbor_agent_allowlist_mint"
   },
   "pack_digest": "1b7833a9def581ba91cf595dc0cc3cfcd3dd5b3f6dbb669d696f2bc77a98dced",
   "package_digests": [],
@@ -26,15 +26,15 @@
     "transport_retry": 0
   },
   "roster_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
-  "schema_version": "harness-census.stage_manifest.v1",
+  "schema_version": "harness_census.stage_manifest.v1",
   "stage_id": "smoke",
-  "task_digest": "9ba481f389a75e94f0c28a2981597f91d34bc8072d744211a8227c19a90141d4",
+  "task_digest": "30744cf4a0eb1d72b75330541f9b6ca0be0846806d6cd9fce7c9aa30540913d9",
   "task_network_enforcement": {
-    "controlled": "tool_surface_no_network_tool",
-    "native_default": "host_allowlist_mint"
+    "controlled": "docker_no_network",
+    "native_default": "docker_no_network"
   },
   "transport_network_mode": {
-    "controlled": "public",
-    "native_default": "no-network"
+    "controlled": "allowlist",
+    "native_default": "allowlist"
   }
 }

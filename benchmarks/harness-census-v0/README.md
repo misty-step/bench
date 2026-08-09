@@ -80,6 +80,6 @@ and the fixed `adapter_attestation:observed-native` model source. Controlled
 requests use Harbor `model` and `thinking` with exactly
 `openrouter/deepseek/deepseek-v4-flash-0731`.
 
-Controlled Docker trials use `network_mode = "public"` for Harbor transport. The worker and task both enforce `tool_surface_no_network_tool`; adapters expose no network-capable agent tool.
+All task containers use `network_mode = "no-network"` with `docker_no_network`. Agent transport uses `allowlist` with `harbor_agent_allowlist_mint`.
 
-Native-default trials use `network_mode = "no-network"`. The worker and task use Mint authority through `host_allowlist_mint` and the `agent_allowed_hosts` entry. Native Docker execution is not claimed by this package.
+Controlled OMP and Pi expose only read, edit, and write tools. Controlled Prime runs IPython inside a clean `bwrap --unshare-net` sandbox.

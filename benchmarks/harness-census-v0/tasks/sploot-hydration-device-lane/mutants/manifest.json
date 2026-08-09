@@ -11,6 +11,11 @@
       "id": "no-external-store",
       "path": "no-external-store.patch",
       "failure_marker": "device-hook"
+    },
+    {
+      "id": "dead-render-hook",
+      "path": "dead-render-hook.patch",
+      "failure_marker": "render-path"
     }
   ]
 }

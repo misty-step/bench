@@ -74,7 +74,6 @@ HARNESS_SPECS: tuple[HarnessSpec, ...] = (
     HarnessSpec("pi", "0.83.0", "harbor_agents.pi_agent:PiAgent", "@earendil-works/pi-coding-agent@0.83.0", "crucible.harbor_agents.pi_agent:PiAgent"),
 )
 HARNESSES = {spec.id: spec for spec in HARNESS_SPECS}
-TASK_IDS = [entry["id"] for entry in MANIFEST["tasks"]]
 
 
 def qualification_harness_records() -> list[dict[str, object]]:
@@ -83,6 +82,30 @@ def qualification_harness_records() -> list[dict[str, object]]:
 
 def runtime_harness_records() -> dict[str, dict[str, str]]:
     return {spec.id: {"version": spec.version, "adapter": spec.adapter, "package": spec.package} for spec in HARNESS_SPECS}
+
+def campaign_matrix() -> tuple[dict[str, object], ...]:
+    rows: list[dict[str, object]] = []
+    for spec in HARNESS_SPECS:
+        for composition in ("native_default", "controlled_raw", "controlled_enriched"):
+            controlled = composition != "native_default"
+            rows.append(
+                {
+                    "cell_id": f"{spec.id}-{composition}",
+                    "harness": spec.id,
+                    "composition": composition,
+                    "model_requested": CONTROLLED_MODEL if controlled else None,
+                    "effort_requested": CONTROLLED_EFFORT if controlled else None,
+                }
+            )
+    return tuple(rows)
+
+
+def model_roster_digest() -> str:
+    return digest(ROSTER)
+
+
+def harness_catalog_digest() -> str:
+    return digest(runtime_harness_records())
 
 
 @dataclass(frozen=True)
@@ -102,23 +125,25 @@ class Task:
 class TaskRecord:
     task_id: str
     task_digest: str
+    comparison_task_digest: str
     source_tree_digest: str
-    source_manifest_digest: str
     grader_digest: str
     dockerfile_digest: str
     prime_package_digest: str | None
     task_dir: str
-    package_task_dir: str
     allowed_paths: tuple[str, ...]
     immutable_paths: tuple[str, ...]
     network_mode: str
-    tool_manifest_digest: str | None = None
-    transcript_ref: str | None = None
 
 
 @dataclass(frozen=True)
 class Cell:
     cell_id: str
+    cell_run_id: str
+    task_set_digest: str
+    task_set_size: int
+    retry_policy_digest: str
+    agent_kwargs_base_digest: str
     cell_dir: Path
     spec_path: Path
     cell_kind: str
@@ -137,7 +162,6 @@ class Cell:
     profile_digest: str
     agent_kwargs: Mapping[str, object]
     agent_allowed_hosts: tuple[str, ...]
-    authority_allowed_hosts: tuple[str, ...]
     network_mode: str
     transport_network_mode: str
     network_enforcement: str
@@ -151,7 +175,19 @@ class Cell:
     task_records: tuple[TaskRecord, ...]
 
     def resolve_native(self, model: str, effort: str, effort_source: str) -> Cell:
-        return replace(self, provider_route_resolved=model, provider_effort_resolved=effort, default_resolution_source="adapter_attestation:observed-native", effort_source=effort_source)
+        baseline_id = digest({
+            "campaign_id": CAMPAIGN_ID,
+            "harness": self.harness,
+            "harness_version": self.harness_version,
+            "composition": self.composition,
+            "model": model,
+            "effort": effort,
+            "effort_source": effort_source,
+            "system_identity": f"{self.harness}@{self.harness_version}",
+            "profile_digest": self.profile_digest,
+            "task_digest": self.task_digest,
+        })
+        return replace(self, provider_route_resolved=model, provider_effort_resolved=effort, default_resolution_source="adapter_attestation:observed-native", effort_source=effort_source, baseline_id=baseline_id)
 
 
 class Attestation(TypedDict, total=False):
@@ -291,4 +327,4 @@ def load_tasks() -> dict[str, Task]:
 
 
 def cell_summary(cell: Cell) -> dict[str, object]:
-    return {"cell_id": cell.cell_id, "cell_kind": cell.cell_kind, "harness": cell.harness, "composition": cell.composition, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "default_resolution_source": cell.default_resolution_source, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "task_digest": cell.task_digest, "composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "package_digest": cell.package_digest, "prime_package_digest": cell.prime_package_digest, "dockerfile_digests": list(cell.dockerfile_digests), "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "agent_allowed_hosts": list(cell.agent_allowed_hosts)}
+    return {"cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "cell_kind": cell.cell_kind, "harness": cell.harness, "composition": cell.composition, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "default_resolution_source": cell.default_resolution_source, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "task_digest": cell.task_digest, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "package_digest": cell.package_digest, "prime_package_digest": cell.prime_package_digest, "dockerfile_digests": list(cell.dockerfile_digests), "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts)}
