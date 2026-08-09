@@ -13,6 +13,32 @@ Any reliability failure invalidates the cell.
 All three tasks must hard-pass before a controlled pair enters the descriptive comparison.
 The study must add at least three independent task buckets and pass a prospective power check before any inferential comparison.
 
+## Corpus contract
+
+Bench owns the corpus, graders, references, alternatives, mutants, and run procedure.
+Each task comes from a pinned pre-fix commit in a different repository and source cluster.
+
+| Task | Missing behavior at the source SHA | Passing behavior |
+| --- | --- | --- |
+| `iron-forest-go-checkruns-array` | GitHub check-run object parsing | Parse populated and empty `check_runs` arrays without losing failed names or conclusions. |
+| `estate-pagination-origin` | Pagination origin enforcement | Follow relative or same-origin links and reject cross-origin or scheme-relative links before requests. |
+| `sploot-hydration-device-lane` | Hydration-safe device selection | Keep server and hydration output on desktop, then select iOS or Android through an external store. |
+
+Qualification proves each reference and independent alternative scores 1.
+It proves unchanged sources, mutants, syntax failures, and scope violations score 0.
+The three source clusters are the paired units.
+The corpus has no power for a deployment decision.
+
+## Live readiness status
+
+The deterministic nine-cell preflight passed on 2026-08-08.
+It built all nine worker images and passed all 27 hidden-reference checks.
+The OpenRouter Mint route served a bounded DeepSeek probe.
+The same route refused `anthropic/claude-opus-5` because no endpoint matched the account privacy policy.
+The direct Anthropic Mint alias was not configured.
+No coding task produced model output, so the pilot has no capability result.
+Do not change the model or privacy policy inside a frozen campaign.
+
 
 Run the repository-owned qualification command with the required source root:
 
@@ -63,17 +89,24 @@ Native-default cells remain separate observational baselines.
 
 
 
-Select bounded live smoke after the full matrix passes validation:
+Run one task as the live readiness canary after the full matrix passes validation:
 
 ```sh
 LIVE_ROOT="$PWD/.harness-census-live-run"
-python3 scripts/run_harness_census.py --cell omp-controlled_raw --max-cells 1 \
+python3 scripts/run_harness_census.py --cell omp-controlled_raw --task iron-forest-go-checkruns-array --max-cells 1 \
   --campaign-root "$LIVE_ROOT" \
   --source-root "$SOURCE_ROOT" \
   --adapter-root "$ADAPTER_ROOT" \
   --prime-package-dir "$PRIME_PACKAGE_DIR" \
   --crucible /path/to/crucible
 ```
+
+Accept readiness only when the canary writes one canonical quality receipt.
+Stop when it writes a reliability receipt or when the provider refuses the configured model.
+After acceptance, resume the same frozen campaign without `--task` to run the two pending tasks.
+Run the matching enriched cell only after the raw cell completes.
+Run the remaining controlled pairs only after both first-pair cells complete.
+Run native-default cells last because their observed identity needs three consistent passed attestations.
 
 Resume the same frozen campaign after an interruption:
 

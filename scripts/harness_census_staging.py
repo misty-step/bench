@@ -125,7 +125,7 @@ def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL,
+    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, COMPACT_RECEIPT_KEYS, CONTROLLED_EFFORT, CONTROLLED_MODEL,
     CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_NETWORK_MODE, CONTROLLED_TASK_NETWORK_ENFORCEMENT,
     CONTROLLED_TRANSPORT_NETWORK_MODE, GO_IMAGE, GO_VERSION, HARBOR_VERSION, HARNESSES, NETWORK_POLICY,
     NATIVE_NETWORK_ENFORCEMENT, NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT,
@@ -191,7 +191,7 @@ def _smoke_identity() -> dict[str, object]:
         "harness_digest": harness_catalog_digest(),
         "adapter_digest": digest([entry["adapter"] for entry in qualification_harness_records()]),
         "pack_digest": digest(pack),
-        "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}),
+        "mcp_digest": mcp_identity_digest(),
         "task_digest": task_digest,
         "reference_hunk_map_digest": digest([reference_hunk_map_digest(task) for task in tasks.values()]),
         "grader_digest": digest([receipts[task_id]["reference"]["grader_digest"] for task_id in tasks]),
@@ -562,8 +562,9 @@ def reward(payload, reward_value, status):
     if isinstance(passed_checks, bool) or not isinstance(passed_checks, int) or isinstance(total_checks, bool) or not isinstance(total_checks, int) or total_checks <= 0 or passed_checks < 0 or passed_checks > total_checks or isinstance(task_points, bool) or not isinstance(task_points, (int, float)) or task_points != passed_checks / total_checks or not 0.0 <= float(task_points) <= 1.0:
         passed_checks, total_checks, task_points, hard_pass = 0, 1, 0.0, False
     hard_pass = bool(hard_pass) and passed_checks == total_checks and float(task_points) == 1.0
-    report = {{"schema_version": "harness_census.grader_report.v1", "reward": float(task_points), "status": status, "passed": hard_pass, "hard_pass": hard_pass, "passed_checks": passed_checks, "total_checks": total_checks, "task_points": float(task_points), "grader_report": payload}}
-    (LOG_DIR / "reward.json").write_text(json.dumps({{"reward": float(task_points)}}) + "\\n", encoding="utf-8")
+    binary_reward = 1.0 if hard_pass else 0.0
+    report = {{"schema_version": "harness_census.grader_report.v1", "reward": binary_reward, "status": status, "passed": hard_pass, "hard_pass": hard_pass, "passed_checks": passed_checks, "total_checks": total_checks, "task_points": binary_reward, "grader_report": payload}}
+    (LOG_DIR / "reward.json").write_text(json.dumps({{"reward": binary_reward}}) + "\\n", encoding="utf-8")
     (LOG_DIR / "grader-report.json").write_text(json.dumps(report, sort_keys=True) + "\\n", encoding="utf-8")
 def scope_check(workspace):
     before = MANIFEST["files"]
@@ -680,7 +681,7 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
     comparison_task_digest = task_corpus_identity(task, source_digest, grader_digest, file_digest(task.task_dir / "reference.patch"), hunk_map_digest)
     task_digest = task_identity(task, source_digest, file_digest(instruction_path), file_digest(task_dir / "task.toml"), grader_digest, file_digest(task.task_dir / "reference.patch"), hunk_map_digest)
     skill_digest = context_pack.skill_digest if composition == "controlled_enriched" else raw_skill_digest()
-    return TaskRecord(task.id, task_digest, comparison_task_digest, source_digest, grader_digest, hunk_map_digest, bytes_digest(docker_text.encode()), gateway["gateway_digest"], gateway["gateway_dockerfile_digest"], gateway["compose_digest"], package["digest"] if harness == "prime" else None, f"tasks/{task.id}", task.allowed_paths, task.immutable_paths, network_mode, context_manifest_digest, context_pack_digest, skill_digest, file_digest(instruction_path), context_pack.skill_count if composition == "controlled_enriched" else 0)
+    return TaskRecord(task.id, task.source_cluster, task_digest, comparison_task_digest, grader_digest, hunk_map_digest, bytes_digest(docker_text.encode()), gateway["gateway_digest"], gateway["gateway_dockerfile_digest"], gateway["compose_digest"], f"tasks/{task.id}", task.immutable_paths, network_mode, context_manifest_digest, context_pack_digest, skill_digest, file_digest(instruction_path), context_pack.skill_count if composition == "controlled_enriched" else 0)
 def preflight_network_enforcement(cell: Cell) -> dict[str, object]:
     """Prove the staged Compose topology blocks direct worker egress."""
     record = cell.task_records[0]
@@ -994,7 +995,7 @@ def immutable_stage_cells(cells: tuple[Cell, ...]) -> dict[str, object]:
                     "task_digest": record.task_digest,
                     "comparison_task_digest": record.comparison_task_digest,
                     "reference_hunk_map_digest": record.reference_hunk_map_digest,
-                    "source_cluster": tasks[record.task_id].source_cluster,
+                    "source_cluster": record.source_cluster,
                     "dockerfile_digest": record.dockerfile_digest,
                     "gateway_digest": record.gateway_digest,
                     "gateway_dockerfile_digest": record.gateway_dockerfile_digest,
@@ -1096,7 +1097,6 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
                 composition_digest=composition_digest,
                 adapter_digest=adapter_digest,
                 package_digest=package_digest,
-                prime_package_digest=prime_digest,
                 dockerfile_digests=docker_digests,
                 gateway_digests=gateway_digests,
                 gateway_dockerfile_digests=gateway_dockerfile_digests,
@@ -1360,7 +1360,7 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
     for key, expected_value in {"context_manifest_digest": record.context_manifest_digest, "context_pack_digest": record.context_pack_digest}.items():
         if receipt.get(key) not in {expected_value, f"sha256:{expected_value}"}:
             fail(f"resume receipt context identity mismatch: {cell.cell_id} {record.task_id} {key}")
-    if receipt.get("source_cluster") not in {None, load_tasks()[record.task_id].source_cluster}:
+    if receipt.get("source_cluster") not in {None, record.source_cluster}:
         fail(f"resume receipt source identity mismatch: {cell.cell_id} {record.task_id}")
     if receipt.get("task_digest") not in {record.task_digest, f"sha256:{record.task_digest}"}:
         fail(f"resume receipt task digest mismatch: {cell.cell_id} {record.task_id}")
@@ -1476,7 +1476,6 @@ def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict
     attestations: list[dict[str, object]] = []
     attestation_digests: list[str] = []
     compact_receipts: list[dict[str, object]] = []
-    receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
     for record in cell.task_records:
         receipt, _ = by_task[record.task_id]
         attestation, attestation_path = _receipt_attestation(root, cell, record, receipt)
@@ -1504,7 +1503,7 @@ def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict
         attestation_path_obj = confined_path(root, *attestation_path.split("/"))
         attestations.append({"task_id": record.task_id, "attestation_ref": attestation_ref, "attestation_digest": bytes_digest(attestation_path_obj.read_bytes()), "transcript_ref": transcript_cell_ref, "record": attestation})
         attestation_digests.append(attestations[-1]["attestation_digest"])
-        compact = {key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
+        compact = {key: receipt[key] for key in COMPACT_RECEIPT_KEYS if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
         compact["receipt_digest"] = digest(compact)
         compact_receipts.append(compact)
     summary_cell = resolved if resolved is not None else cell
@@ -1544,7 +1543,7 @@ def resolve_resume_cell(root: Path, cell: Cell, stage_digest: str) -> Cell:
         reliability, observation = _verified_task_receipt(root, cell, record, stage_digest, *by_task[record.task_id])
         if not reliability and observation is not None:
             observations.append(observation)
-    if not observations:
+    if len(observations) != len(cell.task_records):
         return cell
     if len({tuple(sorted(observation.items())) for observation in observations}) != 1:
         fail(f"resume native receipts disagree on observed identity: {cell.cell_id}")
@@ -1557,9 +1556,8 @@ def resolve_resume_cell(root: Path, cell: Cell, stage_digest: str) -> Cell:
     return resolved
 
 def _reconcile_native_baseline(root: Path, cell: Cell, stage_digest: str, resolved: Cell, observation: dict[str, str], by_task: dict[str, tuple[dict[str, object], int | None]]) -> None:
-    receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
     receipt_digests = [
-        digest({key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))})
+        digest({key: receipt[key] for key in COMPACT_RECEIPT_KEYS if key in receipt and isinstance(receipt[key], (str, int, float, bool))})
         for receipt, _ in by_task.values()
     ]
     expected = {

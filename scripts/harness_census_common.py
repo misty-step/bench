@@ -68,6 +68,8 @@ ROSTER: tuple[RosterEntry, ...] = (
     {"model_requested": "openrouter/minimax/minimax-m3", "provider_route": "openrouter/minimax/minimax-m3", "efforts": ["minimal", "low", "medium", "high"]},
 )
 
+COMPACT_RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+
 
 @dataclass(frozen=True)
 class HarnessSpec:
@@ -128,7 +130,6 @@ class Task:
     immutable_paths: tuple[str, ...]
     source_cluster: str
     task_dir: Path
-    manifest: Mapping[str, object]
     reference_hunk_checks: tuple[tuple[str, str], ...]
 
 
@@ -185,18 +186,16 @@ def reference_hunk_map_digest(task: Task) -> str:
 @dataclass(frozen=True)
 class TaskRecord:
     task_id: str
+    source_cluster: str
     task_digest: str
     comparison_task_digest: str
-    source_tree_digest: str
     grader_digest: str
     reference_hunk_map_digest: str
     dockerfile_digest: str
     gateway_digest: str
     gateway_dockerfile_digest: str
     compose_digest: str
-    prime_package_digest: str | None
     task_dir: str
-    allowed_paths: tuple[str, ...]
     immutable_paths: tuple[str, ...]
     network_mode: str
     context_manifest_digest: str
@@ -239,7 +238,6 @@ class Cell:
     composition_digest: str
     adapter_digest: str
     package_digest: str
-    prime_package_digest: str | None
     dockerfile_digests: tuple[str, ...]
     gateway_digests: tuple[str, ...]
     gateway_dockerfile_digests: tuple[str, ...]
@@ -574,7 +572,7 @@ def load_tasks() -> dict[str, Task]:
             pairs.append((item["hunk_id"], item["grader_check"]))
         if len({hunk_id for hunk_id, _ in pairs}) != len(pairs):
             fail(f"{task_id} reference_hunk_checks contains duplicate hunk IDs")
-        task = Task(task_id, raw["source_repository"], raw["source_sha"], raw["reference_sha"], tuple(raw["allowed_paths"]), tuple(raw["immutable_paths"]), raw["source_cluster"], task_dir, manifest, tuple(pairs))
+        task = Task(task_id, raw["source_repository"], raw["source_sha"], raw["reference_sha"], tuple(raw["allowed_paths"]), tuple(raw["immutable_paths"]), raw["source_cluster"], task_dir, tuple(pairs))
         reference_hunk_mapping(task)
         loaded[task_id] = task
     return loaded

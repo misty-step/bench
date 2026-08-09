@@ -18,16 +18,11 @@ TASK_CONTEXT_NAMES = ("AGENTS.md", "CLAUDE.md", ".omp/RULES.md")
 
 @dataclass(frozen=True)
 class ContextPack:
-    manifest: dict[str, object]
     manifest_digest: str
     pack_digest: str
-    context_digest: str
     skill_digest: str
     skill_count: int
     context_bytes: bytes
-    skill_bytes: bytes
-    pack_path: Path
-    manifest_path: Path
 
 
 def _sha256(value: bytes) -> str:
@@ -228,14 +223,6 @@ def _task_context_records(task_id: str, source: Path, allowed_paths: tuple[str, 
     return sorted(records.values(), key=lambda item: str(item["target_path"])), values
 
 
-def global_identity(omp_source: Path) -> dict[str, object]:
-    manifest, values, context_bytes, skill_bytes = _global_pack(omp_source)
-    return {
-        "manifest_digest": _sha256(_canonical(manifest)),
-        "pack_digest": _sha256(context_bytes),
-        "skill_digest": _sha256(skill_bytes),
-        "skill_count": sum(1 for item in manifest["includes"] if item["kind"] == "skill_entrypoint"),
-    }
 
 
 def prepare_task_pack(root: Path, task_id: str, source: Path, source_repository: str, commit: str, allowed_paths: tuple[str, ...], omp_source: Path, forbidden_tokens: Iterable[bytes] = ()) -> ContextPack:
@@ -276,7 +263,7 @@ def prepare_task_pack(root: Path, task_id: str, source: Path, source_repository:
         aggregate = {**global_manifest, "includes": sorted(list(global_manifest["includes"]) + list(merged.values()), key=lambda item: (str(item["task_id"]), str(item["target_path"]))) }
     aggregate_path.parent.mkdir(parents=True, exist_ok=True)
     aggregate_path.write_bytes(json.dumps(aggregate, indent=2, sort_keys=True).encode("utf-8") + b"\n")
-    return ContextPack(manifest, manifest_digest, pack_digest, _sha256(context_bytes), skill_digest, sum(1 for item in global_manifest["includes"] if item["kind"] == "skill_entrypoint"), context_bytes, global_skills, pack_path, manifest_path)
+    return ContextPack(manifest_digest, pack_digest, skill_digest, sum(1 for item in global_manifest["includes"] if item["kind"] == "skill_entrypoint"), context_bytes)
 
 
 def raw_skill_digest() -> str:

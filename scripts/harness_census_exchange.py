@@ -12,13 +12,12 @@ import sys
 from typing import cast
 
 from harness_census_common import (
-    CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
+    CAMPAIGN_ID, COMPACT_RECEIPT_KEYS, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
     AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, agent_allowed_hosts_identity_digest,
     agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, confined_path, digest, fail,
     harbor_reward_value, load_tasks, mcp_identity_digest, write_json,
 )
 
-RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
 
 SAFE_RUNTIME_ENV_KEYS = (
     "PATH",
@@ -52,11 +51,13 @@ def sha256_ref(value: str) -> str:
     return value if value.startswith("sha256:") else f"sha256:{value}"
 
 
-def cell_task_trial_dir(results: Path, task_id: str) -> Path:
+def cell_task_trial_dir(results: Path, task_id: str, *, materialize_missing: bool = True) -> Path | None:
     jobs = results / "harbor-jobs" / task_id / "run"
     candidates = sorted(path for path in jobs.glob("*") if path.is_dir() and (path / "result.json").is_file())
     if len(candidates) == 1:
         return candidates[0]
+    if not materialize_missing:
+        return None
     suffix = "missing" if not candidates else f"ambiguous-{len(candidates)}"
     trial_dir = jobs / f"_census-reliability-{suffix}"
     trial_dir.mkdir(parents=True, exist_ok=True)
@@ -66,11 +67,13 @@ def cell_task_trial_dir(results: Path, task_id: str) -> Path:
     return trial_dir
 
 
-def collect_attestations(results: Path, cell: Cell) -> list[AttestationEntry]:
+def collect_attestations(results: Path, cell: Cell, records: list[TaskRecord] | tuple[TaskRecord, ...] | None = None, *, materialize_missing: bool = True) -> list[AttestationEntry]:
     entries: list[AttestationEntry] = []
     native = cell.cell_kind == "native_default"
-    for record in cell.task_records:
-        trial_dir = cell_task_trial_dir(results, record.task_id)
+    for record in records if records is not None else cell.task_records:
+        trial_dir = cell_task_trial_dir(results, record.task_id, materialize_missing=materialize_missing)
+        if trial_dir is None:
+            continue
         matches = sorted(trial_dir.rglob(f"{cell.harness}.attestation.json"))
         original = matches[0] if len(matches) == 1 else None
         path = original or trial_dir / f"{cell.harness}.attestation.reliability.json"
@@ -142,6 +145,12 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
     model, effort, effort_source, tool_manifest, config_digest, system_identity = observations[0]
     resolved = cell.resolve_native(model, effort, effort_source, tool_manifest, config_digest)
     return resolved, {"model": model, "effort": effort, "effort_source": effort_source, "tool_manifest_digest": tool_manifest, "config_digest": config_digest, "system_identity": system_identity}
+
+
+def native_cell_failure(cell: Cell, observation: tuple[Cell, dict[str, str]] | None) -> tuple[str, str, str] | None:
+    if cell.cell_kind == "native_default" and cell.baseline_id is None and observation is None:
+        return ("harness", "collect", "native_cell_identity_unresolved")
+    return None
 
 
 def _failure_text(trial: HarborTrial, attestation: Attestation) -> str:
@@ -244,7 +253,7 @@ def adapter_identity_payload(cell: Cell, record: TaskRecord, attestation: Attest
         "cell_run_id": cell.cell_run_id,
         "campaign_id": CAMPAIGN_ID,
         "stage_manifest_digest": sha256_ref(stage_digest),
-        "source_cluster": load_tasks()[record.task_id].source_cluster,
+        "source_cluster": record.source_cluster,
         "task_id": record.task_id,
         "task_digest": sha256_ref(record.task_digest),
         "comparison_task_digest": sha256_ref(record.comparison_task_digest),
@@ -294,7 +303,7 @@ def adapter_identity_payload(cell: Cell, record: TaskRecord, attestation: Attest
         payload.update({"failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail_ref": f"sha256:{bytes_digest(harbor_result_path.read_bytes())}@{harbor_result_path.relative_to(root).as_posix()}"})
     return {key: value for key, value in payload.items() if value is not None}
 
-def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Path, attestation_entry: AttestationEntry, stage_digest: str) -> ExchangePaths:
+def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Path, attestation_entry: AttestationEntry, stage_digest: str, cell_failure: tuple[str, str, str] | None) -> ExchangePaths:
     task_id = record.task_id
     generated_grader_path = cell.cell_dir / record.task_dir / "tests" / "verify.py"
     harbor_result_path = trial_dir / "result.json"
@@ -303,6 +312,8 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     dynamic_hosts = (((trial_raw.get("config") or {}).get("agent") or {}).get("extra_allowed_hosts") if isinstance(trial_raw.get("config"), dict) else None)
     attestation, transcript = attestation_entry["record"], attestation_entry["transcript_path"]
     failure = classify_reliability(trial_raw, attestation, transcript)
+    if failure is None:
+        failure = cell_failure
     if trial_error and failure is None:
         failure = ("harness", "collect", "harbor_trial_malformed")
     if dynamic_hosts not in (None, []) and failure is None:
@@ -400,7 +411,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     request_path, result_path, trial_path, grader_path = exchange_dir / "request.json", exchange_dir / "result.json", exchange_dir / "trial.json", exchange_dir / "grader.json"
     write_json(request_path, request)
     write_json(result_path, result)
-    trial_record: dict[str, object] = {"schema_version": "harness_census.trial_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "crucible_run_id": run_id, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "source_cluster": load_tasks()[task_id].source_cluster, "task_name": task_id, "stage_manifest_digest": stage_ref, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "assistant_turns": trial_raw.get("assistant_turns"), "verifier_result": trial_raw.get("verifier_result")}
+    trial_record: dict[str, object] = {"schema_version": "harness_census.trial_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "crucible_run_id": run_id, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "source_cluster": record.source_cluster, "task_name": task_id, "stage_manifest_digest": stage_ref, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "assistant_turns": trial_raw.get("assistant_turns"), "verifier_result": trial_raw.get("verifier_result")}
     trial_record.update({"context_digest": context_ref, "context_manifest_digest": context_manifest_ref, "context_pack_digest": context_pack_ref, "skill_digest": skill_ref, "skill_count": record.skill_count})
     trial_record["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
     trial_record.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
@@ -452,7 +463,7 @@ def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, path
         "--task-set-size", str(cell.task_set_size),
         "--retry-policy-digest", sha256_ref(cell.retry_policy_digest),
         "--agent-kwargs-base-digest", sha256_ref(cell.agent_kwargs_base_digest),
-        "--source-cluster", load_tasks()[record.task_id].source_cluster,
+        "--source-cluster", record.source_cluster,
         "--task-digest", sha256_ref(record.task_digest),
         "--comparison-task-digest", sha256_ref(record.comparison_task_digest),
         "--cell-kind", cell.cell_kind,
@@ -484,7 +495,7 @@ def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, path
 
 
 def compact_receipt(value: Receipt) -> dict[str, object]:
-    compact = {key: value[key] for key in RECEIPT_KEYS if key in value and isinstance(value[key], (str, int, float, bool))}
+    compact = {key: value[key] for key in COMPACT_RECEIPT_KEYS if key in value and isinstance(value[key], (str, int, float, bool))}
     compact["receipt_digest"] = digest(compact)
     return compact
 
@@ -511,12 +522,14 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
     result_run = subprocess.run(command, cwd=cell.cell_dir, env=environment, text=True, capture_output=True, check=False)
     # A non-zero Crucible run still leaves per-task failure evidence when the Harbor executor can continue.
     # Missing task artifacts are materialized by collect_attestations as denominator-excluded attempts.
-    all_attestations = collect_attestations(output, cell)
-    by_task = {entry["task_id"]: entry for entry in all_attestations}
-    selected_attestations = [by_task[record.task_id] for record in selected if record.task_id in by_task]
+    selected_attestations = collect_attestations(output, cell, selected)
     if len(selected_attestations) != len(selected):
         fail(f"staged cell run left tasks without evidence: {cell.cell_id}")
-    observation = native_observation(cell, selected_attestations)
+    all_attestations = selected_attestations
+    if cell.cell_kind == "native_default" and len(selected) != len(cell.task_records):
+        all_attestations = collect_attestations(output, cell, materialize_missing=False)
+    observation = native_observation(cell, all_attestations)
+    cell_failure = native_cell_failure(cell, observation) if len(all_attestations) == len(cell.task_records) else None
     observed_identity: dict[str, str] = {}
     if observation is not None:
         cell, observed_identity = observation
@@ -525,7 +538,7 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
     for record, attestation in zip(selected, selected_attestations):
         raw_tool_manifest = attestation["record"].get("tool_manifest_digest")
         tool_manifest_digest = raw_tool_manifest if isinstance(raw_tool_manifest, str) and raw_tool_manifest else None
-        paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest)
+        paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest, cell_failure)
         if expected_cell_digest is not None and cell_stage_digest(cell.cell_dir, include_workspace=False) != expected_cell_digest:
             fail(f"staged cell bytes changed before ingest: {cell.cell_id}")
         receipts.append(ingest_task(crucible, root, cell, record, paths, stage_digest, tool_manifest_digest))

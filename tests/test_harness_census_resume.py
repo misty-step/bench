@@ -28,6 +28,7 @@ from harness_census_common import (
     load_tasks,
     mcp_identity_digest,
 )
+from harness_census_exchange import collect_attestations, exchange_envelopes, native_cell_failure, native_observation
 from harness_census_gateway import write_gateway_assets
 from harness_census_staging import (
     _prime_payload,
@@ -61,18 +62,16 @@ def make_cell(root: Path) -> Cell:
     records = tuple(
         TaskRecord(
             task_id=task_id,
+            source_cluster=task_source_cluster(task_id),
             task_digest=h64(0x10 + index),
             comparison_task_digest=h64(0x20 + index),
-            source_tree_digest=h64(0x30 + index),
             grader_digest=h64(0x40 + index),
             reference_hunk_map_digest=h64(0x50 + index),
             dockerfile_digest=h64(0x60 + index),
             gateway_digest=h64(0x70 + index),
             gateway_dockerfile_digest=h64(0x80 + index),
             compose_digest=h64(0x90 + index),
-            prime_package_digest=None,
             task_dir=f"tasks/{task_id}",
-            allowed_paths=("src",),
             immutable_paths=("src/a",),
             network_mode="docker_internal_mint_gateway",
             context_manifest_digest=h64(0xA0 + index),
@@ -120,7 +119,6 @@ def make_cell(root: Path) -> Cell:
         composition_digest=h64(0xE7),
         adapter_digest=h64(0xE8),
         package_digest=h64(0xE9),
-        prime_package_digest=None,
         dockerfile_digests=tuple(h64(0x60 + index) for index in range(3)),
         gateway_digests=tuple(h64(0x70 + index) for index in range(3)),
         gateway_dockerfile_digests=tuple(h64(0x80 + index) for index in range(3)),
@@ -251,7 +249,7 @@ def stage_task_artifacts(
         "task_set_size": 3,
         "retry_policy_digest": f"sha256:{cell.retry_policy_digest}",
         "agent_kwargs_base_digest": f"sha256:{cell.agent_kwargs_base_digest}",
-        "source_cluster": task_source_cluster(record.task_id),
+        "source_cluster": record.source_cluster,
         "task_name": record.task_id,
         "stage_manifest_digest": f"sha256:{stage_digest}",
         "network_mode": "docker_internal_mint_gateway",
@@ -315,7 +313,7 @@ def stage_task_artifacts(
         "task_set_size": 3,
         "retry_policy_digest": f"sha256:{cell.retry_policy_digest}",
         "agent_kwargs_base_digest": f"sha256:{cell.agent_kwargs_base_digest}",
-        "source_cluster": task_source_cluster(record.task_id),
+        "source_cluster": record.source_cluster,
         "task_name": record.task_id,
         "task_id": record.task_id,
         "stage_manifest_digest": f"sha256:{stage_digest}",
@@ -445,6 +443,73 @@ class HarnessCensusResumeTests(unittest.TestCase):
         write_db(self.root, [receipt])
         self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "partial")
         self.assertEqual(pending_task_ids(self.root, self.cell), TASK_IDS[1:])
+
+    def test_task_canary_does_not_materialize_unselected_failures(self) -> None:
+        results = self.cell.cell_dir / "results"
+        selected = collect_attestations(results, self.cell, [self.cell.task_records[0]])
+        self.assertEqual([entry["task_id"] for entry in selected], [TASK_IDS[0]])
+        for task_id in TASK_IDS[1:]:
+            self.assertFalse((results / "harbor-jobs" / task_id).exists())
+        self.assertEqual(collect_attestations(results, self.cell, materialize_missing=False), selected)
+
+    def test_exchange_envelopes_write_provider_failure_receipt(self) -> None:
+        from dataclasses import replace
+
+        instruction = b"repair the task\n"
+        context_manifest: dict[str, object] = {}
+        context_pack = b"context\n"
+        record = replace(
+            self.cell.task_records[0],
+            context_digest=bytes_digest(instruction),
+            context_manifest_digest=digest(context_manifest),
+            context_pack_digest=bytes_digest(context_pack),
+        )
+        cell = replace(self.cell, task_records=(record, *self.cell.task_records[1:]))
+        task_dir = cell.cell_dir / record.task_dir
+        (task_dir / "tests").mkdir(parents=True)
+        (task_dir / "instruction.md").write_bytes(instruction)
+        (task_dir / "tests" / "verify.py").write_text("pass\n", encoding="utf-8")
+        manifest_path = self.root / "context" / "manifests" / f"{record.context_manifest_digest}.json"
+        manifest_path.parent.mkdir(parents=True)
+        manifest_path.write_text(json.dumps(context_manifest), encoding="utf-8")
+        pack_path = self.root / "context" / "packs" / f"{record.context_pack_digest}.md"
+        pack_path.parent.mkdir(parents=True)
+        pack_path.write_bytes(context_pack)
+        trial_dir = cell.cell_dir / "results" / "harbor-jobs" / record.task_id / "run" / "trial"
+        trial_dir.mkdir(parents=True)
+        (trial_dir / "result.json").write_text(
+            json.dumps({"task_name": record.task_id, "exception_info": {"exception_type": "ProviderError", "exception_message": "blocked"}}),
+            encoding="utf-8",
+        )
+        attestation = {
+            "schema_version": "crucible.adapter_attestation.v1",
+            "adapter": cell.harness,
+            "composition": cell.composition,
+            "version": cell.harness_version,
+            "status": "failed",
+            "observed_identities": [],
+            "reason": "provider_error",
+        }
+        attestation_path = trial_dir / "omp.attestation.json"
+        attestation_path.write_text(json.dumps(attestation), encoding="utf-8")
+        entry = {
+            "task_id": record.task_id,
+            "trial_dir": trial_dir,
+            "attestation_path": attestation_path,
+            "attestation_ref": attestation_path.relative_to(cell.cell_dir).as_posix(),
+            "attestation_digest": bytes_digest(attestation_path.read_bytes()),
+            "transcript_ref": None,
+            "transcript_path": None,
+            "record": attestation,
+        }
+
+        paths = exchange_envelopes(self.root, cell, record, trial_dir, entry, self.stage_digest, None)
+        trial = json.loads(paths.trial.read_text(encoding="utf-8"))
+        result = json.loads(paths.result.read_text(encoding="utf-8"))
+        self.assertEqual(trial["source_cluster"], record.source_cluster)
+        self.assertEqual(trial["trial_status"], "reliability_failure")
+        self.assertEqual(result["status"], "execution_error")
+        self.assertIsNone(paths.grader)
 
     def test_three_valid_receipts_are_complete(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)
@@ -594,17 +659,21 @@ class HarnessCensusResumeTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertIsNone(harbor_reward_value(value))
 
-    def test_generated_verifier_writes_harbor_reward_map(self) -> None:
+    def test_generated_verifier_writes_binary_harbor_reward_map(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             workspace = root / "workspace"
             output = root / "verifier"
             workspace.mkdir()
-            source = verifier_source(
-                ROOT / "benchmarks/harness-census-v0/tasks/iron-forest-go-checkruns-array/grader.py",
-                {},
-                (),
+            grader = root / "grader.py"
+            grader.write_text(
+                "import json\n"
+                "def main():\n"
+                "    print(json.dumps({'passed': False, 'hard_pass': False, 'passed_checks': 1, 'total_checks': 2, 'task_points': 0.5}))\n"
+                "    raise SystemExit(1)\n",
+                encoding="utf-8",
             )
+            source = verifier_source(grader, {}, ())
             verifier = root / "verify.py"
             verifier.write_text(source, encoding="utf-8")
             run = subprocess.run(
@@ -616,6 +685,9 @@ class HarnessCensusResumeTests(unittest.TestCase):
             )
             self.assertEqual(run.returncode, 1)
             self.assertEqual(json.loads((output / "reward.json").read_text(encoding="utf-8")), {"reward": 0.0})
+            report = json.loads((output / "grader-report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["task_points"], 0.0)
+            self.assertEqual(report["grader_report"]["task_points"], 0.5)
 
 
     def test_prime_payload_rejects_nested_symlink(self) -> None:
@@ -699,14 +771,49 @@ class HarnessCensusResumeTests(unittest.TestCase):
         receipt["runner_exchange_result_ref"] = result_ref
         return cell, receipt
 
-    def test_native_partial_resume_resolves_baseline_and_pending_tasks(self) -> None:
+    def test_native_partial_resume_keeps_baseline_unresolved(self) -> None:
         from harness_census_staging import resolve_resume_cell
 
         cell, receipt = self._native_partial()
         write_db(self.root, [receipt])
         resolved = resolve_resume_cell(self.root, cell, self.stage_digest)
-        self.assertEqual(resolved.baseline_id, cell.native_baseline_id(CONTROLLED_MODEL, "high", "requested", h64(0xF1), h64(0xF2)))
+        self.assertIsNone(resolved.baseline_id)
         self.assertEqual(pending_task_ids(self.root, cell), TASK_IDS[1:])
+
+    def test_native_observation_requires_three_passes(self) -> None:
+        from dataclasses import replace
+
+        cell = replace(
+            self.cell,
+            cell_kind="native_default",
+            composition="native_default",
+            row_id=None,
+            cohort_id=None,
+            baseline_id=None,
+        )
+        passed = {
+            "status": "passed",
+            "observed_identities": [CONTROLLED_MODEL],
+            "effort": "high",
+            "effort_source": "requested",
+            "tool_manifest_digest": h64(0xF1),
+            "config_digest": h64(0xF2),
+        }
+        failed = {"status": "failed", "observed_identities": [], "reason": "provider_error"}
+        self.assertIsNone(
+            native_observation(
+                cell,
+                [
+                    {"task_id": TASK_IDS[0], "record": passed},
+                    {"task_id": TASK_IDS[1], "record": failed},
+                    {"task_id": TASK_IDS[2], "record": failed},
+                ],
+            )
+        )
+        self.assertEqual(
+            native_cell_failure(cell, None),
+            ("harness", "collect", "native_cell_identity_unresolved"),
+        )
 
     def test_wrong_kind_and_cross_task_attestation_evidence_are_rejected(self) -> None:
         for mutation in ("wrong-kind", "cross-task"):

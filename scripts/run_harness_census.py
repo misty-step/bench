@@ -11,7 +11,7 @@ import subprocess
 from harness_census_common import (
     BUN_VERSION, CAMPAIGN_ID, CONTROLLED_MODEL, HARBOR_VERSION,
     HARNESSES, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
-    fail, harness_catalog_digest, model_roster_digest, runtime_harness_records, verified_commit, write_json,
+    fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, runtime_harness_records, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
 from harness_census_staging import (
@@ -36,7 +36,7 @@ def campaign_stage(cells: tuple, composition_digests: dict[str, str], prime_pack
         "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": cells[0].adapter_digest,
         "pack_digest": digest({"compositions": composition_digests, "context": sorted((cell.cell_id, record.task_id, record.context_manifest_digest, record.context_pack_digest, record.context_digest, record.skill_digest) for cell in cells for record in cell.task_records), "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "prime_package": prime_package["digest"]}), "prime_package_digest": prime_package["digest"],
         "dockerfile_digests": dockerfile_digests, "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "package_digests": package_digests, "profile_digest": digest(sorted((cell.cell_id, cell.profile_digest) for cell in cells)),
-        "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})), "reference_hunk_map_digest": reference_hunk_map_digest,
+        "mcp_digest": mcp_identity_digest(), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})), "reference_hunk_map_digest": reference_hunk_map_digest,
         "grader_digest": digest([record.grader_digest for record in cells[0].task_records]),
         "transport_network_mode": {"controlled": cells[1].transport_network_mode, "native_default": cells[0].transport_network_mode},
         "network_enforcement": {"controlled": cells[1].network_enforcement, "native_default": cells[0].network_enforcement},
@@ -60,6 +60,7 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true", help="resume a non-empty frozen campaign root after identity checks")
     parser.add_argument("--max-cells", type=int, default=1, help="limit selected live cells after validating the full nine-cell matrix")
     parser.add_argument("--cell", action="append", default=[], help="select one cell id; repeat for multiple cells")
+    parser.add_argument("--task", action="append", default=[], help="run one named task as a live readiness canary; repeat to select more")
     parser.add_argument("--campaign-root", type=Path, required=True, help="empty campaign directory, or existing staged root with --resume")
     parser.add_argument("--source-root", type=Path, required=True, help="directory containing pinned source repositories")
     parser.add_argument("--adapter-root", type=Path, required=True, help="pinned harbor_agents package or its parent")
@@ -195,10 +196,16 @@ def main() -> None:
             fail(f"selected {len(selected)} cells exceeds --max-cells {args.max_cells}")
         if not args.dry_run and not args.cell:
             fail("live runs require at least one explicit --cell")
-        run_kind = "final" if len(selected) == len(cells) == 9 else "partial"
+        run_kind = "final" if not args.task and len(selected) == len(cells) == 9 else "partial"
         campaign = {"schema_version": "harness_census.campaign.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "planned_cells": 9, "planned_trials": 27, "selected_cells": len(selected), "selected_trials": sum(len(cell.task_records) for cell in selected), "selected_cell_ids": [cell.cell_id for cell in selected], "run_kind": run_kind, "completion_status": "staged", "cell_status": {cell.cell_id: "staged" for cell in cells}, "immutable_stage_digest": staged_bytes_digest(root), "smoke_digest": smoke["smoke_digest"], "worker_preflight": worker_preflight, "scope_probes": scope_probes, "composition_digests": composition_digests, "controlled_tool_surface_probe": controlled_tool_surface_probe, "verifier_probe": probe, "harbor_task_validity": harbor_tasks, "harbor": {"version": HARBOR_VERSION, "wrapper": str(harbor.relative_to(root))}, "cells": [cell_summary(cell) for cell in cells]}
         write_json(confined_path(root, "campaign.json"), campaign)
         expected_cell_digests = {cell.cell_id: cell_stage_digest(cell.cell_dir, include_workspace=False) for cell in cells}
+    declared_task_ids = {record.task_id for cell in cells for record in cell.task_records}
+    unknown_tasks = sorted(set(args.task) - declared_task_ids)
+    if unknown_tasks:
+        fail(f"unknown --task selection: {', '.join(unknown_tasks)}")
+    if args.dry_run and args.task:
+        fail("--task applies only to live runs")
     for index, cell in enumerate(selected, 1):
         print(f"cell {index}/{len(selected)} harness={cell.harness} composition={cell.composition} model={json.dumps(cell.model_requested)} effort={json.dumps(cell.effort_requested)} tasks={len(cell.task_records)}")
     if args.dry_run:
@@ -213,9 +220,14 @@ def main() -> None:
     if not args.resume:
         campaign["harbor"]["observed_version"] = observed_harbor
         write_json(confined_path(root, "campaign.json"), campaign)
+    attempted_tasks = 0
     for cell in selected:
         pending = pending_task_ids(root, cell)
-        run_cell(root, cell, crucible, harbor, stage_digest, expected_cell_digests[cell.cell_id], task_ids=pending or None)
+        run_tasks = [task_id for task_id in pending if not args.task or task_id in args.task]
+        if not run_tasks:
+            fail(f"selected cell has no pending task matching --task: {cell.cell_id}")
+        attempted_tasks += len(run_tasks)
+        run_cell(root, cell, crucible, harbor, stage_digest, expected_cell_digests[cell.cell_id], task_ids=run_tasks)
     terminal_states = {cell.cell_id: cell_receipt_state(root, cell, stage_digest, expected_cell_digests[cell.cell_id]) for cell in cells}
     if run_kind == "final" and not args.resume:
         if any(state not in {"complete", "invalid"} for state in terminal_states.values()):
@@ -230,7 +242,7 @@ def main() -> None:
     if run_kind == "final" and not args.resume:
         campaign["persisted_trials"] = 27
     write_json(confined_path(root, "campaign.json"), campaign)
-    print(f"run cells={len(selected)} trials={sum(len(cell.task_records) for cell in selected)} provider_calls=runtime")
+    print(f"run cells={len(selected)} trials={attempted_tasks} provider_calls=runtime")
 
 
 if __name__ == "__main__":
