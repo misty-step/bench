@@ -263,11 +263,11 @@ def staged_task_toml(task: Task, composition: str, worker_image: str) -> tuple[s
     if "[verifier]\n" not in text:
         fail(f"task manifest must declare a verifier section: {task.id}")
     staged = text.replace("[verifier]\n", "[verifier]\nenvironment_mode = \"separate\"\n", 1)
-    staged = staged.rstrip() + f'\ndocker_image = "{worker_image}"\n\n[verifier.environment]\ndocker_image = "{worker_image}"\nnetwork_mode = "none"\n'
+    staged = staged.rstrip() + f'\ndocker_image = "{worker_image}"\n\n[verifier.environment]\ndocker_image = "{worker_image}"\nnetwork_mode = "no-network"\n'
     staged_parsed = tomllib.loads(staged)
     verifier = staged_parsed.get("verifier", {})
     verifier_environment = verifier.get("environment", {})
-    if verifier.get("environment_mode") != "separate" or verifier_environment.get("docker_image") != worker_image or verifier_environment.get("network_mode") != "none":
+    if verifier.get("environment_mode") != "separate" or verifier_environment.get("docker_image") != worker_image or verifier_environment.get("network_mode") != "no-network":
         fail(f"staged verifier isolation is invalid: {task.id}")
     return staged, expected
 
@@ -591,7 +591,7 @@ def probe_harbor_task_validity(cells: tuple[Cell, ...]) -> dict[str, object]:
         verifier = task_config.get("verifier", {})
         environment = task_config.get("environment", {})
         verifier_environment = verifier.get("environment", {})
-        if verifier.get("environment_mode") != "separate" or environment.get("docker_image") != verifier_environment.get("docker_image") or verifier_environment.get("network_mode") != "none":
+        if verifier.get("environment_mode") != "separate" or environment.get("docker_image") != verifier_environment.get("docker_image") or verifier_environment.get("network_mode") != "no-network":
             fail(f"Harbor verifier isolation is invalid: {task_path.name}")
     check = """from pathlib import Path
 import sys

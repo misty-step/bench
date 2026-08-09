@@ -943,7 +943,7 @@ class HarnessCensusResumeTests(unittest.TestCase):
         staged, _ = staged_task_toml(task, "controlled_raw", tag)
         self.assertIn(f'docker_image = "{tag}"', staged)
         self.assertIn('environment_mode = "separate"', staged)
-        self.assertIn('network_mode = "none"', staged)
+        self.assertIn('network_mode = "no-network"', staged)
         compose = compose_yaml(worker_image=tag)
         self.assertIn(f"    image: {tag}\n", compose)
         self.assertNotIn("dockerfile: Dockerfile", compose)
