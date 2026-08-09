@@ -18,11 +18,11 @@ import tomllib
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL, PNPM_VERSION,
+    AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, DEFAULT_CONTROLLED_PAIR, PNPM_VERSION,
     CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_NETWORK_MODE, CONTROLLED_TASK_NETWORK_ENFORCEMENT,
     CONTROLLED_TRANSPORT_NETWORK_MODE, DECISION_POLICY, GO_VERSION, HARBOR_VERSION, HARNESSES, NATIVE_NETWORK_ENFORCEMENT,
     NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT, NATIVE_TRANSPORT_NETWORK_MODE, RETRY_POLICY, RUST_VERSION,
-    Cell, Task, TaskRecord, _valid_digest, bytes_digest, campaign_matrix, cell_stage_digest, cell_summary,
+    Cell, ControlledPair, Task, TaskRecord, _valid_digest, bytes_digest, campaign_matrix, cell_stage_digest, cell_summary,
     canonical_task_set_digest, cohort_identity, confined_path, digest, fail, file_digest, harbor_reward_value, harness_catalog_digest,
     load_tasks, mcp_identity_digest, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, row_identity, task_corpus_identity,
     task_identity, tree_digest, tree_files, verified_commit, worker_image_tag, write_json,
@@ -92,7 +92,7 @@ def _smoke_identity() -> dict[str, object]:
     }
 
 
-def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
+def validate_stage_manifest(stage: object, *, stage_id: str, controlled_pair: ControlledPair) -> None:
     if not isinstance(stage, dict):
         fail(f"{stage_id} stage manifest must be an object")
     schema = json.loads((PACKAGE / "schemas" / "stage-manifest-v1.schema.json").read_text(encoding="utf-8"))
@@ -111,13 +111,15 @@ def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
         fail("campaign stage manifest worker preflight digest is invalid")
     if stage_id == "campaign":
         cells = stage.get("cells")
-        expected_cells = {str(row["cell_id"]) for row in campaign_matrix()}
+        expected_cells = {str(row["cell_id"]) for row in campaign_matrix(controlled_pair)}
         if not isinstance(cells, dict) or set(cells) != expected_cells:
             fail("campaign stage manifest cells are incomplete or undeclared")
         for cell_id, entry in cells.items():
             if not isinstance(entry, dict) or not isinstance(entry.get("summary"), dict) or entry["summary"].get("cell_id") != cell_id:
                 fail(f"campaign stage manifest cell summary is invalid: {cell_id}")
             summary = entry["summary"]
+            if summary.get("cell_kind") == "controlled" and (summary.get("model_requested") != controlled_pair.model_requested or summary.get("effort_requested") != controlled_pair.effort_requested or summary.get("provider_route_resolved") != controlled_pair.provider_route_resolved or summary.get("provider_effort_resolved") != controlled_pair.effort_requested):
+                fail(f"campaign stage manifest controlled pair is stale: {cell_id}")
             for key in ("agent_kwargs_digest", "agent_allowed_hosts_digest", "composition_digest", "adapter_digest", "mcp_digest"):
                 if not _valid_digest(summary.get(key)):
                     fail(f"campaign stage manifest cell summary digest is invalid: {cell_id} {key}")
@@ -157,6 +159,8 @@ def validate_stage_manifest(stage: object, *, stage_id: str) -> None:
     decision = stage.get("decision_policy")
     if not isinstance(decision, dict) or any(decision.get(key) != value for key, value in DECISION_POLICY.items()):
         fail(f"{stage_id} stage manifest decision policy is invalid")
+    if stage_id == "campaign" and (decision.get("controlled_model_identity") != controlled_pair.model_requested or decision.get("controlled_route_identity") != controlled_pair.provider_route_resolved or decision.get("controlled_effort_identity") != controlled_pair.effort_requested):
+        fail(f"{stage_id} stage manifest controlled pair is stale")
     if stage_id == "smoke" and any(stage.get(key) != value for key, value in _smoke_identity().items()):
         fail("smoke stage manifest identity is stale")
 
@@ -227,12 +231,12 @@ def validate_smoke() -> dict[str, str]:
         fail("smoke artifact has an invalid shared runner or task identity")
     cells = smoke.get("cells")
     expected = []
-    for row in campaign_matrix():
+    for row in campaign_matrix(DEFAULT_CONTROLLED_PAIR):
         expected.append({**row, "task_ids": list(tasks), "identity_digest": digest({"cell": row, "task_digest": identity["task_digest"], "reference_hunk_map_digest": identity["reference_hunk_map_digest"]})})
     if cells != expected:
         fail("smoke cells do not match the canonical nine-cell matrix")
     stage_path = PACKAGE / "smoke" / "stage-manifest.json"
-    validate_stage_manifest(json.loads(stage_path.read_text(encoding="utf-8")), stage_id="smoke")
+    validate_stage_manifest(json.loads(stage_path.read_text(encoding="utf-8")), stage_id="smoke", controlled_pair=DEFAULT_CONTROLLED_PAIR)
     return {"smoke_digest": bytes_digest(path.read_bytes())}
 
 
@@ -625,7 +629,7 @@ def copy_adapters(campaign_root: Path, adapter_root: Path) -> str:
     return tree_digest(destination, exclude_git=False)
 
 
-def probe_controlled_argv_surfaces(adapter_root: Path) -> dict[str, object]:
+def probe_controlled_argv_surfaces(adapter_root: Path, controlled_pair: ControlledPair) -> dict[str, object]:
     source = adapter_root / "harbor_agents" if adapter_root.name != "harbor_agents" and (adapter_root / "harbor_agents").is_dir() else adapter_root
     common_path = source / "adapter_common.py"
     if not common_path.is_file():
@@ -641,6 +645,13 @@ def probe_controlled_argv_surfaces(adapter_root: Path) -> dict[str, object]:
     build_argv = getattr(module, "build_argv", None)
     if not callable(build_argv):
         fail("adapter command contract does not expose build_argv")
+    parse_model = getattr(module, "parse_openrouter_model", None)
+    if not callable(parse_model):
+        fail("adapter command contract does not expose parse_openrouter_model")
+    try:
+        provider, model = parse_model(controlled_pair.provider_route_resolved)
+    except (TypeError, ValueError) as error:
+        fail(f"controlled provider route is invalid for the adapter command contract: {error}")
     wrapper_path = source / "prime_kernel_wrapper.sh"
     wrapper = wrapper_path.read_text(encoding="utf-8") if wrapper_path.is_file() else ""
     if "env -i" not in wrapper or "--unshare-net" not in wrapper:
@@ -651,7 +662,7 @@ def probe_controlled_argv_surfaces(adapter_root: Path) -> dict[str, object]:
     enabled_context_flags = {"--context", "--context-file", "--extension", "--extensions", "--mcp", "--rule", "--rules", "--skill", "--skills", "--theme", "--themes", "--prompt-template", "--prompt-templates"}
     records: list[dict[str, object]] = []
     for name in HARNESSES:
-        command = list(build_argv(name, composition="controlled_raw", provider="openrouter", model="probe", thinking=CONTROLLED_EFFORT, instruction="controlled-probe", profile="harness-census-probe"))
+        command = list(build_argv(name, composition="controlled_raw", provider=provider, model=model, thinking=controlled_pair.effort_requested, instruction="controlled-probe", profile="harness-census-probe"))
         if any(marker in token.lower() for token in command for marker in ("shell", "process", "browser", "mcp")) or any(token in enabled_context_flags for token in command) or any(flag not in command for flag in required_flags[name]):
             fail(f"controlled {name} argv exposes an undeclared surface: {command}")
         try:
@@ -698,13 +709,13 @@ def immutable_stage_cells(cells: tuple[Cell, ...]) -> dict[str, object]:
         for cell in cells
     }
 
-def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapping[str, str], source_root: Path, adapter_root: Path, prime_package: dict[str, str] | None) -> tuple[Cell, ...]:
+def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapping[str, str], source_root: Path, adapter_root: Path, prime_package: dict[str, str] | None, controlled_pair: ControlledPair) -> tuple[Cell, ...]:
     validate_gateway_contract()
     tasks = load_tasks()
     adapter_digest = copy_adapters(root, adapter_root)
     cells: list[Cell] = []
     packages = {harness: harness_package_info(harness, prime_package) for harness in HARNESSES}
-    for row in campaign_matrix():
+    for row in campaign_matrix(controlled_pair):
         harness, composition = str(row["harness"]), str(row["composition"])
         spec, package = HARNESSES[harness], packages[harness]
         cell_id, cell_dir = str(row["cell_id"]), root / "cells" / str(row["cell_id"])
@@ -723,11 +734,11 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
         task_enforcement = CONTROLLED_TASK_NETWORK_ENFORCEMENT if controlled else NATIVE_TASK_NETWORK_ENFORCEMENT
         allowed_hosts = AGENT_ALLOWED_HOSTS
         model, effort = row["model_requested"], row["effort_requested"]
-        kwargs: Mapping[str, object] = {"composition": composition, "thinking": CONTROLLED_EFFORT, "mint_base_url": MINT_INTERNAL_BASE_URL} if controlled else {"composition": "native_default", "mint_base_url": MINT_INTERNAL_BASE_URL}
+        kwargs: Mapping[str, object] = {"composition": composition, "thinking": controlled_pair.effort_requested, "mint_base_url": MINT_INTERNAL_BASE_URL} if controlled else {"composition": "native_default", "mint_base_url": MINT_INTERNAL_BASE_URL}
         agent_kwargs_base_digest = digest({key: value for key, value in kwargs.items() if key not in {"composition", "thinking", "reasoning_effort"}})
         config: dict[str, object] = {"agent": harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "agent_kwargs": dict(kwargs), "agent_allowed_hosts": list(allowed_hosts)}
         if controlled:
-            config["model"] = CONTROLLED_MODEL
+            config["model"] = controlled_pair.provider_route_resolved
         spec_json = {"schema_version": "crucible.eval_spec.v1", "id": cell_id, "task": CAMPAIGN_ID, "inputs": "Three history-free pinned repository repair tasks with deterministic graders.", "outputs": "Harbor verifier reward per task.", "graders": {"graders": [{"id": "harness_census_deterministic", "kind": "deterministic"}]}, "aggregation": "proportion", "uncertainty": {"method": "wilson", "confidence": 0.95}, "decision": "Native defaults remain separate from controlled comparisons.", "runner": {"kind": "harbor_task", "corpus": {"source": "harbor_tasks", "config": config, "tasks": [{"task_id": record.task_id, "task_dir": record.task_dir} for record in records]}}}
         spec_path = cell_dir / "eval.json"
         write_json(spec_path, spec_json)
@@ -744,8 +755,8 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
         docker_digests = tuple(sorted({record.dockerfile_digest for record in records}))
         package_digest = package["digest"]
         prime_digest = package["prime_digest"] if harness == "prime" else None
-        row_id = row_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, harness, composition) if controlled else None
-        cohort_id = cohort_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, CONTROLLED_MODEL, CONTROLLED_EFFORT) if controlled else None
+        row_id = row_identity(controlled_pair.model_requested, controlled_pair.effort_requested, harness, composition) if controlled else None
+        cohort_id = cohort_identity(controlled_pair.model_requested, controlled_pair.effort_requested, controlled_pair.provider_route_resolved, controlled_pair.effort_requested) if controlled else None
         baseline_id = None
         profile = digest({"harness": harness, "version": spec.version, "adapter_digest": adapter_digest, "kwargs": kwargs, "task_digest": task_digest, "composition_digest": composition_digest, "package_digest": package_digest, "prime_package_digest": prime_digest, "dockerfile_digests": list(docker_digests), **composition_identity, "transport_network_mode": transport_mode, "network_enforcement": network_enforcement, "task_network_enforcement": task_enforcement})
         cells.append(
@@ -764,7 +775,7 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
                 composition=composition,
                 model_requested=model if isinstance(model, str) else None,
                 effort_requested=effort if isinstance(effort, str) else None,
-                provider_route_resolved=model if isinstance(model, str) else None,
+                provider_route_resolved=controlled_pair.provider_route_resolved if controlled else None,
                 provider_effort_resolved=effort if isinstance(effort, str) else None,
                 default_resolution_source=None,
                 effort_source="requested" if controlled else None,
@@ -801,8 +812,8 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
             expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "agent_kwargs": {"composition": "native_default", "mint_base_url": MINT_INTERNAL_BASE_URL}, "agent_allowed_hosts": ["mint-gateway"]}
             valid = config == expected and cell.network_mode == NATIVE_NETWORK_MODE and cell.transport_network_mode == NATIVE_TRANSPORT_NETWORK_MODE and cell.network_enforcement == NATIVE_NETWORK_ENFORCEMENT and cell.task_network_enforcement == NATIVE_TASK_NETWORK_ENFORCEMENT and cell.agent_allowed_hosts == AGENT_ALLOWED_HOSTS and cell.model_requested is None and cell.effort_requested is None and cell.provider_route_resolved is None and cell.provider_effort_resolved is None and cell.default_resolution_source is None
         else:
-            expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "model": CONTROLLED_MODEL, "agent_kwargs": {"composition": cell.composition, "thinking": CONTROLLED_EFFORT, "mint_base_url": MINT_INTERNAL_BASE_URL}, "agent_allowed_hosts": ["mint-gateway"]}
-            valid = config == expected and cell.network_mode == CONTROLLED_NETWORK_MODE and cell.transport_network_mode == CONTROLLED_TRANSPORT_NETWORK_MODE and cell.network_enforcement == CONTROLLED_NETWORK_ENFORCEMENT and cell.task_network_enforcement == CONTROLLED_TASK_NETWORK_ENFORCEMENT and cell.agent_allowed_hosts == AGENT_ALLOWED_HOSTS and cell.model_requested == CONTROLLED_MODEL and cell.effort_requested == CONTROLLED_EFFORT and cell.provider_route_resolved == CONTROLLED_MODEL and cell.provider_effort_resolved == CONTROLLED_EFFORT
+            expected = {"agent": cell.harness, "agent_import_path": spec.adapter, "job_timeout_ms": 900000, "model": controlled_pair.provider_route_resolved, "agent_kwargs": {"composition": cell.composition, "thinking": controlled_pair.effort_requested, "mint_base_url": MINT_INTERNAL_BASE_URL}, "agent_allowed_hosts": ["mint-gateway"]}
+            valid = config == expected and cell.network_mode == CONTROLLED_NETWORK_MODE and cell.transport_network_mode == CONTROLLED_TRANSPORT_NETWORK_MODE and cell.network_enforcement == CONTROLLED_NETWORK_ENFORCEMENT and cell.task_network_enforcement == CONTROLLED_TASK_NETWORK_ENFORCEMENT and cell.agent_allowed_hosts == AGENT_ALLOWED_HOSTS and cell.model_requested == controlled_pair.model_requested and cell.effort_requested == controlled_pair.effort_requested and cell.provider_route_resolved == controlled_pair.provider_route_resolved and cell.provider_effort_resolved == controlled_pair.effort_requested
         if not valid:
             fail(f"staged config or metadata shape is invalid: {cell.cell_id}")
     return tuple(cells)
@@ -876,12 +887,12 @@ def run_scope_probes(root: Path, cell: Cell) -> dict[str, object]:
 
 
 
-def resume_staged_cells(root: Path, source_root: Path, adapter_root: Path, prime_source: Path) -> tuple[tuple[Cell, ...], dict[str, str], dict[str, str], dict[str, str]]:
+def resume_staged_cells(root: Path, source_root: Path, adapter_root: Path, prime_source: Path, controlled_pair: ControlledPair) -> tuple[tuple[Cell, ...], dict[str, str], dict[str, str], dict[str, str]]:
     assets, composition_digests = load_compositions()
     with tempfile.TemporaryDirectory(prefix="harness-census-resume-") as temporary:
         staged = Path(temporary)
         prime_package = stage_prime_package(staged, prime_source)
-        expected = build_cells(staged, assets, composition_digests, source_root, adapter_root, prime_package)
+        expected = build_cells(staged, assets, composition_digests, source_root, adapter_root, prime_package, controlled_pair)
         write_json(staged / "prime-package.json", {key: prime_package[key] for key in ("package", "version", "source_kind", "digest")})
         write_harbor_wrapper(staged)
         expected_digest = staged_bytes_digest(staged)

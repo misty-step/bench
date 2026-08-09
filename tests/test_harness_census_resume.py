@@ -30,11 +30,14 @@ from harness_census_common import (
     mcp_identity_digest,
     worker_image_tag,
 )
+
 from harness_census_gateway import compose_yaml, write_gateway_assets
 from harness_census_exchange import collect_attestations, exchange_envelopes, native_observation, run_cell
 from harness_census_generation import _prime_payload, dockerfile, node_toolchain_package_info, prime_package_info, runtime_package_info, stage_prime_package, verifier_source
-from harness_census_resume import _derive_cell_result, _reconcile_native_baseline, cell_receipt_state, pending_task_ids, receipt_task_ids, staged_bytes_digest, verify_pending_task_sources
 from harness_census_staging import staged_task_toml
+from harness_census_resume import _derive_cell_result, _reconcile_native_baseline, cell_receipt_state, pending_task_ids, receipt_task_ids, staged_bytes_digest, verify_pending_task_sources
+
+
 
 
 TASK_IDS = sorted((
@@ -425,6 +428,20 @@ class HarnessCensusResumeTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.cell = make_cell(self.root)
         self.stage_digest = h64(0xFF)
+
+    def test_resume_rejects_changed_controlled_pair_before_receipts(self) -> None:
+        from dataclasses import replace
+
+        build_complete(self.root, self.cell, self.stage_digest)
+        mismatched = replace(
+            self.cell,
+            model_requested="openrouter/deepseek/deepseek-v4-flash-0731",
+            effort_requested="high",
+            provider_route_resolved="openrouter/deepseek/deepseek-v4-flash-0731",
+            provider_effort_resolved="high",
+        )
+        with self.assertRaisesRegex(SystemExit, "resume receipt cell identity mismatch"):
+            cell_receipt_state(self.root, mismatched, self.stage_digest)
     def test_runtime_package_changes_stage_digests_but_mutable_state_does_not(self) -> None:
         runtime = self.cell.cell_dir / "tasks" / TASK_IDS[0] / "environment" / "runtime-package"
         repo = self.cell.cell_dir / "tasks" / TASK_IDS[0] / "environment" / "repo"
@@ -938,8 +955,13 @@ class HarnessCensusResumeTests(unittest.TestCase):
     def test_guardrail_refusal_is_non_retryable_provider_policy(self) -> None:
         from harness_census_exchange import classify_reliability
 
-        failure = classify_reliability({"exception_info": {"exception_message": "No endpoints available matching your guardrail restrictions and data policy"}}, {"status": "failed"}, None)
-        self.assertEqual(failure, ("provider", "run", "provider_policy_refused"))
+        cases = (
+            ({"exception_info": {"exception_message": "No endpoints available matching your guardrail restrictions and data policy"}}, {"status": "failed"}),
+            ({"exception_info": {"exception_type": "NonZeroAgentExitCodeError"}}, {"status": "failed", "reason": "provider_policy_refused"}),
+        )
+        for trial, attestation in cases:
+            with self.subTest(attestation=attestation):
+                self.assertEqual(classify_reliability(trial, attestation, None), ("provider", "run", "provider_policy_refused"))
 
     def test_memory_ledger_for_generic_runs(self) -> None:
         exchange_source = (ROOT / "scripts/harness_census_exchange.py").read_text(encoding="utf-8")

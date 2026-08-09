@@ -65,6 +65,13 @@ class RosterEntry(TypedDict):
     efforts: list[str]
 
 
+@dataclass(frozen=True)
+class ControlledPair:
+    model_requested: str
+    provider_route_resolved: str
+    effort_requested: str
+
+
 ROSTER: tuple[RosterEntry, ...] = (
     {"model_requested": "openai-codex/gpt-5.6-sol", "provider_route": "openai-codex/gpt-5.6-sol", "efforts": ["low", "medium", "high", "xhigh", "max"]},
     {"model_requested": "openai-codex/gpt-5.6-terra", "provider_route": "openai-codex/gpt-5.6-terra", "efforts": ["low", "medium", "high", "xhigh", "max"]},
@@ -86,6 +93,24 @@ ROSTER: tuple[RosterEntry, ...] = (
     {"model_requested": "openrouter/nvidia/nemotron-3-ultra-550b-a55b", "provider_route": "openrouter/nvidia/nemotron-3-ultra-550b-a55b", "efforts": ["medium", "high"]},
     {"model_requested": "openrouter/minimax/minimax-m3", "provider_route": "openrouter/minimax/minimax-m3", "efforts": ["minimal", "low", "medium", "high"]},
 )
+
+
+def validate_controlled_pair(model: str, effort: str) -> ControlledPair:
+    if not isinstance(model, str) or not isinstance(effort, str):
+        fail("controlled model and effort must be strings")
+    entry = next((candidate for candidate in ROSTER if candidate["model_requested"] == model), None)
+    if entry is None:
+        fail(f"controlled model is not supported by ROSTER: {model}")
+    route = entry["provider_route"]
+    if not isinstance(route, str) or not route.startswith("openrouter/"):
+        fail(f"controlled model must use an OpenRouter route: {model}")
+    if effort not in entry["efforts"]:
+        fail(f"controlled effort is not supported for {model}: {effort}")
+    return ControlledPair(model, route, effort)
+
+
+DEFAULT_CONTROLLED_PAIR = validate_controlled_pair(CONTROLLED_MODEL, CONTROLLED_EFFORT)
+
 
 COMPACT_RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
 def compact_receipt(value: Mapping[str, object]) -> dict[str, object]:
@@ -117,8 +142,7 @@ def qualification_harness_records() -> list[dict[str, object]]:
 
 def runtime_harness_records() -> dict[str, dict[str, str]]:
     return {spec.id: {"version": spec.version, "adapter": spec.adapter, "package": spec.package} for spec in HARNESS_SPECS}
-
-def campaign_matrix() -> tuple[dict[str, object], ...]:
+def campaign_matrix(controlled_pair: ControlledPair) -> tuple[dict[str, object], ...]:
     rows: list[dict[str, object]] = []
     for spec in HARNESS_SPECS:
         for composition in ("native_default", "controlled_raw", "controlled_enriched"):
@@ -128,8 +152,8 @@ def campaign_matrix() -> tuple[dict[str, object], ...]:
                     "cell_id": f"{spec.id}-{composition}",
                     "harness": spec.id,
                     "composition": composition,
-                    "model_requested": CONTROLLED_MODEL if controlled else None,
-                    "effort_requested": CONTROLLED_EFFORT if controlled else None,
+                    "model_requested": controlled_pair.model_requested if controlled else None,
+                    "effort_requested": controlled_pair.effort_requested if controlled else None,
                 }
             )
     return tuple(rows)

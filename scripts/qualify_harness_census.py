@@ -13,7 +13,7 @@ from typing import Mapping
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    CAMPAIGN_ID, CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_TASK_NETWORK_ENFORCEMENT, CONTROLLED_TRANSPORT_NETWORK_MODE, DECISION_POLICY, MANIFEST, NATIVE_NETWORK_ENFORCEMENT, NATIVE_TASK_NETWORK_ENFORCEMENT, NATIVE_TRANSPORT_NETWORK_MODE, PACKAGE, RETRY_POLICY, Task, campaign_matrix,
+    CAMPAIGN_ID, CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_TASK_NETWORK_ENFORCEMENT, CONTROLLED_TRANSPORT_NETWORK_MODE, DECISION_POLICY, DEFAULT_CONTROLLED_PAIR, MANIFEST, NATIVE_NETWORK_ENFORCEMENT, NATIVE_TASK_NETWORK_ENFORCEMENT, NATIVE_TRANSPORT_NETWORK_MODE, PACKAGE, RETRY_POLICY, Task, campaign_matrix,
     digest, fail, file_digest, harness_catalog_digest, load_tasks, mcp_identity_digest, model_roster_digest,
     qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping,
     task_identity, tree_digest, tree_files, write_json,
@@ -249,10 +249,10 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
         "task_network_enforcement": {"controlled": CONTROLLED_TASK_NETWORK_ENFORCEMENT, "native_default": NATIVE_TASK_NETWORK_ENFORCEMENT},
         "retry_policy": dict(RETRY_POLICY), "decision_policy": dict(DECISION_POLICY),
     }
-    validate_stage_manifest(stage, stage_id="smoke")
+    validate_stage_manifest(stage, stage_id="smoke", controlled_pair=DEFAULT_CONTROLLED_PAIR)
     write_json(PACKAGE / "smoke" / "stage-manifest.json", stage)
     smoke_cells = []
-    for row in campaign_matrix():
+    for row in campaign_matrix(DEFAULT_CONTROLLED_PAIR):
         identity = digest({"cell": row, "task_digest": task_digest, "reference_hunk_map_digest": hunk_map_digest})
         smoke_cells.append({**row, "task_ids": list(TASKS), "identity_digest": identity})
     write_json(PACKAGE / "smoke" / "harness-census-v0.json", {

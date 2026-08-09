@@ -90,13 +90,15 @@ One live cell validates execution and evidence only.
 Run all six controlled cells to produce paired descriptive deltas.
 Native-default cells remain separate observational baselines.
 
-
-
-Run one task as the live readiness canary after the full matrix passes validation:
+Run one task as the live readiness canary after the full matrix passes validation. Select the supported OpenRouter route explicitly:
 
 ```sh
 LIVE_ROOT="$PWD/.harness-census-live-run"
+CONTROLLED_MODEL="openrouter/deepseek/deepseek-v4-flash-0731"
+CONTROLLED_EFFORT="high"
 python3 scripts/run_harness_census.py --cell omp-controlled_raw --task iron-forest-go-checkruns-array --max-cells 1 \
+  --controlled-model "$CONTROLLED_MODEL" \
+  --controlled-effort "$CONTROLLED_EFFORT" \
   --campaign-root "$LIVE_ROOT" \
   --source-root "$SOURCE_ROOT" \
   --adapter-root "$ADAPTER_ROOT" \
@@ -106,15 +108,12 @@ python3 scripts/run_harness_census.py --cell omp-controlled_raw --task iron-fore
 
 Accept readiness only when the canary writes one canonical quality receipt.
 Stop when it writes a reliability receipt or when the provider refuses the configured model.
-After acceptance, resume the same frozen campaign without `--task` to run the two pending tasks.
-Run the matching enriched cell only after the raw cell completes.
-Run the remaining controlled pairs only after both first-pair cells complete.
-Run native-default cells last because their observed identity needs three consistent passed attestations.
-
-Resume the same frozen campaign after an interruption:
+After acceptance, resume the same frozen campaign with the same explicit pair:
 
 ```sh
 python3 scripts/run_harness_census.py --resume \
+  --controlled-model "$CONTROLLED_MODEL" \
+  --controlled-effort "$CONTROLLED_EFFORT" \
   --campaign-root "$LIVE_ROOT" \
   --source-root "$SOURCE_ROOT" \
   --adapter-root "$ADAPTER_ROOT" \
@@ -122,10 +121,14 @@ python3 scripts/run_harness_census.py --resume \
   --crucible /path/to/crucible
 ```
 
+The driver rejects a different pair before any provider call. Omit both flags to preserve the Opus/high defaults.
+After the canary, use the resume command without `--task` to run the two pending tasks.
+Run the matching enriched cell only after the raw cell completes.
+Run the remaining controlled pairs only after both first-pair cells complete.
+
 Resume verifies frozen stage, task, adapter, context, grader, and receipt identities.
 It runs only tasks without a canonical receipt.
 It reconstructs derived cell results from canonical receipts when needed.
-
 
 Each campaign is stored under the explicit `--campaign-root`:
 
@@ -174,8 +177,8 @@ The gateway constrains destination and path, but it does not issue a broker-sign
 receipt for the request body.
 Treat a harness that misreports its OpenRouter request model as a residual pilot risk.
 
-Controlled requests use Harbor `model` and `thinking` with exactly
-`openrouter/anthropic/claude-opus-5`.
+Controlled requests use the selected supported OpenRouter model in Harbor `model` and the selected effort in `thinking`.
+The CLI defaults remain `openrouter/anthropic/claude-opus-5` and `high`.
 
 Controlled OMP and Pi expose only read, edit, and write tools. Controlled Prime runs IPython inside a clean `bwrap --unshare-net` sandbox.
 The task graders are deterministic and binary.

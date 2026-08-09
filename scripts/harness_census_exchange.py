@@ -252,7 +252,7 @@ def classify_reliability(trial: HarborTrial, attestation: Attestation, transcrip
         return _failure_for_code(_canonical_reliability_code(explicit_code))
     if "no endpoints available matching your guardrail restrictions and data policy" in exception_message.lower():
         return _failure_for_code("provider_policy_refused")
-    provider_reasons = {"provider_error": "provider_request_failed", "provider_rate_limited": "provider_rate_limited", "provider_authentication_failed": "provider_authentication_failed", "provider_budget_exceeded": "provider_budget_exceeded"}
+    provider_reasons = {"provider_policy_refused": "provider_policy_refused", "provider_error": "provider_request_failed", "provider_rate_limited": "provider_rate_limited", "provider_authentication_failed": "provider_authentication_failed", "provider_budget_exceeded": "provider_budget_exceeded"}
     provider_exceptions = {"authenticationerror": "provider_authentication_failed", "ratelimiterror": "provider_rate_limited", "budgetexceedederror": "provider_budget_exceeded", "providererror": "provider_request_failed"}
     if reason in provider_reasons:
         return _failure_for_code(provider_reasons[reason])

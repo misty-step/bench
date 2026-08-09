@@ -22,7 +22,7 @@ if [ -z "$bench_python" ]; then
   exit 1
 fi
 
-"$bench_python" -c 'import json, sys; sys.path.insert(0, "scripts"); from pathlib import Path; from harness_census_gateway import validate_gateway_contract; from harness_census_staging import validate_stage_manifest; validate_gateway_contract(); validate_stage_manifest(json.loads(Path("benchmarks/harness-census-v0/smoke/stage-manifest.json").read_text()), stage_id="smoke")'
+"$bench_python" -c 'import json, sys; sys.path.insert(0, "scripts"); from pathlib import Path; from harness_census_common import DEFAULT_CONTROLLED_PAIR; from harness_census_gateway import validate_gateway_contract; from harness_census_staging import validate_stage_manifest; validate_gateway_contract(); validate_stage_manifest(json.loads(Path("benchmarks/harness-census-v0/smoke/stage-manifest.json").read_text()), stage_id="smoke", controlled_pair=DEFAULT_CONTROLLED_PAIR)'
 "$bench_python" scripts/validate_seam_agency.py
 "$bench_python" -m unittest discover -s tests -p 'test_*.py'
 git diff --check
