@@ -4,7 +4,7 @@
   "campaign_id": "harness-census-v0",
   "catalog_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "compose_digests": [
-    "2d69d5b51c19918eaa45c136a863095f6e72054a491ae61506ccb6d0b91398a0"
+    "dcaa441329c3f757252398dfff122c7033665337d581664fb0cf4b33675390a5"
   ],
   "crucible_binary_digest": null,
   "crucible_commit": null,
@@ -35,7 +35,6 @@
     "95c0b1efb8e5fa17c2f57fa31371975e1036df4d8935533db7c166cfb5b0c135"
   ],
   "grader_digest": "f370edc0790e86277a8c90c22d4937be21bc239490fa9bbb0aa0639bfc8ac710",
-  "harness_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
   "network_enforcement": {
     "controlled": "docker_internal_mint_gateway",

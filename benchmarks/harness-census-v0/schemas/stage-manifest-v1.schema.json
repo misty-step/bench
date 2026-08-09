@@ -3,7 +3,7 @@
   "$id": "harness_census.stage_manifest.v1",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "campaign_id", "stage_id", "bench_commit", "crucible_commit", "crucible_binary_digest", "prime_package_digest", "dockerfile_digests", "gateway_digests", "gateway_dockerfile_digests", "compose_digests", "package_digests", "profile_digest", "roster_digest", "catalog_digest", "harness_digest", "adapter_digest", "pack_digest", "mcp_digest", "task_digest", "reference_hunk_map_digest", "grader_digest", "transport_network_mode", "network_enforcement", "task_network_enforcement", "retry_policy", "decision_policy"],
+  "required": ["schema_version", "campaign_id", "stage_id", "bench_commit", "crucible_commit", "crucible_binary_digest", "prime_package_digest", "dockerfile_digests", "gateway_digests", "gateway_dockerfile_digests", "compose_digests", "package_digests", "profile_digest", "roster_digest", "catalog_digest", "adapter_digest", "pack_digest", "mcp_digest", "task_digest", "reference_hunk_map_digest", "grader_digest", "transport_network_mode", "network_enforcement", "task_network_enforcement", "retry_policy", "decision_policy"],
   "properties": {
     "schema_version": {"const": "harness_census.stage_manifest.v1"},
     "campaign_id": {"type": "string", "minLength": 1},
@@ -12,7 +12,6 @@
     "crucible_commit": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
     "roster_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "catalog_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "harness_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "adapter_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "pack_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "mcp_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},

@@ -32,11 +32,12 @@ The corpus has no power for a deployment decision.
 ## Live readiness status
 
 The deterministic nine-cell preflight passed on 2026-08-08.
-It built all nine worker images and passed all 27 hidden-reference checks.
+It built all nine worker images and passed all 9 hidden-reference checks.
+The 27 figure is the planned campaign trial count: nine cells with three tasks each.
 The OpenRouter Mint route served a bounded DeepSeek probe.
 The same route refused `anthropic/claude-opus-5` because no endpoint matched the account privacy policy.
 The OMP controlled-raw canary persisted that refusal as canonical
-`reliability_failure` / `provider_request_failed` evidence and marked the campaign `invalid`.
+`reliability_failure` / `provider_policy_refused` evidence and marked the campaign `invalid`.
 The direct Anthropic Mint alias was not configured.
 No coding task produced model output, so the pilot has no capability result.
 Do not change the model or privacy policy inside a frozen campaign.
@@ -140,13 +141,14 @@ exchange/<cell>/<task>/{request,result,trial,grader}.json
 Quality outcomes write Harbor's canonical `{"reward": <number>}` map as `verifier/reward.json` and the detailed deterministic grader report as `verifier/grader-report.json`. Reliability outcomes write no grader receipt; they persist typed failure fields with null scores and retain transcript and attestation evidence when present.
 
 The driver exports each pinned source SHA without Git history and writes a cell-specific Dockerfile.
+It builds one deterministic local worker tag per harness and task before provider work.
+The preflight records each immutable image ID, retains the image, and checks tag identity before live and resumed runs.
 It uses lock-backed Bun and pnpm packages for every worker image.
 Prime also installs its checked-in dependency lock before the in-image CLI probe.
 Dependency acquisition during pre-provider image builds may use network; the validated no-egress boundary starts for the live task container.
 Prime workers relax only Docker's seccomp filter for Bubblewrap user and network namespaces.
 They add no container capability, and the inner kernel remains network-isolated.
-It mounts the hidden content manifest and deterministic grader only through
-`tests/test.sh`.
+Harbor uses a separate verifier environment with the same frozen image and `network_mode = "none"`; the agent cannot read `/tests`.
 Each staged task also contains a pinned Node Mint gateway and `docker-compose.yaml`.
 The Compose `main` service joins only the internal network. The
 `mint-gateway` sidecar joins the internal and egress networks and forwards

@@ -13,11 +13,11 @@ import sys
 from typing import cast
 
 from harness_census_common import (
-    CAMPAIGN_ID, COMPACT_RECEIPT_KEYS, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
-    AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, agent_allowed_hosts_identity_digest,
-    agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, confined_path, digest, fail,
+    CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation, AttestationEntry, ExchangePaths, HarborTrial, TaskRecord,
+    agent_allowed_hosts_identity_digest, agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, confined_path, digest, fail,
     harbor_reward_value, load_tasks, mcp_identity_digest, write_json,
 )
+from harness_census_resume import resolve_native_observation
 
 
 SAFE_RUNTIME_ENV_KEYS = (
@@ -70,6 +70,13 @@ def cell_task_trial_dir(results: Path, task_id: str, *, materialize_missing: boo
     if not result_path.exists():
         write_json(result_path, {"schema_version": "harness_census.trial_receipt.v1", "task_name": task_id, "exception_info": {"exception_type": "HarborTrialUnavailable", "exception_message": f"expected one Harbor trial, found {len(candidates)}", "reliability_code": "harbor_trial_unavailable", "candidate_paths": [path.as_posix() for path in candidates]}})
     return trial_dir
+def _materialize_reliability_attestation(trial_dir: Path, cell: Cell, reason: str, source: Path | None = None) -> tuple[Path, Attestation]:
+    path = trial_dir / f"{cell.harness}.attestation.reliability.json"
+    attestation: Attestation = {"schema_version": "crucible.adapter_attestation.v1", "adapter": cell.harness, "composition": cell.composition, "version": cell.harness_version, "status": "failed", "observed_identities": [], "reason": reason}
+    if source is not None:
+        attestation["source_attestation_path"] = source.relative_to(trial_dir).as_posix()
+    write_json(path, attestation)
+    return path, attestation
 
 
 def collect_attestations(results: Path, cell: Cell, records: list[TaskRecord] | tuple[TaskRecord, ...] | None = None, *, materialize_missing: bool = True) -> list[AttestationEntry]:
@@ -94,18 +101,14 @@ def collect_attestations(results: Path, cell: Cell, records: list[TaskRecord] | 
             and attestation.get("version") == cell.harness_version
         )
         if not valid:
-            path = trial_dir / f"{cell.harness}.attestation.reliability.json"
-            attestation = {"schema_version": "crucible.adapter_attestation.v1", "adapter": cell.harness, "composition": cell.composition, "version": cell.harness_version, "status": "failed", "observed_identities": [], "reason": "adapter_attestation_missing" if original is None else "adapter_attestation_invalid", "source_attestation_path": original.relative_to(trial_dir).as_posix() if original else None}
-            write_json(path, attestation)
+            path, attestation = _materialize_reliability_attestation(trial_dir, cell, "adapter_attestation_missing" if original is None else "adapter_attestation_invalid", original)
         status = attestation.get("status")
         observed = attestation.get("observed_identities")
         if status == "failed" and observed is None:
             observed = []
             attestation["observed_identities"] = observed
         if not isinstance(observed, list) or any(not isinstance(value, str) or not value.strip() for value in observed):
-            path = trial_dir / f"{cell.harness}.attestation.reliability.json"
-            attestation = {"schema_version": "crucible.adapter_attestation.v1", "adapter": cell.harness, "composition": cell.composition, "version": cell.harness_version, "status": "failed", "observed_identities": [], "reason": "adapter_attestation_invalid"}
-            write_json(path, attestation)
+            path, attestation = _materialize_reliability_attestation(trial_dir, cell, "adapter_attestation_invalid")
             status, observed = "failed", []
         if status == "passed":
             expected = observed[0] if len(observed) == 1 else None
@@ -120,9 +123,7 @@ def collect_attestations(results: Path, cell: Cell, records: list[TaskRecord] | 
                 value = attestation.get(field)
                 identity_ok = identity_ok and isinstance(value, str) and len(value) == 64 and all(character in "0123456789abcdef" for character in value)
             if not identity_ok:
-                path = trial_dir / f"{cell.harness}.attestation.reliability.json"
-                attestation = {"schema_version": "crucible.adapter_attestation.v1", "adapter": cell.harness, "composition": cell.composition, "version": cell.harness_version, "status": "failed", "observed_identities": [], "reason": "adapter_attestation_invalid", "source_attestation_path": original.relative_to(trial_dir).as_posix() if original else None}
-                write_json(path, attestation)
+                path, attestation = _materialize_reliability_attestation(trial_dir, cell, "adapter_attestation_invalid", original)
                 status, observed = "failed", []
         transcript = path.with_name(f"{cell.harness}.jsonl")
         entries.append({"task_id": record.task_id, "trial_dir": trial_dir, "attestation_path": path, "attestation_ref": path.relative_to(cell.cell_dir).as_posix(), "attestation_digest": bytes_digest(path.read_bytes()), "transcript_ref": transcript.relative_to(cell.cell_dir).as_posix() if transcript.is_file() else None, "transcript_path": transcript if transcript.is_file() else None, "record": attestation})
@@ -132,7 +133,7 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
     passed = [entry for entry in attestations if entry["record"].get("status") == "passed"]
     if cell.cell_kind != "native_default" or len(cell.task_records) != 3 or len(passed) != 3:
         return None
-    observations: list[tuple[str, str, str, str, str, str]] = []
+    observations: list[dict[str, str]] = []
     for entry in passed:
         record = entry["record"]
         observed = record.get("observed_identities")
@@ -143,18 +144,17 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
         config_digest = record.get("config_digest")
         if not all(isinstance(value, str) and value.strip() for value in (model, effort, effort_source, tool_manifest, config_digest)):
             fail(f"native attestation identity is incomplete: {cell.cell_id} {entry['task_id']}")
-        system_identity = cell.observed_system_identity(config_digest, tool_manifest)
-        observations.append((model, effort, effort_source, tool_manifest, config_digest, system_identity))
-    if len(set(observations)) != 1:
-        fail(f"native task attestations disagree on observed identity: {cell.cell_id}")
-    model, effort, effort_source, tool_manifest, config_digest, system_identity = observations[0]
-    resolved = cell.resolve_native(model, effort, effort_source, tool_manifest, config_digest)
-    return resolved, {"model": model, "effort": effort, "effort_source": effort_source, "tool_manifest_digest": tool_manifest, "config_digest": config_digest, "system_identity": system_identity}
+        observations.append({"model": model, "effort": effort, "effort_source": effort_source, "tool": tool_manifest, "config": config_digest})
+    resolved_observation = resolve_native_observation(cell, observations)
+    if resolved_observation is None:
+        return None
+    resolved, observation = resolved_observation
+    observation = {**observation, "system_identity": cell.observed_system_identity(observation["config"], observation["tool"]), "tool_manifest_digest": observation["tool"], "config_digest": observation["config"]}
+    return resolved, observation
 
 
 SUPPORTED_RELIABILITY_CODES = {
-    "provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout",
-    "provider_authentication_failed", "provider_budget_exceeded", "verifier_reward_missing",
+    "provider_policy_refused", "provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout",
     "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
     "harbor_job_setup_failed", "harbor_spawn_failed", "harbor_status_failed",
     "harbor_output_failed", "harbor_process_failed", "harbor_trial_missing",
@@ -245,10 +245,13 @@ def classify_reliability(trial: HarborTrial, attestation: Attestation, transcrip
     exception = trial.get("exception_info")
     exception_type = str(exception.get("exception_type", "") if isinstance(exception, dict) else "")
     exception_lower = exception_type.lower()
+    exception_message = str(exception.get("exception_message", "") if isinstance(exception, dict) else "")
     reason = attestation.get("reason") if isinstance(attestation.get("reason"), str) else ""
     explicit_code = exception.get("reliability_code") if isinstance(exception, dict) else None
     if explicit_code is not None:
         return _failure_for_code(_canonical_reliability_code(explicit_code))
+    if "no endpoints available matching your guardrail restrictions and data policy" in exception_message.lower():
+        return _failure_for_code("provider_policy_refused")
     provider_reasons = {"provider_error": "provider_request_failed", "provider_rate_limited": "provider_rate_limited", "provider_authentication_failed": "provider_authentication_failed", "provider_budget_exceeded": "provider_budget_exceeded"}
     provider_exceptions = {"authenticationerror": "provider_authentication_failed", "ratelimiterror": "provider_rate_limited", "budgetexceedederror": "provider_budget_exceeded", "providererror": "provider_request_failed"}
     if reason in provider_reasons:
@@ -598,10 +601,6 @@ def ingest_task(crucible: Path, root: Path, cell: Cell, record: TaskRecord, path
         fail(f"Runner Exchange ingest returned invalid JSON for {record.task_id}: {error}")
 
 
-def compact_receipt(value: Receipt) -> dict[str, object]:
-    compact = {key: value[key] for key in COMPACT_RECEIPT_KEYS if key in value and isinstance(value[key], (str, int, float, bool))}
-    compact["receipt_digest"] = digest(compact)
-    return compact
 
 
 
@@ -623,7 +622,7 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
         fail(f"no tasks are selected for cell: {cell.cell_id}")
     output = cell.cell_dir / "results"
     output.mkdir(exist_ok=True)
-    command = [str(crucible), "run", str(cell.spec_path), "--out", str(output), "--json"]
+    command = [str(crucible), "run", str(cell.spec_path), "--out", str(output), "--db", ":memory:", "--json"]
     if task_ids is not None and set(task_ids) != declared:
         for task_id in task_ids:
             command += ["--task", task_id]
@@ -662,7 +661,3 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
     observed_tools = sorted({entry["record"]["tool_manifest_digest"] for entry in passed if entry["record"].get("tool_manifest_digest")})
     if cell.cell_kind != "native_default" and len(passed) == len(selected_attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
         fail(f"cell observed model or effort identity is not singular: {cell.cell_id}")
-    observed_systems = sorted({cell.observed_system_identity(entry["record"]["config_digest"], entry["record"]["tool_manifest_digest"]) for entry in passed if isinstance(entry["record"].get("config_digest"), str) and isinstance(entry["record"].get("tool_manifest_digest"), str)})
-    compact_receipts = [compact_receipt(cast(Receipt, receipt)) for receipt in receipts]
-    if len(selected) == len(cell.task_records):
-        write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "observed_tool_manifest_digests": observed_tools, "observed_config_digests": observed_configs, "observed_system_identities": observed_systems, "effort_source": cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in selected_attestations], "runner_exchange_receipts": compact_receipts})

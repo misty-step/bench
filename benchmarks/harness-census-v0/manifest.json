@@ -11,18 +11,10 @@
     "global_paths": ["global/AGENTS.md", "global/RULES.md", "global/skills/*/SKILL.md"],
     "task_context_names": ["AGENTS.md", "CLAUDE.md", ".omp/RULES.md"],
     "forbidden_segments": ["eval", "evals", "campaign", "campaigns", "grader", "graders", "references", "fixtures", "tests"],
-    "forbidden_names": ["WAIVER", "WAIVER.md"],
-    "empty_skill_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    "forbidden_names": ["WAIVER", "WAIVER.md"]
   },
   "network_policy": {
     "native_default": {
-      "network_mode": "public",
-      "transport_network_mode": "allowlist",
-      "network_enforcement": "docker_internal_mint_gateway",
-      "task_network_enforcement": "docker_internal_network",
-      "mint_base_url": "http://mint-gateway:4949/proxy/https/openrouter.ai/api/v1"
-    },
-    "controlled": {
       "network_mode": "public",
       "transport_network_mode": "allowlist",
       "network_enforcement": "docker_internal_mint_gateway",

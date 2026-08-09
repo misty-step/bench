@@ -28,22 +28,13 @@ from harness_census_common import (
     harbor_reward_value,
     load_tasks,
     mcp_identity_digest,
+    worker_image_tag,
 )
+from harness_census_gateway import compose_yaml, write_gateway_assets
 from harness_census_exchange import collect_attestations, exchange_envelopes, native_observation, run_cell
-from harness_census_gateway import write_gateway_assets
-from harness_census_staging import (
-    _prime_payload,
-    cell_receipt_state,
-    dockerfile,
-    node_toolchain_package_info,
-    pending_task_ids,
-    prime_package_info,
-    receipt_task_ids,
-    runtime_package_info,
-    stage_prime_package,
-    staged_bytes_digest,
-    verifier_source,
-)
+from harness_census_generation import _prime_payload, dockerfile, node_toolchain_package_info, prime_package_info, runtime_package_info, stage_prime_package, verifier_source
+from harness_census_resume import _derive_cell_result, _reconcile_native_baseline, cell_receipt_state, pending_task_ids, receipt_task_ids, resolve_resume_cell, staged_bytes_digest, verify_pending_task_sources
+from harness_census_staging import staged_task_toml
 
 
 TASK_IDS = sorted((
@@ -176,7 +167,7 @@ def stage_task_artifacts(
             "context": [],
             "digest": f"sha256:{h64(0xF0)}",
         },
-        "authority": {"filesystem_roots": [], "network": "deny", "allowed_hosts": [], "credential_refs": []},
+        "authority": {"filesystem_roots": [], "network": "allowlist", "allowed_hosts": ["mint-gateway"], "credential_refs": []},
         "limits": {
             "timeout_ms": 900000,
             "max_output_bytes": 1048576,
@@ -395,7 +386,6 @@ def build_complete(root: Path, cell: Cell, stage_digest: str) -> None:
         stage_task_artifacts(root, cell, stage_digest, record, receipt)
         receipts.append(receipt)
     write_db(root, receipts)
-    from harness_census_staging import _derive_cell_result
 
     result = _derive_cell_result(root, cell, stage_digest, {receipt["task_name"]: (receipt, 1) for receipt in receipts}, None)
     result_path = root / "cells" / cell.cell_id / "result.json"
@@ -553,7 +543,6 @@ class HarnessCensusResumeTests(unittest.TestCase):
 
     def test_native_baseline_reconciles_all_canonical_receipts(self) -> None:
         from dataclasses import replace
-        from harness_census_staging import _reconcile_native_baseline
 
         cell = replace(self.cell, cell_kind="native_default", composition="native_default", model_requested=None, effort_requested=None, provider_route_resolved=None, provider_effort_resolved=None, row_id=None, cohort_id=None, baseline_id=None)
         resolved = cell.resolve_native(CONTROLLED_MODEL, "high", "requested", h64(0xF1), h64(0xF2))
@@ -830,7 +819,6 @@ class HarnessCensusResumeTests(unittest.TestCase):
         receipt["runner_exchange_result_ref"] = result_ref
         return cell, receipt
     def test_native_partial_resume_keeps_baseline_unresolved(self) -> None:
-        from harness_census_staging import resolve_resume_cell
 
         cell, receipt = self._native_partial()
         write_db(self.root, [receipt])
@@ -938,6 +926,41 @@ class HarnessCensusResumeTests(unittest.TestCase):
             classify_reliability({"exception_info": {"reliability_code": "made_up_failure"}}, {"status": "failed"}, None),
             ("harness", "run", "harbor_execution_failed"),
         )
+    def test_guardrail_refusal_is_non_retryable_provider_policy(self) -> None:
+        from harness_census_exchange import classify_reliability
+
+        failure = classify_reliability({"exception_info": {"exception_message": "No endpoints available matching your guardrail restrictions and data policy"}}, {"status": "failed"}, None)
+        self.assertEqual(failure, ("provider", "run", "provider_policy_refused"))
+
+    def test_memory_ledger_for_generic_runs(self) -> None:
+        exchange_source = (ROOT / "scripts/harness_census_exchange.py").read_text(encoding="utf-8")
+        self.assertIn('"--db", ":memory:"', exchange_source)
+        self.assertNotIn('cell.cell_dir / "runs"', exchange_source)
+
+    def test_staged_task_freezes_worker_and_verifier_images(self) -> None:
+        task = load_tasks()[TASK_IDS[0]]
+        tag = worker_image_tag("omp", task.id)
+        staged, _ = staged_task_toml(task, "controlled_raw", tag)
+        self.assertIn(f'docker_image = "{tag}"', staged)
+        self.assertIn('environment_mode = "separate"', staged)
+        self.assertIn('network_mode = "none"', staged)
+        compose = compose_yaml(worker_image=tag)
+        self.assertIn(f"    image: {tag}\n", compose)
+        self.assertNotIn("dockerfile: Dockerfile", compose)
+
+    def test_mutated_pending_workspace_is_refused(self) -> None:
+        source = self.cell.cell_dir / "tasks" / TASK_IDS[0] / "environment" / "repo"
+        source.mkdir(parents=True)
+        (source / "changed.txt").write_text("mutated", encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "source identity changed"):
+            verify_pending_task_sources(self.root, self.cell, [TASK_IDS[0]])
+    def test_context_pack_has_no_write_only_artifact_paths(self) -> None:
+        context_source = (ROOT / "scripts/harness_census_context.py").read_text(encoding="utf-8")
+        for marker in ("/blobs/", "/archive/", "context-manifest.json"):
+            self.assertNotIn(marker, context_source)
+
+    def test_worker_image_excludes_verifier_mount(self) -> None:
+        self.assertNotIn("COPY tests", dockerfile("omp", "runtime-package", TASK_IDS[0]))
 
 
 if __name__ == "__main__":

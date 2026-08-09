@@ -30,14 +30,32 @@ AGENT_ALLOWED_HOSTS = ("mint-gateway",)
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
 MANIFEST = json.loads((PACKAGE / "manifest.json").read_text(encoding="utf-8"))
 NETWORK_POLICY = MANIFEST["network_policy"]
-CONTROLLED_NETWORK_MODE = NETWORK_POLICY["controlled"]["network_mode"]
-CONTROLLED_NETWORK_ENFORCEMENT = NETWORK_POLICY["controlled"]["network_enforcement"]
-NATIVE_NETWORK_MODE = NETWORK_POLICY["native_default"]["network_mode"]
-NATIVE_NETWORK_ENFORCEMENT = NETWORK_POLICY["native_default"]["network_enforcement"]
-CONTROLLED_TRANSPORT_NETWORK_MODE = NETWORK_POLICY["controlled"]["transport_network_mode"]
-CONTROLLED_TASK_NETWORK_ENFORCEMENT = NETWORK_POLICY["controlled"]["task_network_enforcement"]
-NATIVE_TRANSPORT_NETWORK_MODE = NETWORK_POLICY["native_default"]["transport_network_mode"]
-NATIVE_TASK_NETWORK_ENFORCEMENT = NETWORK_POLICY["native_default"]["task_network_enforcement"]
+_NATIVE_NETWORK_POLICY = NETWORK_POLICY["native_default"]
+NATIVE_NETWORK_MODE = _NATIVE_NETWORK_POLICY["network_mode"]
+NATIVE_NETWORK_ENFORCEMENT = _NATIVE_NETWORK_POLICY["network_enforcement"]
+NATIVE_TRANSPORT_NETWORK_MODE = _NATIVE_NETWORK_POLICY["transport_network_mode"]
+NATIVE_TASK_NETWORK_ENFORCEMENT = _NATIVE_NETWORK_POLICY["task_network_enforcement"]
+# Native and controlled runs intentionally share the same network substrate.
+CONTROLLED_NETWORK_MODE = NATIVE_NETWORK_MODE
+CONTROLLED_NETWORK_ENFORCEMENT = NATIVE_NETWORK_ENFORCEMENT
+CONTROLLED_TRANSPORT_NETWORK_MODE = NATIVE_TRANSPORT_NETWORK_MODE
+CONTROLLED_TASK_NETWORK_ENFORCEMENT = NATIVE_TASK_NETWORK_ENFORCEMENT
+WORKER_IMAGE_PREFIX = "harness-census-worker"
+def worker_image_tag(harness: str, task_id: str) -> str:
+    return f"{WORKER_IMAGE_PREFIX}:{CAMPAIGN_ID}-{harness}-{task_id}"
+RETRY_POLICY = {"product_retry": 0, "transport_retry": 0}
+DECISION_POLICY = {
+    "decision": "scale_or_repair",
+    "task_buckets": 3,
+    "paired_delta_resolvable": {"point_delta": 1.0},
+    "interval_claims": {"descriptive": True, "inferential": False},
+    "forbidden_claims": ["winner", "deployment", "context_deletion"],
+    "cell_invalidation": "any_reliability_failure",
+    "hard_pass_requires_all_tasks": True,
+    "native_default_separate": True,
+}
+RAW_SKILL_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
 
 
 class RosterEntry(TypedDict):
@@ -69,6 +87,10 @@ ROSTER: tuple[RosterEntry, ...] = (
 )
 
 COMPACT_RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+def compact_receipt(value: Mapping[str, object]) -> dict[str, object]:
+    compact = {key: value[key] for key in COMPACT_RECEIPT_KEYS if key in value and isinstance(value[key], (str, int, float, bool))}
+    compact["receipt_digest"] = digest(compact)
+    return compact
 
 
 @dataclass(frozen=True)
@@ -435,12 +457,16 @@ def canonical_task_set_digest(pairs: list[tuple[str, str]]) -> str:
     normalized = sorted([[task_id, comparison.removeprefix("sha256:")] for task_id, comparison in pairs])
     return digest(normalized)
 
+def _task_identity_base(task: Task, source_tree_digest: str, grader_digest: str, reference_patch_digest: str, hunk_map_digest: str) -> dict[str, object]:
+    return {"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest, "reference_hunk_map_digest": hunk_map_digest}
+
+
 def task_identity(task: Task, source_tree_digest: str, instruction_digest: str, task_manifest_digest: str, grader_digest: str, reference_patch_digest: str, hunk_map_digest: str) -> str:
-    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "instruction_digest": instruction_digest, "task_manifest_digest": task_manifest_digest, "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest, "reference_hunk_map_digest": hunk_map_digest})
+    return digest({**_task_identity_base(task, source_tree_digest, grader_digest, reference_patch_digest, hunk_map_digest), "instruction_digest": instruction_digest, "task_manifest_digest": task_manifest_digest})
 
 
 def task_corpus_identity(task: Task, source_tree_digest: str, grader_digest: str, reference_patch_digest: str, hunk_map_digest: str) -> str:
-    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest, "reference_hunk_map_digest": hunk_map_digest})
+    return digest(_task_identity_base(task, source_tree_digest, grader_digest, reference_patch_digest, hunk_map_digest))
 
 
 def bytes_digest(value: bytes) -> str:

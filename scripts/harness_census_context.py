@@ -2,18 +2,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 import posixpath
 from pathlib import Path
 import subprocess
 from typing import Iterable
-
-OMP_COMMIT = "43f0190225a640835ed1a27759b60844359eee30"
-OMP_REPOSITORY = "misty-step/omp-config"
-FORBIDDEN_SEGMENTS = frozenset({"eval", "evals", "campaign", "campaigns", "grader", "graders", "references", "fixtures", "tests"})
-FORBIDDEN_NAMES = frozenset({"WAIVER", "WAIVER.md"})
-TASK_CONTEXT_NAMES = ("AGENTS.md", "CLAUDE.md", ".omp/RULES.md")
+from harness_census_common import MANIFEST, RAW_SKILL_DIGEST, bytes_digest, canonical
+_CONTEXT = MANIFEST["context_pack"]
+OMP_COMMIT = str(_CONTEXT["source_commit"])
+OMP_REPOSITORY = str(_CONTEXT["source_repo"])
+FORBIDDEN_SEGMENTS = frozenset(str(value) for value in _CONTEXT["forbidden_segments"])
+FORBIDDEN_NAMES = frozenset(str(value) for value in _CONTEXT["forbidden_names"])
+TASK_CONTEXT_NAMES = tuple(str(value) for value in _CONTEXT["task_context_names"])
 
 
 @dataclass(frozen=True)
@@ -25,12 +25,6 @@ class ContextPack:
     context_bytes: bytes
 
 
-def _sha256(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
-
-
-def _canonical(value: object) -> bytes:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
 def _git(source: Path, *args: str) -> bytes:
@@ -127,7 +121,7 @@ def _record(source: str, target: str, kind: str, value: bytes, task_id: str | No
         "target_path": target,
         "kind": kind,
         "task_id": task_id,
-        "sha256": _sha256(value),
+        "sha256": bytes_digest(value),
     }
 
 
@@ -154,7 +148,7 @@ def _framed(records: Iterable[dict[str, object]], values: dict[str, bytes]) -> b
     return bytes(output).lstrip(b"\n")
 
 
-def _global_pack(source: Path, forbidden_tokens: Iterable[bytes] = ()) -> tuple[dict[str, object], dict[str, bytes], bytes, bytes]:
+def _global_pack(source: Path, forbidden_tokens: Iterable[bytes] = ()) -> tuple[dict[str, object], dict[str, bytes], bytes]:
     entries = _tree(source)
     includes, holdouts = _global_entries(entries)
     for record in includes:
@@ -164,12 +158,12 @@ def _global_pack(source: Path, forbidden_tokens: Iterable[bytes] = ()) -> tuple[
     values = {record["sha256"]: entries[str(record["source_path"])][1] if str(record["source_path"]) in entries else b"" for record in includes}
     for record in includes:
         if not values[record["sha256"]]:
-            source = str(record["source_path"])
-            resolved = entries[source][1] if entries[source][0] != "120000" else b""
+            source_path = str(record["source_path"])
+            resolved = entries[source_path][1] if entries[source_path][0] != "120000" else b""
             if resolved:
                 values[record["sha256"]] = resolved
             else:
-                raise RuntimeError(f"context blob is missing: {source}")
+                raise RuntimeError(f"context blob is missing: {source_path}")
     manifest: dict[str, object] = {
         "schema_version": "harness_census.context_manifest.v1",
         "source_repo": OMP_REPOSITORY,
@@ -178,9 +172,8 @@ def _global_pack(source: Path, forbidden_tokens: Iterable[bytes] = ()) -> tuple[
         "holdouts": sorted(holdouts, key=lambda item: str(item["source_path"])),
     }
     skills = [record for record in includes if record["kind"] == "skill_entrypoint"]
-    context_bytes = _framed(manifest["includes"], values)
     skill_bytes = _framed(sorted(skills, key=lambda item: str(item["target_path"])), values)
-    return manifest, values, context_bytes, skill_bytes
+    return manifest, values, skill_bytes
 
 
 def _task_context_records(task_id: str, source: Path, allowed_paths: tuple[str, ...], source_repository: str, commit: str) -> tuple[list[dict[str, object]], dict[str, bytes]]:
@@ -211,7 +204,7 @@ def _task_context_records(task_id: str, source: Path, allowed_paths: tuple[str, 
                     "target_path": target_path,
                     "kind": "task_context",
                     "task_id": task_id,
-                    "sha256": _sha256(value),
+                    "sha256": bytes_digest(value),
                 }
                 records[target_path] = record
                 values[record["sha256"]] = value
@@ -226,7 +219,7 @@ def _task_context_records(task_id: str, source: Path, allowed_paths: tuple[str, 
 
 
 def prepare_task_pack(root: Path, task_id: str, source: Path, source_repository: str, commit: str, allowed_paths: tuple[str, ...], omp_source: Path, forbidden_tokens: Iterable[bytes] = ()) -> ContextPack:
-    global_manifest, global_values, global_context, global_skills = _global_pack(omp_source, forbidden_tokens)
+    global_manifest, global_values, global_skills = _global_pack(omp_source, forbidden_tokens)
     task_records, task_values = _task_context_records(task_id, source, allowed_paths, source_repository, commit)
     for record in task_records:
         value = task_values[record["sha256"]]
@@ -234,37 +227,14 @@ def prepare_task_pack(root: Path, task_id: str, source: Path, source_repository:
             raise RuntimeError(f"task context contains forbidden task material: {record['source_path']}")
     includes = list(global_manifest["includes"]) + task_records
     manifest = {**global_manifest, "includes": sorted(includes, key=lambda item: (str(item["task_id"]), str(item["target_path"]))) }
-    manifest_digest = _sha256(_canonical(manifest))
+    manifest_digest = bytes_digest(canonical(manifest))
     values = {**global_values, **task_values}
     prompt_records = [dict(record, target_path=str(record["source_path"])) if record["task_id"] is not None else record for record in manifest["includes"]]
     context_bytes = _framed(prompt_records, values)
-    pack_digest = _sha256(context_bytes)
-    skill_digest = _sha256(global_skills)
-    context_dir = root / "context"
-    for sha, value in values.items():
-        _write_immutable(context_dir / "blobs" / sha, value)
-    pack_path = context_dir / "packs" / f"{pack_digest}.md"
-    manifest_path = context_dir / "manifests" / f"{manifest_digest}.json"
-    _write_immutable(pack_path, context_bytes)
-    _write_json_immutable(manifest_path, manifest)
-    archive_root = context_dir / "archive" / OMP_COMMIT
-    for record in global_manifest["includes"]:
-        _write_immutable(archive_root / str(record["target_path"]), global_values[record["sha256"]])
-    _write_json_immutable(archive_root / "archive.json", {"schema_version": "harness_census.context_archive.v1", "source_repo": OMP_REPOSITORY, "source_commit": OMP_COMMIT, "include_count": len(global_manifest["includes"]), "pack_digest": _sha256(global_context), "skill_digest": skill_digest})
-    aggregate = manifest
-    aggregate_path = context_dir / "context-manifest.json"
-    if aggregate_path.is_file():
-        try:
-            prior = json.loads(aggregate_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-            raise RuntimeError(f"context aggregate manifest is invalid: {error}") from error
-        prior_task = [record for record in prior.get("includes", []) if isinstance(record, dict) and record.get("task_id") is not None]
-        merged = {str(record["target_path"]): record for record in prior_task + task_records}
-        aggregate = {**global_manifest, "includes": sorted(list(global_manifest["includes"]) + list(merged.values()), key=lambda item: (str(item["task_id"]), str(item["target_path"]))) }
-    aggregate_path.parent.mkdir(parents=True, exist_ok=True)
-    aggregate_path.write_bytes(json.dumps(aggregate, indent=2, sort_keys=True).encode("utf-8") + b"\n")
+    pack_digest = bytes_digest(context_bytes)
+    skill_digest = bytes_digest(global_skills)
     return ContextPack(manifest_digest, pack_digest, skill_digest, sum(1 for item in global_manifest["includes"] if item["kind"] == "skill_entrypoint"), context_bytes)
 
 
 def raw_skill_digest() -> str:
-    return _sha256(b"")
+    return RAW_SKILL_DIGEST

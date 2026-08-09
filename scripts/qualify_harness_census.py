@@ -13,7 +13,7 @@ from typing import Mapping
 
 from harness_census_archive import archive_git_tree
 from harness_census_common import (
-    CAMPAIGN_ID, MANIFEST, NETWORK_POLICY, PACKAGE, Task, campaign_matrix,
+    CAMPAIGN_ID, CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_TASK_NETWORK_ENFORCEMENT, CONTROLLED_TRANSPORT_NETWORK_MODE, DECISION_POLICY, MANIFEST, NATIVE_NETWORK_ENFORCEMENT, NATIVE_TASK_NETWORK_ENFORCEMENT, NATIVE_TRANSPORT_NETWORK_MODE, PACKAGE, RETRY_POLICY, Task, campaign_matrix,
     digest, fail, file_digest, harness_catalog_digest, load_tasks, mcp_identity_digest, model_roster_digest,
     qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping,
     task_identity, tree_digest, tree_files, write_json,
@@ -241,13 +241,13 @@ def write_smoke(receipts: list[dict[str, object]]) -> None:
     gateway = gateway_identity()
     stage = {
         "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "smoke", "bench_commit": None, "crucible_commit": None,
-        "roster_digest": model_roster_digest(), "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": digest([entry["adapter"] for entry in qualification_harness_records()]), "pack_digest": digest(pack), "crucible_binary_digest": None, "prime_package_digest": None,
+        "roster_digest": model_roster_digest(), "catalog_digest": harness_catalog_digest(), "adapter_digest": digest([entry["adapter"] for entry in qualification_harness_records()]), "pack_digest": digest(pack), "crucible_binary_digest": None, "prime_package_digest": None,
         "dockerfile_digests": [], "gateway_digests": [gateway["gateway_digest"]], "gateway_dockerfile_digests": [gateway["gateway_dockerfile_digest"]], "compose_digests": [gateway["compose_digest"]], "package_digests": [], "profile_digest": digest({"mint_base_url": MINT_INTERNAL_BASE_URL, "gateway_digests": [gateway["gateway_digest"]], "gateway_dockerfile_digests": [gateway["gateway_dockerfile_digest"]], "compose_digests": [gateway["compose_digest"]]}),
         "mcp_digest": mcp_identity_digest(), "task_digest": task_digest, "reference_hunk_map_digest": hunk_map_digest, "grader_digest": digest([receipt["reference"]["grader_digest"] for receipt in receipts]),
-        "transport_network_mode": {"controlled": NETWORK_POLICY["controlled"]["transport_network_mode"], "native_default": NETWORK_POLICY["native_default"]["transport_network_mode"]},
-        "network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["network_enforcement"]},
-        "task_network_enforcement": {"controlled": NETWORK_POLICY["controlled"]["task_network_enforcement"], "native_default": NETWORK_POLICY["native_default"]["task_network_enforcement"]},
-        "retry_policy": {"product_retry": 0, "transport_retry": 0}, "decision_policy": {"decision": "scale_or_repair", "task_buckets": 3, "paired_delta_resolvable": {"point_delta": 1.0}, "interval_claims": {"descriptive": True, "inferential": False}, "forbidden_claims": ["winner", "deployment", "context_deletion"], "cell_invalidation": "any_reliability_failure", "hard_pass_requires_all_tasks": True, "native_default_separate": True},
+        "transport_network_mode": {"controlled": CONTROLLED_TRANSPORT_NETWORK_MODE, "native_default": NATIVE_TRANSPORT_NETWORK_MODE},
+        "network_enforcement": {"controlled": CONTROLLED_NETWORK_ENFORCEMENT, "native_default": NATIVE_NETWORK_ENFORCEMENT},
+        "task_network_enforcement": {"controlled": CONTROLLED_TASK_NETWORK_ENFORCEMENT, "native_default": NATIVE_TASK_NETWORK_ENFORCEMENT},
+        "retry_policy": dict(RETRY_POLICY), "decision_policy": dict(DECISION_POLICY),
     }
     validate_stage_manifest(stage, stage_id="smoke")
     write_json(PACKAGE / "smoke" / "stage-manifest.json", stage)

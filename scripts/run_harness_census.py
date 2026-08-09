@@ -4,20 +4,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 import subprocess
 
 from harness_census_common import (
-    BUN_VERSION, CAMPAIGN_ID, CONTROLLED_MODEL, HARBOR_VERSION,
-    HARNESSES, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
-    fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, runtime_harness_records, verified_commit, write_json,
+    BUN_VERSION, CAMPAIGN_ID, CONTROLLED_MODEL, DECISION_POLICY, HARBOR_VERSION, RETRY_POLICY, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
+    fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
+from harness_census_resume import cell_receipt_state, pending_task_ids, receipt_task_ids, resolve_resume_cell, staged_bytes_digest, verify_pending_task_sources
 from harness_census_staging import (
-    build_cells, cell_receipt_state, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, pending_task_ids, preflight_worker_images, receipt_task_ids, resolve_resume_cell,
+    build_cells, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, preflight_worker_images,
     probe_controlled_argv_surfaces, probe_harbor_task_validity, probe_verifier, qualification, require_dir,
-    resume_staged_cells, run_scope_probes, stage_prime_package, staged_bytes_digest, validate_smoke, validate_stage_manifest, write_harbor_wrapper,
+    resume_staged_cells, run_scope_probes, stage_prime_package, validate_smoke, validate_stage_manifest, verify_worker_images, write_harbor_wrapper,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,7 +32,7 @@ def campaign_stage(cells: tuple, composition_digests: dict[str, str], prime_pack
     return {
         "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "campaign", "bench_commit": bench_commit,
         "crucible_commit": crucible_meta["commit"], "crucible_binary_digest": crucible_meta["binary_digest"], "roster_digest": model_roster_digest(),
-        "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": cells[0].adapter_digest,
+        "catalog_digest": harness_catalog_digest(), "adapter_digest": cells[0].adapter_digest,
         "pack_digest": digest({"compositions": composition_digests, "context": sorted((cell.cell_id, record.task_id, record.context_manifest_digest, record.context_pack_digest, record.context_digest, record.skill_digest) for cell in cells for record in cell.task_records), "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "prime_package": prime_package["digest"]}), "prime_package_digest": prime_package["digest"],
         "dockerfile_digests": dockerfile_digests, "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "package_digests": package_digests, "profile_digest": digest(sorted((cell.cell_id, cell.profile_digest) for cell in cells)),
         "mcp_digest": mcp_identity_digest(), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})), "reference_hunk_map_digest": reference_hunk_map_digest,
@@ -41,8 +40,8 @@ def campaign_stage(cells: tuple, composition_digests: dict[str, str], prime_pack
         "transport_network_mode": {"controlled": cells[1].transport_network_mode, "native_default": cells[0].transport_network_mode},
         "network_enforcement": {"controlled": cells[1].network_enforcement, "native_default": cells[0].network_enforcement},
         "task_network_enforcement": {"controlled": cells[1].task_network_enforcement, "native_default": cells[0].task_network_enforcement},
-        "controlled_tool_surface_probe": controlled_probe, "retry_policy": {"product_retry": 0, "transport_retry": 0},
-        "decision_policy": {"decision": "scale_or_repair", "task_buckets": 3, "paired_delta_resolvable": {"point_delta": 1.0}, "interval_claims": {"descriptive": True, "inferential": False}, "forbidden_claims": ["winner", "deployment", "context_deletion"], "cell_invalidation": "any_reliability_failure", "hard_pass_requires_all_tasks": True, "native_default_separate": True, "controlled_model_identity": CONTROLLED_MODEL, "bun_version": BUN_VERSION, "harbor_version": HARBOR_VERSION},
+        "controlled_tool_surface_probe": controlled_probe, "retry_policy": dict(RETRY_POLICY),
+        "decision_policy": {**DECISION_POLICY, "controlled_model_identity": CONTROLLED_MODEL, "bun_version": BUN_VERSION, "harbor_version": HARBOR_VERSION},
         "cells": immutable_stage_cells(cells), "worker_preflight_digest": worker_preflight_digest,
     }
 
@@ -170,7 +169,8 @@ def main() -> None:
             if unknown:
                 fail(f"unknown --cell selection for resume: {', '.join(unknown)}")
             selected = [cell for cell in selected if cell.cell_id in args.cell]
-        selected = [resolved_cells[cell.cell_id] for cell in selected if states[cell.cell_id] not in {"complete", "invalid"}]
+        if len(selected) > args.max_cells:
+            fail(f"resume selected {len(selected)} cells exceeds --max-cells {args.max_cells}")
     else:
         qualification(source_root)
         assets, composition_digests = load_compositions()
@@ -216,6 +216,7 @@ def main() -> None:
     if args.dry_run:
         print(f"dry-run cells={len(selected)} planned_task_set_size={len(cells[0].task_records)} selected_task_count={sum(len(cell.task_records) for cell in selected)} provider_calls=0")
         return
+    verify_worker_images(root, cells, worker_preflight)
     run_plan: list[tuple[object, list[str], list[str]]] = []
     for cell in selected:
         prior = receipt_task_ids(root, cell)
@@ -238,7 +239,7 @@ def main() -> None:
         write_json(confined_path(root, "campaign.json"), campaign)
     attempted_tasks = 0
     for cell, prior, run_tasks in run_plan:
-        attempted_tasks += len(run_tasks)
+        verify_pending_task_sources(root, cell, run_tasks)
         run_cell(root, cell, crucible, harbor, stage_digest, expected_cell_digests[cell.cell_id], task_ids=run_tasks, prior_task_ids=prior)
     terminal_states = {cell.cell_id: cell_receipt_state(root, cell, stage_digest, expected_cell_digests[cell.cell_id]) for cell in cells}
     if run_kind == "final" and not args.resume:
