@@ -319,6 +319,8 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
     task_toml, network_mode = staged_task_toml(task, composition, worker_image)
     (task_dir / "task.toml").write_text(task_toml, encoding="utf-8")
     gateway = write_gateway_assets(task_dir, worker_image=worker_image, allow_user_namespaces=harness == "prime")
+    tests = task_dir / "tests"
+    tests.mkdir(parents=True, exist_ok=True)
     source_manifest = {name: bytes_digest(value) for name, value in tree_files(source, exclude_git=False).items()}
     (tests / "verify.py").write_text(verifier_source(task.task_dir / "grader.py", source_manifest, task.allowed_paths), encoding="utf-8")
     (tests / "verify.py").chmod(0o755)
