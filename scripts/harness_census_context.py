@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 import posixpath
 from pathlib import Path
 import subprocess
