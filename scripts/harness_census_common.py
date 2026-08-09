@@ -45,6 +45,28 @@ WORKER_IMAGE_PREFIX = "harness-census-worker"
 def worker_image_tag(harness: str, task_id: str) -> str:
     return f"{WORKER_IMAGE_PREFIX}:{CAMPAIGN_ID}-{harness}-{task_id}"
 RETRY_POLICY = {"product_retry": 0, "transport_retry": 0}
+SUPPORTED_RELIABILITY_CODES = frozenset({
+    "provider_policy_refused", "provider_request_failed", "provider_rate_limited", "provider_authentication_failed", "provider_budget_exceeded", "adapter_timeout", "harbor_timeout",
+    "verifier_reward_missing", "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
+    "harbor_job_setup_failed", "harbor_spawn_failed", "harbor_status_failed",
+    "harbor_output_failed", "harbor_process_failed", "harbor_trial_missing",
+    "harbor_trial_evidence_unreadable", "harbor_trial_malformed",
+})
+RETRYABLE_RELIABILITY_CODES = frozenset({"provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout"})
+def reliability_failure_identity(code: str) -> tuple[str, str, str]:
+    if code.startswith("provider_"):
+        return "provider", "run", code
+    if code in {"adapter_timeout", "harbor_timeout"}:
+        return "timeout", "run", code
+    if code.startswith("verifier_"):
+        return "harness", "grade", code
+    if code.startswith("harbor_trial_"):
+        return "harness", "collect", code
+    if code in {"harbor_job_setup_failed", "harbor_spawn_failed", "harbor_command_invalid"}:
+        return "harness", "launch", code
+    return "harness", "run", code
+
+
 DECISION_POLICY = {
     "decision": "scale_or_repair",
     "task_buckets": 3,

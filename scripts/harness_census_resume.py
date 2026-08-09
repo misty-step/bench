@@ -7,6 +7,8 @@ from pathlib import Path
 
 from harness_census_common import (
     CAMPAIGN_ID,
+    RETRYABLE_RELIABILITY_CODES,
+    SUPPORTED_RELIABILITY_CODES,
     Cell,
     TaskRecord,
     agent_allowed_hosts_identity_digest,
@@ -23,6 +25,7 @@ from harness_census_common import (
     load_tasks,
     mcp_identity_digest,
     reference_hunk_map_digest,
+    reliability_failure_identity,
     task_corpus_identity,
     tree_digest,
     write_json,
@@ -188,13 +191,29 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
         fail(f"resume receipt identity mismatch: {cell.cell_id} {record.task_id}")
     status = receipt.get("trial_status")
     reliability = status == "reliability_failure"
-    for key, expected_value in {"cell_kind": cell.cell_kind, "composition": cell.composition, "harness": cell.harness, "harness_version": cell.harness_version, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved}.items():
-        if key in receipt:
-            if cell.cell_kind == "native_default" and key in {"provider_route_resolved", "provider_effort_resolved"}:
-                if not isinstance(receipt[key], str) or not receipt[key].strip():
-                    fail(f"resume native receipt identity is incomplete: {cell.cell_id} {key}")
-            elif receipt[key] != expected_value:
-                fail(f"resume receipt cell identity mismatch: {cell.cell_id} {key}")
+    required_identity = {
+        "cell_kind": cell.cell_kind,
+        "composition": cell.composition,
+        "harness": cell.harness,
+        "harness_version": cell.harness_version,
+    }
+    if cell.cell_kind == "controlled":
+        required_identity.update({
+            "model_requested": cell.model_requested,
+            "effort_requested": cell.effort_requested,
+            "provider_route_resolved": cell.provider_route_resolved,
+            "provider_effort_resolved": cell.provider_effort_resolved,
+        })
+    for key, expected_value in required_identity.items():
+        if key not in receipt or receipt[key] != expected_value:
+            fail(f"resume receipt cell identity mismatch: {cell.cell_id} {key}")
+    if cell.cell_kind == "native_default":
+        for key in ("model_requested", "effort_requested"):
+            if key in receipt and receipt[key] is not None:
+                fail(f"resume native receipt identity mismatch: {cell.cell_id} {key}")
+        for key in ("provider_route_resolved", "provider_effort_resolved"):
+            if key in receipt and (not isinstance(receipt[key], str) or not receipt[key].strip()):
+                fail(f"resume native receipt identity is incomplete: {cell.cell_id} {key}")
     for key, expected_value in {"composition_digest": cell.composition_digest, "adapter_digest": cell.adapter_digest, "mcp_digest": mcp_identity_digest(), "agent_kwargs_digest": agent_kwargs_identity_digest(cell.agent_kwargs), "agent_allowed_hosts_digest": agent_allowed_hosts_identity_digest(cell)}.items():
         if key in receipt and not _matches_ref(receipt[key], expected_value):
             fail(f"resume receipt digest identity mismatch: {cell.cell_id} {key}")
@@ -209,9 +228,16 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
     for key, expected_value, label in (("task_digest", record.task_digest, "task digest"), ("comparison_task_digest", record.comparison_task_digest, "comparison identity"), ("context_digest", record.context_digest, "context digest"), ("skill_digest", record.skill_digest, "skill digest")):
         if not _matches_ref(receipt.get(key), expected_value):
             fail(f"resume receipt {label} mismatch: {cell.cell_id} {record.task_id}")
-    for key, expected_value, label in (("row_id", cell.row_id, "row"), ("cohort_id", cell.cohort_id, "cohort"), ("profile_digest", cell.profile_digest, "profile")):
-        if receipt.get(key) is not None and not _matches_ref(receipt[key], expected_value):
+    required_trial_identity = [("profile_digest", cell.profile_digest, "profile")]
+    if cell.cell_kind == "controlled":
+        required_trial_identity.extend((("row_id", cell.row_id, "row"), ("cohort_id", cell.cohort_id, "cohort")))
+    for key, expected_value, label in required_trial_identity:
+        if not _matches_ref(receipt.get(key), expected_value):
             fail(f"resume receipt {label} identity mismatch: {cell.cell_id}")
+    if cell.cell_kind == "native_default":
+        for key, expected_value, label in (("row_id", cell.row_id, "row"), ("cohort_id", cell.cohort_id, "cohort")):
+            if receipt.get(key) is not None and not _matches_ref(receipt[key], expected_value):
+                fail(f"resume receipt {label} identity mismatch: {cell.cell_id}")
     if trusted is None and not reliability:
         fail(f"resume quality receipt trust is unavailable: {cell.cell_id} {record.task_id}")
     if trusted is not None and int(trusted) != 1 and not (int(trusted) == 0 and reliability):
@@ -288,12 +314,30 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
                     fail(f"resume native receipt identity is incomplete: {cell.cell_id} {record.task_id}")
                 observation = {"model": str(route), "effort": str(effort), "effort_source": str(effort_source), "tool": tool_manifest, "config": config_digest}
     else:
+        failure_identity: dict[str, str] = {}
         for key in ("failure_class", "failure_stage", "failure_code"):
-            if not isinstance(receipt.get(key), str) or not receipt[key]:
+            value = receipt.get(key)
+            if not isinstance(value, str) or not value:
                 fail(f"resume reliability receipt is missing {key}: {cell.cell_id} {record.task_id}")
+            failure_identity[key] = value
+            if trial.get(key) != value:
+                fail(f"resume reliability trial disagrees on {key}: {cell.cell_id} {record.task_id}")
+        failure_code = failure_identity["failure_code"]
+        if failure_code not in SUPPORTED_RELIABILITY_CODES:
+            fail(f"resume reliability receipt has unsupported failure_code: {cell.cell_id} {record.task_id}")
+        if tuple(failure_identity[key] for key in ("failure_class", "failure_stage", "failure_code")) != reliability_failure_identity(failure_code):
+            fail(f"resume reliability receipt has inconsistent failure identity: {cell.cell_id} {record.task_id}")
+        expected_status = "timeout" if failure_identity["failure_class"] == "timeout" else "execution_error"
+        error = result.get("error")
+        expected_retryable = failure_code in RETRYABLE_RELIABILITY_CODES
+        if result.get("status") != expected_status or not isinstance(error, dict) or error.get("code") != failure_code or error.get("retryable") is not expected_retryable or error.get("detail") != trial.get("failure_detail"):
+            fail(f"resume reliability result disagrees with the receipt: {cell.cell_id} {record.task_id}")
+        if receipt.get("hard_pass") is not None or receipt.get("task_points") is not None:
+            fail(f"resume reliability receipt contains a score: {cell.cell_id} {record.task_id}")
         detail_ref = receipt.get("failure_detail_ref")
-        if detail_ref is not None:
-            _verify_content_ref(root, detail_ref, "failure_detail_ref")
+        if not isinstance(detail_ref, str):
+            fail(f"resume reliability receipt is missing failure_detail_ref: {cell.cell_id} {record.task_id}")
+        _verify_content_ref(root, detail_ref, "failure_detail_ref")
     transcript_ref = receipt.get("transcript_ref")
     if transcript_ref is not None:
         _verify_content_ref(root, transcript_ref, "transcript_ref")

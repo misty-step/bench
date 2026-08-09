@@ -581,7 +581,7 @@ class HarnessCensusResumeTests(unittest.TestCase):
         self.assertTrue(result_path.is_file())
         self.assertTrue(json.loads(result_path.read_text(encoding="utf-8"))["reconstructed"])
 
-    def test_reliability_receipt_invalidates_cell(self) -> None:
+    def test_incoherent_reliability_receipt_is_rejected(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)
         db = self.root / "runs" / "campaign.sqlite"
         with sqlite3.connect(db) as connection:
@@ -607,16 +607,8 @@ class HarnessCensusResumeTests(unittest.TestCase):
                 [(CAMPAIGN_ID, json.dumps(receipt), receipt["crucible_run_id"], index, receipt["cell_run_id"]) for index, receipt in enumerate(rows, 1)],
             )
             connection.commit()
-        (self.root / "cells" / self.cell.cell_id / "result.json").unlink()
-        self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "invalid")
-        with sqlite3.connect(db) as connection:
-            connection.execute(
-                "DELETE FROM harness_census_receipts WHERE crucible_run_id != ?",
-                (next(receipt["crucible_run_id"] for receipt in rows if receipt["trial_status"] == "reliability_failure"),),
-            )
-            connection.commit()
-        self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "invalid")
-        self.assertEqual(pending_task_ids(self.root, self.cell), [TASK_IDS[0], TASK_IDS[2]])
+        with self.assertRaisesRegex(SystemExit, "reliability trial disagrees"):
+            cell_receipt_state(self.root, self.cell, self.stage_digest)
 
     def test_tampered_grader_bytes_are_rejected(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)

@@ -12,9 +12,9 @@ import time
 from typing import cast
 
 from harness_census_common import (
-    CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation, AttestationEntry, ExchangePaths, HarborTrial, TaskRecord,
+    CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, RETRYABLE_RELIABILITY_CODES, SUPPORTED_RELIABILITY_CODES, Cell, Attestation, AttestationEntry, ExchangePaths, HarborTrial, TaskRecord,
     agent_allowed_hosts_identity_digest, agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, confined_path, digest, fail,
-    harbor_reward_value, load_tasks, mcp_identity_digest, write_json,
+    harbor_reward_value, load_tasks, mcp_identity_digest, reliability_failure_identity, write_json,
 )
 from harness_census_resume import resolve_native_observation
 
@@ -152,29 +152,9 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
     return resolved, observation
 
 
-SUPPORTED_RELIABILITY_CODES = {
-    "provider_policy_refused", "provider_request_failed", "provider_rate_limited", "provider_authentication_failed", "provider_budget_exceeded", "adapter_timeout", "harbor_timeout",
-    "verifier_reward_missing", "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
-    "harbor_job_setup_failed", "harbor_spawn_failed", "harbor_status_failed",
-    "harbor_output_failed", "harbor_process_failed", "harbor_trial_missing",
-    "harbor_trial_evidence_unreadable", "harbor_trial_malformed",
-}
-RETRYABLE_RELIABILITY_CODES = {"provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout"}
 
 
 
-def _failure_for_code(code: str) -> tuple[str, str, str]:
-    if code.startswith("provider_"):
-        return "provider", "run", code
-    if code in {"adapter_timeout", "harbor_timeout"}:
-        return "timeout", "run", code
-    if code.startswith("verifier_"):
-        return "harness", "grade", code
-    if code.startswith("harbor_trial_"):
-        return "harness", "collect", code
-    if code in {"harbor_job_setup_failed", "harbor_spawn_failed", "harbor_command_invalid"}:
-        return "harness", "launch", code
-    return "harness", "run", code
 
 
 def _canonical_reliability_code(value: object) -> str:
@@ -249,27 +229,27 @@ def classify_reliability(trial: HarborTrial, attestation: Attestation, transcrip
     reason = attestation.get("reason") if isinstance(attestation.get("reason"), str) else ""
     explicit_code = exception.get("reliability_code") if isinstance(exception, dict) else None
     if explicit_code is not None:
-        return _failure_for_code(_canonical_reliability_code(explicit_code))
+        return reliability_failure_identity(_canonical_reliability_code(explicit_code))
     if "no endpoints available matching your guardrail restrictions and data policy" in exception_message.lower():
-        return _failure_for_code("provider_policy_refused")
+        return reliability_failure_identity("provider_policy_refused")
     provider_reasons = {"provider_policy_refused": "provider_policy_refused", "provider_error": "provider_request_failed", "provider_rate_limited": "provider_rate_limited", "provider_authentication_failed": "provider_authentication_failed", "provider_budget_exceeded": "provider_budget_exceeded"}
     provider_exceptions = {"authenticationerror": "provider_authentication_failed", "ratelimiterror": "provider_rate_limited", "budgetexceedederror": "provider_budget_exceeded", "providererror": "provider_request_failed"}
     if reason in provider_reasons:
-        return _failure_for_code(provider_reasons[reason])
+        return reliability_failure_identity(provider_reasons[reason])
     if exception_lower in provider_exceptions:
-        return _failure_for_code(provider_exceptions[exception_lower])
+        return reliability_failure_identity(provider_exceptions[exception_lower])
     if reason in {"verifier_reward_missing", "verifier_reward_invalid", "grader_report_missing", "grader_report_invalid", "grader_missing"}:
-        return _failure_for_code(_canonical_reliability_code(reason))
+        return reliability_failure_identity(_canonical_reliability_code(reason))
     if reason == "turn_limit_exceeded" or reason == "timeout" or "timeout" in exception_lower or "deadline" in exception_lower:
-        return _failure_for_code("adapter_timeout")
+        return reliability_failure_identity("adapter_timeout")
     if reason == "setup_error" or exception_lower in {"setuperror", "adaptersetuperror", "bootstraperror", "installerror"}:
-        return _failure_for_code("harbor_job_setup_failed")
+        return reliability_failure_identity("harbor_job_setup_failed")
     if reason in {"transport_error", "connection_error"} or "transport" in exception_lower or "connection" in exception_lower:
-        return _failure_for_code("provider_request_failed")
+        return reliability_failure_identity("provider_request_failed")
     if exception_type or attestation.get("status") == "failed" or reason:
-        return _failure_for_code("harbor_execution_failed")
+        return reliability_failure_identity("harbor_execution_failed")
     if transcript_path is None or not transcript_path.is_file():
-        return _failure_for_code("harbor_trial_evidence_unreadable")
+        return reliability_failure_identity("harbor_trial_evidence_unreadable")
     return None
 
 
@@ -417,7 +397,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
         if cell_run_bounds is None:
             fail(f"Harbor trial timestamps are malformed and Bench cell bounds are unavailable: {cell.cell_id}")
         provenance_started_at, provenance_finished_at = cell_run_bounds
-        failure = _failure_for_code("harbor_trial_malformed")
+        failure = reliability_failure_identity("harbor_trial_malformed")
     else:
         timestamp_error = None
         timestamp_fallback_source = None
@@ -430,25 +410,25 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     if failure is None:
         failure = cell_failure
     if trial_error and failure is None:
-        failure = _failure_for_code("harbor_trial_malformed")
+        failure = reliability_failure_identity("harbor_trial_malformed")
     if dynamic_hosts not in (None, []) and failure is None:
-        failure = _failure_for_code("harbor_command_invalid")
+        failure = reliability_failure_identity("harbor_command_invalid")
     reward_path, report_path = trial_dir / "verifier" / "reward.json", trial_dir / "verifier" / "grader-report.json"
     reward_raw, reward_error = _read_json_or_failure(reward_path)
     report_raw, report_error = _read_json_or_failure(report_path)
     reward_value = harbor_reward_value(reward_raw)
     if failure is None and not generated_grader_path.is_file():
-        failure = _failure_for_code("verifier_reward_missing")
+        failure = reliability_failure_identity("verifier_reward_missing")
     if failure is None and reward_error == "missing":
-        failure = _failure_for_code("verifier_reward_missing")
+        failure = reliability_failure_identity("verifier_reward_missing")
     elif failure is None and reward_error == "invalid":
-        failure = _failure_for_code("verifier_reward_invalid")
+        failure = reliability_failure_identity("verifier_reward_invalid")
     elif failure is None and reward_value is None:
-        failure = _failure_for_code("verifier_reward_invalid")
+        failure = reliability_failure_identity("verifier_reward_invalid")
     if failure is None and report_error == "missing":
-        failure = _failure_for_code("verifier_reward_missing")
+        failure = reliability_failure_identity("verifier_reward_missing")
     elif failure is None and (report_error == "invalid" or not isinstance(report_raw, dict)):
-        failure = _failure_for_code("verifier_reward_invalid")
+        failure = reliability_failure_identity("verifier_reward_invalid")
     grader_digest = record.grader_digest
     trial_id, run_id = f"{cell.cell_id}--{task_id}", f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}"
     instruction_file = cell.cell_dir / record.task_dir / "instruction.md"
@@ -478,7 +458,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
         if not final.is_file():
             final = reward_path
         if not final.is_file():
-            failure = _failure_for_code("harbor_trial_evidence_unreadable")
+            failure = reliability_failure_identity("harbor_trial_evidence_unreadable")
         else:
             evidence.append({"kind": "final_state", "path": final.relative_to(root).as_posix(), "sha256": bytes_digest(final.read_bytes()), "media_type": "text/plain"})
     for path, kind in ((reward_path, "verifier_reward"), (report_path, "grader_report")):
