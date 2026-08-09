@@ -198,7 +198,7 @@ def _canonical_reliability_code(value: object) -> str:
         return "harbor_output_failed"
     if "process" in text:
         return "harbor_process_failed"
-    if "transport" in text or "connection" in text or "provider" in text:
+    if "transport" in text or "connection" in text:
         return "provider_request_failed"
     return "harbor_execution_failed"
 

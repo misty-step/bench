@@ -60,23 +60,29 @@ def _receipt_rows(root: Path, cell: Cell) -> list[tuple[dict[str, object], int |
             return []
         trusted_sql = ", r.trusted" if "run_records" in tables else ", NULL"
         rows = connection.execute(
-            "SELECT c.receipt_json, c.crucible_run_id" + trusted_sql + " FROM harness_census_receipts c "
+            "SELECT c.receipt_json, c.crucible_run_id, c.trial_id, c.cell_run_id, e.exchange_id"
+            + trusted_sql
+            + " FROM harness_census_receipts c "
             "JOIN runner_exchange_records e ON e.record_id = c.exchange_record_id "
             + ("LEFT JOIN run_records r ON r.run_id = c.cell_run_id " if "run_records" in tables else "")
-            + "WHERE c.campaign_id = ?",
-            (CAMPAIGN_ID,),
+            + "WHERE c.campaign_id = ? AND c.cell_run_id = ?",
+            (CAMPAIGN_ID, cell.cell_run_id),
         ).fetchall()
     parsed: list[tuple[dict[str, object], int | None]] = []
-    for raw, run_id, trusted in rows:
+    for raw, database_run_id, database_trial_id, database_cell_run_id, exchange_id, trusted in rows:
         try:
             receipt = json.loads(raw)
         except (TypeError, json.JSONDecodeError):
             fail(f"resume receipt is not valid JSON: {cell.cell_id}")
         if not isinstance(receipt, dict):
             fail(f"resume receipt is not an object: {cell.cell_id}")
-        identity = receipt.get("cell_id") or receipt.get("cell_run_id") or str(run_id)
-        if identity == cell.cell_id or identity == cell.cell_run_id or str(run_id).startswith(f"{CAMPAIGN_ID}--{cell.cell_id}--"):
-            parsed.append((receipt, trusted))
+        task_id = receipt.get("task_id") or receipt.get("task_name")
+        expected_run = f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}"
+        expected_trial = f"{cell.cell_id}--{task_id}"
+        expected_exchange = f"{expected_run}--{task_id}"
+        if not isinstance(task_id, str) or (database_run_id, database_trial_id, database_cell_run_id, exchange_id) != (expected_run, expected_trial, cell.cell_run_id, expected_exchange):
+            fail(f"resume database receipt identity mismatch: {cell.cell_id}")
+        parsed.append((receipt, trusted))
     return parsed
 
 
@@ -95,7 +101,7 @@ def _receipt_identity(receipt: dict[str, object], cell: Cell, stage_digest: str,
         "crucible_run_id": f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}",
     }
     for key, value in expected.items():
-        if key in receipt and receipt[key] != value:
+        if receipt.get(key) != value:
             return False
     return (
         receipt.get("schema_version") == "harness_census.trial_receipt.v1"
@@ -186,6 +192,90 @@ def _receipt_attestation(root: Path, cell: Cell, record: TaskRecord, receipt: di
     return attestation, relative
 
 
+def _verify_quality_receipt(root: Path, cell: Cell, record: TaskRecord, receipt: dict[str, object], status: object, task_exchange: Path) -> dict[str, str] | None:
+    grader_path = task_exchange / "grader.json"
+    if not grader_path.is_file():
+        fail(f"resume quality receipt is missing grader artifact: {cell.cell_id} {record.task_id}")
+    try:
+        grader = json.loads(grader_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        fail(f"resume grader artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
+    grader_bindings = {
+        "row_id": cell.row_id,
+        "cohort_id": cell.cohort_id,
+        "profile_digest": cell.profile_digest,
+    }
+    if cell.cell_kind == "controlled":
+        grader_bindings["baseline_id"] = cell.baseline_id
+    task_points = grader.get("task_points") if isinstance(grader, dict) else None
+    if not isinstance(grader, dict) or grader.get("schema_version") != "harness_census.grader_receipt.v1" or grader.get("campaign_id") != CAMPAIGN_ID or grader.get("task_id") != record.task_id or grader.get("trial_id") != f"{cell.cell_id}--{record.task_id}" or any(not _matches_ref(grader.get(key), expected) for key, expected in grader_bindings.items()) or not _matches_ref(grader.get("grader_digest"), record.grader_digest) or grader.get("grader_identity") != "harness_census_deterministic" or not isinstance(grader.get("hard_pass"), bool) or isinstance(task_points, bool) or not isinstance(task_points, (int, float)) or not 0.0 <= float(task_points) <= 1.0:
+        fail(f"resume grader artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    grader_ref = receipt.get("grader_receipt_ref")
+    if grader_ref is not None and _verify_content_ref(root, grader_ref, "grader_receipt_ref") != grader_path:
+        fail(f"resume grader receipt reference mismatch: {cell.cell_id} {record.task_id}")
+    expected_hard_pass = status == "success"
+    if grader["hard_pass"] != expected_hard_pass or receipt.get("hard_pass") != expected_hard_pass or receipt.get("task_points") != task_points:
+        fail(f"resume receipt score disagrees with grader: {cell.cell_id} {record.task_id}")
+    attestation, _ = _receipt_attestation(root, cell, record, receipt)
+    tool_manifest = attestation.get("tool_manifest_digest")
+    config_digest = attestation.get("config_digest")
+    receipt_tool = receipt.get("tool_manifest_digest")
+    if isinstance(tool_manifest, str) and tool_manifest and not _matches_ref(receipt_tool, tool_manifest):
+        fail(f"resume receipt tool manifest mismatch: {cell.cell_id} {record.task_id}")
+    if isinstance(receipt_tool, str) and receipt_tool and not _valid_digest(receipt_tool.removeprefix("sha256:")):
+        fail(f"resume receipt tool manifest is invalid: {cell.cell_id} {record.task_id}")
+    if not isinstance(config_digest, str) or not isinstance(tool_manifest, str) or not config_digest or not tool_manifest:
+        return None
+    expected_system = cell.observed_system_identity(config_digest, tool_manifest)
+    if receipt.get("system_identity") not in {expected_system, f"sha256:{expected_system}"}:
+        fail(f"resume receipt system identity mismatch: {cell.cell_id} {record.task_id}")
+    if cell.cell_kind != "native_default":
+        return None
+    route = receipt.get("provider_route_resolved")
+    effort = receipt.get("provider_effort_resolved")
+    effort_source = receipt.get("effort_source")
+    if not all(isinstance(value, str) and value.strip() for value in (route, effort, effort_source)):
+        fail(f"resume native receipt identity is incomplete: {cell.cell_id} {record.task_id}")
+    observation = {"model": str(route), "effort": str(effort), "effort_source": str(effort_source), "tool": tool_manifest, "config": config_digest}
+    resolved = cell.resolve_native(str(route), str(effort), str(effort_source), tool_manifest, config_digest)
+    if not _matches_ref(grader.get("baseline_id"), resolved.baseline_id) or not _matches_ref(receipt.get("baseline_id"), resolved.baseline_id):
+        fail(f"resume native baseline identity mismatch: {cell.cell_id} {record.task_id}")
+    return observation
+
+
+def _verify_reliability_receipt(root: Path, cell: Cell, record: TaskRecord, receipt: dict[str, object], result: dict[str, object], trial: dict[str, object], evidence_refs: list[object]) -> None:
+    failure_identity: dict[str, str] = {}
+    for key in ("failure_class", "failure_stage", "failure_code"):
+        value = receipt.get(key)
+        if not isinstance(value, str) or not value:
+            fail(f"resume reliability receipt is missing {key}: {cell.cell_id} {record.task_id}")
+        failure_identity[key] = value
+        if trial.get(key) != value:
+            fail(f"resume reliability trial disagrees on {key}: {cell.cell_id} {record.task_id}")
+    failure_code = failure_identity["failure_code"]
+    if failure_code not in SUPPORTED_RELIABILITY_CODES:
+        fail(f"resume reliability receipt has unsupported failure_code: {cell.cell_id} {record.task_id}")
+    if tuple(failure_identity[key] for key in ("failure_class", "failure_stage", "failure_code")) != reliability_failure_identity(failure_code):
+        fail(f"resume reliability receipt has inconsistent failure identity: {cell.cell_id} {record.task_id}")
+    expected_status = "timeout" if failure_identity["failure_class"] == "timeout" else "execution_error"
+    failure_detail = trial.get("failure_detail")
+    if not isinstance(failure_detail, dict) or not failure_detail:
+        fail(f"resume reliability trial has invalid failure_detail: {cell.cell_id} {record.task_id}")
+    error = result.get("error")
+    expected_retryable = failure_code in RETRYABLE_RELIABILITY_CODES
+    if result.get("status") != expected_status or not isinstance(error, dict) or error.get("code") != failure_code or error.get("retryable") is not expected_retryable or error.get("detail") != failure_detail:
+        fail(f"resume reliability result disagrees with the receipt: {cell.cell_id} {record.task_id}")
+    if receipt.get("hard_pass") is not None or receipt.get("task_points") is not None:
+        fail(f"resume reliability receipt contains a score: {cell.cell_id} {record.task_id}")
+    detail_ref = receipt.get("failure_detail_ref")
+    if not isinstance(detail_ref, str) or detail_ref not in evidence_refs:
+        fail(f"resume reliability receipt has invalid failure_detail_ref: {cell.cell_id} {record.task_id}")
+    detail_path = _verify_content_ref(root, detail_ref, "failure_detail_ref")
+    failure_root = confined_path(root, "cells", cell.cell_id, "results", "harbor-jobs", record.task_id)
+    if detail_path.name != "result.json" or not detail_path.is_relative_to(failure_root):
+        fail(f"resume reliability failure detail is outside the task result: {cell.cell_id} {record.task_id}")
+
+
 def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[bool, dict[str, str] | None]:
     if not _receipt_identity(receipt, cell, stage_digest, record.task_id):
         fail(f"resume receipt identity mismatch: {cell.cell_id} {record.task_id}")
@@ -272,76 +362,48 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
         fail(f"resume request artifact identity mismatch: {cell.cell_id} {record.task_id}")
     if not isinstance(result, dict) or result.get("schema_version") != "crucible.runner_exchange_result.v1" or result.get("exchange_id") != expected_exchange or result.get("cell_id") != cell.cell_id or result.get("cell_run_id") != cell.cell_run_id:
         fail(f"resume result artifact identity mismatch: {cell.cell_id} {record.task_id}")
-    if not isinstance(trial, dict) or trial.get("schema_version") != "harness_census.trial_receipt.v1" or trial.get("campaign_id") != CAMPAIGN_ID or trial.get("cell_id") != cell.cell_id or trial.get("cell_run_id") != cell.cell_run_id or trial.get("task_name") != record.task_id or trial.get("trial_id") != f"{cell.cell_id}--{record.task_id}":
+    if not isinstance(trial, dict) or trial.get("schema_version") != "harness_census.trial_receipt.v1" or trial.get("campaign_id") != CAMPAIGN_ID or trial.get("crucible_run_id") != expected_run or trial.get("cell_id") != cell.cell_id or trial.get("cell_run_id") != cell.cell_run_id or trial.get("task_id") != record.task_id or trial.get("task_name") != record.task_id or trial.get("trial_id") != f"{cell.cell_id}--{record.task_id}":
         fail(f"resume trial artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    trial_path = task_exchange / "trial.json"
+    trial_ref = f"sha256:{bytes_digest(trial_path.read_bytes())}@{trial_path.relative_to(root).as_posix()}"
+    evidence_refs = receipt.get("evidence_refs")
+    if not isinstance(evidence_refs, list) or trial_ref not in evidence_refs:
+        fail(f"resume trial artifact is not bound to the receipt: {cell.cell_id} {record.task_id}")
     singular_digests = {"dockerfile_digest": record.dockerfile_digest, "gateway_digest": record.gateway_digest, "gateway_dockerfile_digest": record.gateway_dockerfile_digest, "compose_digest": record.compose_digest}
     for artifact_name, artifact in (("request", request), ("result", result), ("trial", trial)):
         if any(not _matches_ref(artifact.get(key), expected) for key, expected in singular_digests.items()):
             fail(f"resume {artifact_name} task artifact identity mismatch: {cell.cell_id} {record.task_id}")
+    if trial.get("trial_status") != status:
+        fail(f"resume trial status disagrees with the receipt: {cell.cell_id} {record.task_id}")
+    if cell.cell_kind == "controlled":
+        if not isinstance(cell.model_requested, str):
+            fail(f"resume controlled model identity is missing: {cell.cell_id}")
+        provider, separator, model_name = cell.model_requested.partition("/")
+        expected_model = {"provider": provider, "name": model_name}
+        if not separator:
+            fail(f"resume controlled model identity is invalid: {cell.cell_id}")
+        for artifact_name, artifact in (("request", request), ("result", result)):
+            candidate = artifact.get("candidate")
+            if not isinstance(candidate, dict) or candidate.get("model") != expected_model or candidate.get("reasoning_effort") != cell.effort_requested:
+                fail(f"resume {artifact_name} treatment identity mismatch: {cell.cell_id} {record.task_id}")
+        trial_treatment = {
+            "model_requested": cell.model_requested,
+            "effort_requested": cell.effort_requested,
+            "provider_route_resolved": cell.provider_route_resolved,
+            "provider_effort_resolved": cell.provider_effort_resolved,
+        }
+        if any(trial.get(key) != value for key, value in trial_treatment.items()):
+            fail(f"resume trial treatment identity mismatch: {cell.cell_id} {record.task_id}")
     observation: dict[str, str] | None = None
-    if not reliability:
-        if not (task_exchange / "grader.json").is_file():
-            fail(f"resume quality receipt is missing grader artifact: {cell.cell_id} {record.task_id}")
-        try:
-            grader = json.loads((task_exchange / "grader.json").read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as error:
-            fail(f"resume grader artifact is invalid: {cell.cell_id} {record.task_id}: {error}")
-        if not isinstance(grader, dict) or grader.get("schema_version") != "harness_census.grader_receipt.v1" or grader.get("campaign_id") != CAMPAIGN_ID or grader.get("task_id") != record.task_id or grader.get("trial_id") != f"{cell.cell_id}--{record.task_id}" or any(grader.get(key) not in {expected, f"sha256:{expected}" if expected else None} for key, expected in {"row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest}.items()) or grader.get("grader_digest") not in {record.grader_digest, f"sha256:{record.grader_digest}"} or grader.get("grader_identity") != "harness_census_deterministic" or not isinstance(grader.get("hard_pass"), bool) or isinstance(grader.get("task_points"), bool) or not isinstance(grader.get("task_points"), (int, float)) or not 0.0 <= float(grader.get("task_points")) <= 1.0:
-            fail(f"resume grader artifact identity mismatch: {cell.cell_id} {record.task_id}")
-        grader_ref = receipt.get("grader_receipt_ref")
-        if grader_ref is not None and _verify_content_ref(root, grader_ref, "grader_receipt_ref") != task_exchange / "grader.json":
-            fail(f"resume grader receipt reference mismatch: {cell.cell_id} {record.task_id}")
-        expected_hard_pass = status == "success"
-        if grader.get("hard_pass") != expected_hard_pass or receipt.get("hard_pass") != expected_hard_pass or receipt.get("task_points") != grader.get("task_points"):
-            fail(f"resume receipt score disagrees with grader: {cell.cell_id} {record.task_id}")
-        attestation, _ = _receipt_attestation(root, cell, record, receipt)
-        tool_manifest = attestation.get("tool_manifest_digest")
-        config_digest = attestation.get("config_digest")
-        receipt_tool = receipt.get("tool_manifest_digest")
-        if isinstance(tool_manifest, str) and tool_manifest and not _matches_ref(receipt_tool, tool_manifest):
-            fail(f"resume receipt tool manifest mismatch: {cell.cell_id} {record.task_id}")
-        if isinstance(receipt_tool, str) and receipt_tool and not _valid_digest(receipt_tool.removeprefix("sha256:")):
-            fail(f"resume receipt tool manifest is invalid: {cell.cell_id} {record.task_id}")
-        if isinstance(config_digest, str) and isinstance(tool_manifest, str) and config_digest and tool_manifest:
-            expected_system = cell.observed_system_identity(config_digest, tool_manifest)
-            if receipt.get("system_identity") not in {expected_system, f"sha256:{expected_system}"}:
-                fail(f"resume receipt system identity mismatch: {cell.cell_id} {record.task_id}")
-            if cell.cell_kind == "native_default":
-                route = receipt.get("provider_route_resolved")
-                effort = receipt.get("provider_effort_resolved")
-                effort_source = receipt.get("effort_source")
-                if not all(isinstance(value, str) and value.strip() for value in (route, effort, effort_source)):
-                    fail(f"resume native receipt identity is incomplete: {cell.cell_id} {record.task_id}")
-                observation = {"model": str(route), "effort": str(effort), "effort_source": str(effort_source), "tool": tool_manifest, "config": config_digest}
+    if reliability:
+        _verify_reliability_receipt(root, cell, record, receipt, result, trial, evidence_refs)
+        observation = None
     else:
-        failure_identity: dict[str, str] = {}
-        for key in ("failure_class", "failure_stage", "failure_code"):
-            value = receipt.get(key)
-            if not isinstance(value, str) or not value:
-                fail(f"resume reliability receipt is missing {key}: {cell.cell_id} {record.task_id}")
-            failure_identity[key] = value
-            if trial.get(key) != value:
-                fail(f"resume reliability trial disagrees on {key}: {cell.cell_id} {record.task_id}")
-        failure_code = failure_identity["failure_code"]
-        if failure_code not in SUPPORTED_RELIABILITY_CODES:
-            fail(f"resume reliability receipt has unsupported failure_code: {cell.cell_id} {record.task_id}")
-        if tuple(failure_identity[key] for key in ("failure_class", "failure_stage", "failure_code")) != reliability_failure_identity(failure_code):
-            fail(f"resume reliability receipt has inconsistent failure identity: {cell.cell_id} {record.task_id}")
-        expected_status = "timeout" if failure_identity["failure_class"] == "timeout" else "execution_error"
-        error = result.get("error")
-        expected_retryable = failure_code in RETRYABLE_RELIABILITY_CODES
-        if result.get("status") != expected_status or not isinstance(error, dict) or error.get("code") != failure_code or error.get("retryable") is not expected_retryable or error.get("detail") != trial.get("failure_detail"):
-            fail(f"resume reliability result disagrees with the receipt: {cell.cell_id} {record.task_id}")
-        if receipt.get("hard_pass") is not None or receipt.get("task_points") is not None:
-            fail(f"resume reliability receipt contains a score: {cell.cell_id} {record.task_id}")
-        detail_ref = receipt.get("failure_detail_ref")
-        if not isinstance(detail_ref, str):
-            fail(f"resume reliability receipt is missing failure_detail_ref: {cell.cell_id} {record.task_id}")
-        _verify_content_ref(root, detail_ref, "failure_detail_ref")
+        observation = _verify_quality_receipt(root, cell, record, receipt, status, task_exchange)
     transcript_ref = receipt.get("transcript_ref")
     if transcript_ref is not None:
         _verify_content_ref(root, transcript_ref, "transcript_ref")
-    for value in receipt.get("evidence_refs", []):
+    for value in evidence_refs:
         _verify_content_ref(root, value, "evidence ref")
     return reliability, observation
 

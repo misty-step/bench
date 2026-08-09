@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 
 from harness_census_common import (
-    BUN_VERSION, CAMPAIGN_ID, DECISION_POLICY, DEFAULT_CONTROLLED_PAIR, HARBOR_VERSION, RETRY_POLICY, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
+    BUN_VERSION, CAMPAIGN_ID, DECISION_POLICY, DEFAULT_CONTROLLED_PAIR, HARBOR_VERSION, RETRY_POLICY, ControlledPair, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
     fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, validate_controlled_pair, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
@@ -58,6 +58,11 @@ def validate_resume_campaign_binding(stage: object, campaign: object) -> str:
     if campaign.get("stage_manifest_digest") != stage_digest or campaign.get("campaign_id") != CAMPAIGN_ID:
         fail("--resume campaign metadata does not bind to stage-manifest.json")
     return stage_digest
+
+
+def validate_resume_controlled_pair(campaign: object, controlled_pair: ControlledPair) -> None:
+    if not isinstance(campaign, dict) or campaign.get("controlled_model") != controlled_pair.model_requested or campaign.get("controlled_route") != controlled_pair.provider_route_resolved or campaign.get("controlled_effort") != controlled_pair.effort_requested:
+        fail("--resume campaign controlled pair differs from the frozen stage")
 
 
 
@@ -131,8 +136,7 @@ def main() -> None:
             fail(f"--resume metadata is invalid JSON: {error}")
         stage_digest = validate_resume_campaign_binding(stage, campaign)
         validate_stage_manifest(stage, stage_id="campaign", controlled_pair=controlled_pair)
-        if campaign.get("controlled_model") != controlled_pair.model_requested or campaign.get("controlled_route") != controlled_pair.provider_route_resolved or campaign.get("controlled_effort") != controlled_pair.effort_requested:
-            fail("--resume campaign controlled pair differs from the frozen stage")
+        validate_resume_controlled_pair(campaign, controlled_pair)
         if stage.get("bench_commit") != current_bench_commit or stage.get("crucible_commit") != crucible_meta["commit"] or stage.get("crucible_binary_digest") != crucible_meta["binary_digest"]:
             fail("--resume runtime identity differs from the frozen stage")
         worker_preflight = campaign.get("worker_preflight")
