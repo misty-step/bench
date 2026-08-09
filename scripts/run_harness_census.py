@@ -60,9 +60,6 @@ def validate_resume_campaign_binding(stage: object, campaign: object) -> str:
     return stage_digest
 
 
-def validate_resume_controlled_pair(campaign: object, controlled_pair: ControlledPair) -> None:
-    if not isinstance(campaign, dict) or campaign.get("controlled_model") != controlled_pair.model_requested or campaign.get("controlled_route") != controlled_pair.provider_route_resolved or campaign.get("controlled_effort") != controlled_pair.effort_requested:
-        fail("--resume campaign controlled pair differs from the frozen stage")
 
 
 
@@ -136,7 +133,6 @@ def main() -> None:
             fail(f"--resume metadata is invalid JSON: {error}")
         stage_digest = validate_resume_campaign_binding(stage, campaign)
         validate_stage_manifest(stage, stage_id="campaign", controlled_pair=controlled_pair)
-        validate_resume_controlled_pair(campaign, controlled_pair)
         if stage.get("bench_commit") != current_bench_commit or stage.get("crucible_commit") != crucible_meta["commit"] or stage.get("crucible_binary_digest") != crucible_meta["binary_digest"]:
             fail("--resume runtime identity differs from the frozen stage")
         worker_preflight = campaign.get("worker_preflight")
@@ -226,7 +222,7 @@ def main() -> None:
         run_kind = "final" if not args.task and len(selected) == len(cells) == 9 else "partial"
         first_task_ids = sorted(set(args.task)) if args.task else sorted({record.task_id for cell in selected for record in cell.task_records})
         first_task_count = sum(1 for cell in selected for record in cell.task_records if record.task_id in first_task_ids)
-        campaign = {"schema_version": "harness_census.campaign.v1", "campaign_id": CAMPAIGN_ID, "controlled_model": controlled_pair.model_requested, "controlled_route": controlled_pair.provider_route_resolved, "controlled_effort": controlled_pair.effort_requested, "stage_manifest_digest": stage_digest, "planned_cells": 9, "planned_trials": 27, "planned_task_set_size": len(cells[0].task_records), "selected_cells": len(selected), "selected_trials": sum(len(cell.task_records) for cell in selected), "selected_task_ids": first_task_ids, "selected_task_count": first_task_count, "current_selected_task_count": first_task_count, "selected_cell_ids": [cell.cell_id for cell in selected], "run_kind": run_kind, "completion_status": "staged", "cell_status": {cell.cell_id: "staged" for cell in cells}, "immutable_stage_digest": staged_bytes_digest(root), "smoke_digest": smoke["smoke_digest"], "worker_preflight": worker_preflight, "scope_probes": scope_probes, "composition_digests": composition_digests, "controlled_tool_surface_probe": controlled_tool_surface_probe, "verifier_probe": probe, "harbor_task_validity": harbor_tasks, "harbor": {"version": HARBOR_VERSION, "wrapper": str(harbor.relative_to(root))}, "cells": [cell_summary(cell) for cell in cells]}
+        campaign = {"schema_version": "harness_census.campaign.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "planned_cells": 9, "planned_trials": 27, "planned_task_set_size": len(cells[0].task_records), "selected_cells": len(selected), "selected_trials": sum(len(cell.task_records) for cell in selected), "selected_task_ids": first_task_ids, "selected_task_count": first_task_count, "current_selected_task_count": first_task_count, "selected_cell_ids": [cell.cell_id for cell in selected], "run_kind": run_kind, "completion_status": "staged", "cell_status": {cell.cell_id: "staged" for cell in cells}, "immutable_stage_digest": staged_bytes_digest(root), "smoke_digest": smoke["smoke_digest"], "worker_preflight": worker_preflight, "scope_probes": scope_probes, "composition_digests": composition_digests, "controlled_tool_surface_probe": controlled_tool_surface_probe, "verifier_probe": probe, "harbor_task_validity": harbor_tasks, "harbor": {"version": HARBOR_VERSION, "wrapper": str(harbor.relative_to(root))}, "cells": [cell_summary(cell) for cell in cells]}
         write_json(confined_path(root, "campaign.json"), campaign)
         expected_cell_digests = {cell.cell_id: cell_stage_digest(cell.cell_dir, include_workspace=False) for cell in cells}
     declared_task_ids = {record.task_id for cell in cells for record in cell.task_records}

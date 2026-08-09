@@ -60,7 +60,7 @@ def _receipt_rows(root: Path, cell: Cell) -> list[tuple[dict[str, object], int |
             return []
         trusted_sql = ", r.trusted" if "run_records" in tables else ", NULL"
         rows = connection.execute(
-            "SELECT c.receipt_json, c.crucible_run_id, c.trial_id, c.cell_run_id, e.exchange_id"
+            "SELECT c.receipt_json, c.crucible_run_id, c.trial_id, e.exchange_id"
             + trusted_sql
             + " FROM harness_census_receipts c "
             "JOIN runner_exchange_records e ON e.record_id = c.exchange_record_id "
@@ -69,7 +69,7 @@ def _receipt_rows(root: Path, cell: Cell) -> list[tuple[dict[str, object], int |
             (CAMPAIGN_ID, cell.cell_run_id),
         ).fetchall()
     parsed: list[tuple[dict[str, object], int | None]] = []
-    for raw, database_run_id, database_trial_id, database_cell_run_id, exchange_id, trusted in rows:
+    for raw, database_run_id, database_trial_id, exchange_id, trusted in rows:
         try:
             receipt = json.loads(raw)
         except (TypeError, json.JSONDecodeError):
@@ -80,7 +80,7 @@ def _receipt_rows(root: Path, cell: Cell) -> list[tuple[dict[str, object], int |
         expected_run = f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}"
         expected_trial = f"{cell.cell_id}--{task_id}"
         expected_exchange = f"{expected_run}--{task_id}"
-        if not isinstance(task_id, str) or (database_run_id, database_trial_id, database_cell_run_id, exchange_id) != (expected_run, expected_trial, cell.cell_run_id, expected_exchange):
+        if not isinstance(task_id, str) or (database_run_id, database_trial_id, exchange_id) != (expected_run, expected_trial, expected_exchange):
             fail(f"resume database receipt identity mismatch: {cell.cell_id}")
         parsed.append((receipt, trusted))
     return parsed
@@ -95,7 +95,6 @@ def _receipt_identity(receipt: dict[str, object], cell: Cell, stage_digest: str,
         "cell_id": cell.cell_id,
         "cell_run_id": cell.cell_run_id,
         "task_set_size": cell.task_set_size,
-        "task_name": task_id,
         "task_id": task_id,
         "trial_id": f"{cell.cell_id}--{task_id}",
         "crucible_run_id": f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}",
@@ -268,7 +267,16 @@ def _verify_reliability_receipt(root: Path, cell: Cell, record: TaskRecord, rece
     if receipt.get("hard_pass") is not None or receipt.get("task_points") is not None:
         fail(f"resume reliability receipt contains a score: {cell.cell_id} {record.task_id}")
     detail_ref = receipt.get("failure_detail_ref")
-    if not isinstance(detail_ref, str) or detail_ref not in evidence_refs:
+    evidence = result.get("evidence")
+    harbor_trials = [item for item in evidence if isinstance(item, dict) and item.get("kind") == "harbor_trial"] if isinstance(evidence, list) else []
+    if len(harbor_trials) != 1:
+        fail(f"resume reliability result must contain one Harbor trial: {cell.cell_id} {record.task_id}")
+    harbor_trial = harbor_trials[0]
+    raw_digest, relative = harbor_trial.get("sha256"), harbor_trial.get("path")
+    if isinstance(raw_digest, str) and raw_digest.startswith("sha256:"):
+        raw_digest = raw_digest.removeprefix("sha256:")
+    canonical_detail_ref = f"sha256:{raw_digest}@{relative}"
+    if not _valid_digest(raw_digest) or not isinstance(relative, str) or detail_ref != canonical_detail_ref or detail_ref not in evidence_refs:
         fail(f"resume reliability receipt has invalid failure_detail_ref: {cell.cell_id} {record.task_id}")
     detail_path = _verify_content_ref(root, detail_ref, "failure_detail_ref")
     failure_root = confined_path(root, "cells", cell.cell_id, "results", "harbor-jobs", record.task_id)
@@ -276,7 +284,7 @@ def _verify_reliability_receipt(root: Path, cell: Cell, record: TaskRecord, rece
         fail(f"resume reliability failure detail is outside the task result: {cell.cell_id} {record.task_id}")
 
 
-def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[bool, dict[str, str] | None]:
+def _verify_receipt_metadata(cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[object, bool]:
     if not _receipt_identity(receipt, cell, stage_digest, record.task_id):
         fail(f"resume receipt identity mismatch: {cell.cell_id} {record.task_id}")
     status = receipt.get("trial_status")
@@ -332,6 +340,10 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
         fail(f"resume quality receipt trust is unavailable: {cell.cell_id} {record.task_id}")
     if trusted is not None and int(trusted) != 1 and not (int(trusted) == 0 and reliability):
         fail(f"resume receipt trust is invalid: {cell.cell_id} {record.task_id}")
+    return status, reliability
+
+
+def _load_exchange_artifacts(root: Path, cell: Cell, record: TaskRecord, receipt: dict[str, object]) -> tuple[Path, dict[str, object], dict[str, object], dict[str, object], list[object]]:
     task_exchange = confined_path(root, "exchange", cell.cell_id, record.task_id)
     allowed_names = {"request.json", "result.json", "trial.json", "grader.json"}
     names = {path.name for path in task_exchange.iterdir()} if task_exchange.is_dir() else set()
@@ -369,35 +381,45 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
     evidence_refs = receipt.get("evidence_refs")
     if not isinstance(evidence_refs, list) or trial_ref not in evidence_refs:
         fail(f"resume trial artifact is not bound to the receipt: {cell.cell_id} {record.task_id}")
+    return task_exchange, request, result, trial, evidence_refs
+
+
+def _verify_exchange_identity(cell: Cell, record: TaskRecord, status: object, request: dict[str, object], result: dict[str, object], trial: dict[str, object]) -> None:
     singular_digests = {"dockerfile_digest": record.dockerfile_digest, "gateway_digest": record.gateway_digest, "gateway_dockerfile_digest": record.gateway_dockerfile_digest, "compose_digest": record.compose_digest}
     for artifact_name, artifact in (("request", request), ("result", result), ("trial", trial)):
         if any(not _matches_ref(artifact.get(key), expected) for key, expected in singular_digests.items()):
             fail(f"resume {artifact_name} task artifact identity mismatch: {cell.cell_id} {record.task_id}")
     if trial.get("trial_status") != status:
         fail(f"resume trial status disagrees with the receipt: {cell.cell_id} {record.task_id}")
-    if cell.cell_kind == "controlled":
-        if not isinstance(cell.model_requested, str):
-            fail(f"resume controlled model identity is missing: {cell.cell_id}")
-        provider, separator, model_name = cell.model_requested.partition("/")
-        expected_model = {"provider": provider, "name": model_name}
-        if not separator:
-            fail(f"resume controlled model identity is invalid: {cell.cell_id}")
-        for artifact_name, artifact in (("request", request), ("result", result)):
-            candidate = artifact.get("candidate")
-            if not isinstance(candidate, dict) or candidate.get("model") != expected_model or candidate.get("reasoning_effort") != cell.effort_requested:
-                fail(f"resume {artifact_name} treatment identity mismatch: {cell.cell_id} {record.task_id}")
-        trial_treatment = {
-            "model_requested": cell.model_requested,
-            "effort_requested": cell.effort_requested,
-            "provider_route_resolved": cell.provider_route_resolved,
-            "provider_effort_resolved": cell.provider_effort_resolved,
-        }
-        if any(trial.get(key) != value for key, value in trial_treatment.items()):
-            fail(f"resume trial treatment identity mismatch: {cell.cell_id} {record.task_id}")
+    if cell.cell_kind != "controlled":
+        return
+    if not isinstance(cell.model_requested, str):
+        fail(f"resume controlled model identity is missing: {cell.cell_id}")
+    provider, separator, model_name = cell.model_requested.partition("/")
+    if not separator:
+        fail(f"resume controlled model identity is invalid: {cell.cell_id}")
+    expected_model = {"provider": provider, "name": model_name}
+    for artifact_name, artifact in (("request", request), ("result", result)):
+        candidate = artifact.get("candidate")
+        if not isinstance(candidate, dict) or candidate.get("model") != expected_model or candidate.get("reasoning_effort") != cell.effort_requested:
+            fail(f"resume {artifact_name} treatment identity mismatch: {cell.cell_id} {record.task_id}")
+    trial_treatment = {
+        "model_requested": cell.model_requested,
+        "effort_requested": cell.effort_requested,
+        "provider_route_resolved": cell.provider_route_resolved,
+        "provider_effort_resolved": cell.provider_effort_resolved,
+    }
+    if any(trial.get(key) != value for key, value in trial_treatment.items()):
+        fail(f"resume trial treatment identity mismatch: {cell.cell_id} {record.task_id}")
+
+
+def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[bool, dict[str, str] | None]:
+    status, reliability = _verify_receipt_metadata(cell, record, stage_digest, receipt, trusted)
+    task_exchange, request, result, trial, evidence_refs = _load_exchange_artifacts(root, cell, record, receipt)
+    _verify_exchange_identity(cell, record, status, request, result, trial)
     observation: dict[str, str] | None = None
     if reliability:
         _verify_reliability_receipt(root, cell, record, receipt, result, trial, evidence_refs)
-        observation = None
     else:
         observation = _verify_quality_receipt(root, cell, record, receipt, status, task_exchange)
     transcript_ref = receipt.get("transcript_ref")

@@ -10,16 +10,18 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from harness_census_common import (
     CAMPAIGN_ID,
-    CONTROLLED_EFFORT,
-    CONTROLLED_MODEL,
     Cell,
+    ControlledPair,
+    DEFAULT_CONTROLLED_PAIR,
     TaskRecord,
     agent_allowed_hosts_identity_digest,
     agent_kwargs_identity_digest,
     bytes_digest,
     canonical,
+    cohort_identity,
     digest,
     load_tasks,
+    row_identity,
     mcp_identity_digest,
 )
 from harness_census_resume import _derive_cell_result
@@ -39,7 +41,7 @@ def content_ref(value: str, relative: str) -> str:
     return f"sha256:{value}@{relative}"
 
 
-def make_cell(root: Path) -> Cell:
+def make_cell(root: Path, controlled_pair: ControlledPair = DEFAULT_CONTROLLED_PAIR) -> Cell:
     records = tuple(
         TaskRecord(
             task_id=task_id,
@@ -76,20 +78,20 @@ def make_cell(root: Path) -> Cell:
         harness="omp",
         harness_version="17.2.11",
         composition="controlled_raw",
-        model_requested=CONTROLLED_MODEL,
-        effort_requested=CONTROLLED_EFFORT,
-        provider_route_resolved=CONTROLLED_MODEL,
-        provider_effort_resolved=CONTROLLED_EFFORT,
+        model_requested=controlled_pair.model_requested,
+        effort_requested=controlled_pair.effort_requested,
+        provider_route_resolved=controlled_pair.provider_route_resolved,
+        provider_effort_resolved=controlled_pair.effort_requested,
         default_resolution_source=None,
         effort_source="requested",
-        row_id=h64(0xE3),
-        cohort_id=h64(0xE4),
+        row_id=row_identity(controlled_pair.model_requested, controlled_pair.effort_requested, "omp", "controlled_raw"),
+        cohort_id=cohort_identity(controlled_pair.model_requested, controlled_pair.effort_requested, controlled_pair.provider_route_resolved, controlled_pair.effort_requested),
         baseline_id=None,
         profile_digest=h64(0xE5),
         agent_kwargs={
             "mint_base_url": "http://mint-gateway:4949",
             "composition": "controlled_raw",
-            "thinking": "high",
+            "thinking": controlled_pair.effort_requested,
         },
         agent_allowed_hosts=("mint-gateway",),
         network_mode="docker_internal_mint_gateway",
@@ -121,7 +123,13 @@ def stage_task_artifacts(
 ) -> None:
     task_exchange = root / "exchange" / cell.cell_id / record.task_id
     task_exchange.mkdir(parents=True, exist_ok=True)
-    provider, name = CONTROLLED_MODEL.split("/", 1)
+    candidate_model: dict[str, str] | None = None
+    if isinstance(cell.model_requested, str):
+        provider, name = cell.model_requested.split("/", 1)
+        candidate_model = {"provider": provider, "name": name}
+    observed_model = cell.provider_route_resolved or DEFAULT_CONTROLLED_PAIR.provider_route_resolved
+    observed_effort = cell.provider_effort_resolved or DEFAULT_CONTROLLED_PAIR.effort_requested
+    observed_effort_source = cell.effort_source or "requested"
     run_id = f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}"
     exchange_id = f"{run_id}--{record.task_id}"
     instruction_path = f"cells/{cell.cell_id}/{record.task_dir}/instruction.md"
@@ -132,7 +140,7 @@ def stage_task_artifacts(
         "cell_id": cell.cell_id,
         "cell_run_id": cell.cell_run_id,
         "task_set_digest": f"sha256:{cell.task_set_digest}",
-        "task_set_size": 3,
+        "task_set_size": cell.task_set_size,
         "retry_policy_digest": f"sha256:{cell.retry_policy_digest}",
         "agent_kwargs_base_digest": f"sha256:{cell.agent_kwargs_base_digest}",
         "adapter": {
@@ -143,9 +151,9 @@ def stage_task_artifacts(
         "candidate": {
             "kind": "agent",
             "harness": "omp",
-            "harness_version": "17.2.11",
-            "model": {"provider": provider, "name": name},
-            "reasoning_effort": "high",
+            "harness_version": cell.harness_version,
+            "model": candidate_model,
+            "reasoning_effort": cell.effort_requested,
         },
         "capabilities": ["workspace_edit"],
         "input": {
@@ -185,11 +193,11 @@ def stage_task_artifacts(
         "schema_version": "crucible.adapter_attestation.v1",
         "status": "passed",
         "adapter": "omp",
-        "composition": "controlled_raw",
-        "version": "17.2.11",
-        "observed_identities": [CONTROLLED_MODEL],
-        "effort": "high",
-        "effort_source": "requested",
+        "composition": cell.composition,
+        "version": cell.harness_version,
+        "observed_identities": [observed_model],
+        "effort": observed_effort,
+        "effort_source": observed_effort_source,
         "fallback_count": 0,
         "turn_count": 3,
         "tool_manifest_digest": h64(0xF1),
@@ -213,7 +221,7 @@ def stage_task_artifacts(
         "output": {"summary": "ok", "primary_artifact": trial_ref},
         "evidence": evidence,
         "usage": {"input_tokens": 1, "output_tokens": 1, "cache_tokens": 0, "cost_usd": 0.0, "latency_ms": 1},
-        "provenance": {"response_model": CONTROLLED_MODEL, "started_at": "2026-08-09T00:00:00Z", "finished_at": "2026-08-09T00:00:01Z"},
+        "provenance": {"response_model": observed_model, "started_at": "2026-08-09T00:00:00Z", "finished_at": "2026-08-09T00:00:01Z"},
         "adapter_payload": {"composition_digest": f"sha256:{cell.composition_digest}"},
     }
     for key in ("dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest"):
@@ -228,7 +236,7 @@ def stage_task_artifacts(
         "cell_id": cell.cell_id,
         "cell_run_id": cell.cell_run_id,
         "task_set_digest": f"sha256:{cell.task_set_digest}",
-        "task_set_size": 3,
+        "task_set_size": cell.task_set_size,
         "retry_policy_digest": f"sha256:{cell.retry_policy_digest}",
         "agent_kwargs_base_digest": f"sha256:{cell.agent_kwargs_base_digest}",
         "source_cluster": record.source_cluster,
@@ -240,10 +248,10 @@ def stage_task_artifacts(
         "cohort_id": f"sha256:{cell.cohort_id}",
         "baseline_id": None,
         "profile_digest": f"sha256:{cell.profile_digest}",
-        "model_requested": CONTROLLED_MODEL,
-        "effort_requested": CONTROLLED_EFFORT,
-        "provider_route_resolved": CONTROLLED_MODEL,
-        "provider_effort_resolved": CONTROLLED_EFFORT,
+        "model_requested": cell.model_requested,
+        "effort_requested": cell.effort_requested,
+        "provider_route_resolved": cell.provider_route_resolved,
+        "provider_effort_resolved": cell.provider_effort_resolved,
         "context_digest": f"sha256:{record.context_digest}",
         "context_manifest_digest": f"sha256:{record.context_manifest_digest}",
         "context_pack_digest": f"sha256:{record.context_pack_digest}",
@@ -292,22 +300,21 @@ def stage_task_artifacts(
         "cell_id": cell.cell_id,
         "cell_run_id": cell.cell_run_id,
         "task_set_digest": f"sha256:{cell.task_set_digest}",
-        "task_set_size": 3,
+        "task_set_size": cell.task_set_size,
         "retry_policy_digest": f"sha256:{cell.retry_policy_digest}",
         "agent_kwargs_base_digest": f"sha256:{cell.agent_kwargs_base_digest}",
         "source_cluster": record.source_cluster,
-        "task_name": record.task_id,
         "task_id": record.task_id,
         "stage_manifest_digest": f"sha256:{stage_digest}",
-        "cell_kind": "controlled",
-        "composition": "controlled_raw",
-        "harness": "omp",
-        "harness_version": "17.2.11",
-        "model_requested": CONTROLLED_MODEL,
-        "effort_requested": CONTROLLED_EFFORT,
-        "provider_route_resolved": CONTROLLED_MODEL,
-        "provider_effort_resolved": CONTROLLED_EFFORT,
-        "effort_source": "requested",
+        "cell_kind": cell.cell_kind,
+        "composition": cell.composition,
+        "harness": cell.harness,
+        "harness_version": cell.harness_version,
+        "model_requested": cell.model_requested,
+        "effort_requested": cell.effort_requested,
+        "provider_route_resolved": cell.provider_route_resolved,
+        "provider_effort_resolved": cell.provider_effort_resolved,
+        "effort_source": cell.effort_source,
         "composition_digest": f"sha256:{cell.composition_digest}",
         "adapter_digest": f"sha256:{cell.adapter_digest}",
         "mcp_digest": f"sha256:{mcp_identity_digest()}",
@@ -320,7 +327,7 @@ def stage_task_artifacts(
         "context_pack_digest": f"sha256:{record.context_pack_digest}",
         "context_digest": f"sha256:{record.context_digest}",
         "skill_digest": f"sha256:{record.skill_digest}",
-        "skill_count": 0,
+        "skill_count": record.skill_count,
         "task_digest": f"sha256:{record.task_digest}",
         "comparison_task_digest": f"sha256:{record.comparison_task_digest}",
         "row_id": f"sha256:{cell.row_id}",
@@ -376,7 +383,7 @@ def build_complete(root: Path, cell: Cell, stage_digest: str) -> None:
         receipts.append(receipt)
     write_db(root, receipts)
 
-    result = _derive_cell_result(root, cell, stage_digest, {receipt["task_name"]: (receipt, 1) for receipt in receipts}, None)
+    result = _derive_cell_result(root, cell, stage_digest, {str(receipt["task_id"]): (receipt, 1) for receipt in receipts}, None)
     result_path = root / "cells" / cell.cell_id / "result.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(result), encoding="utf-8")

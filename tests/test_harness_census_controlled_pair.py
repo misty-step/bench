@@ -23,7 +23,9 @@ from harness_census_common import (
     validate_controlled_pair,
 )
 from harness_census_staging import build_cells, immutable_stage_cells, probe_controlled_argv_surfaces
-from run_harness_census import campaign_stage, validate_resume_campaign_binding, validate_resume_controlled_pair
+from harness_census_resume import cell_receipt_state
+from harness_census_test_support import build_complete, h64, make_cell
+from run_harness_census import campaign_stage, validate_resume_campaign_binding
 
 TASK_IDS = sorted((
     "estate-pagination-origin",
@@ -42,16 +44,6 @@ class ResumeCampaignBindingTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaisesRegex(SystemExit, "does not bind"):
                 validate_resume_campaign_binding(stage, mutated)
 
-    def test_resume_rejects_a_different_controlled_pair(self) -> None:
-        staged_pair = validate_controlled_pair("openrouter/deepseek/deepseek-v4-flash-0731", "high")
-        campaign = {
-            "controlled_model": staged_pair.model_requested,
-            "controlled_route": staged_pair.provider_route_resolved,
-            "controlled_effort": staged_pair.effort_requested,
-        }
-        validate_resume_controlled_pair(campaign, staged_pair)
-        with self.assertRaisesRegex(SystemExit, "controlled pair differs"):
-            validate_resume_controlled_pair(campaign, validate_controlled_pair(CONTROLLED_MODEL, CONTROLLED_EFFORT))
 
 
 class ControlledRouteTests(unittest.TestCase):
@@ -70,6 +62,15 @@ class ControlledRouteTests(unittest.TestCase):
         self.assertEqual(pair.model_requested, "openrouter/zai/glm-5.2")
         self.assertEqual(pair.provider_route_resolved, "openrouter/z-ai/glm-5.2")
         self.assertEqual(pair.effort_requested, "high")
+
+    def test_deepseek_pair_receipts_complete_resume_validation(self) -> None:
+        pair = validate_controlled_pair("openrouter/deepseek/deepseek-v4-flash-0731", "high")
+        with tempfile.TemporaryDirectory(prefix="controlled-pair-receipt-") as directory:
+            root = Path(directory)
+            cell = make_cell(root, pair)
+            stage_digest = h64(0xFF)
+            build_complete(root, cell, stage_digest)
+            self.assertEqual(cell_receipt_state(root, cell, stage_digest), "complete")
 
     def test_controlled_probe_splits_resolved_route_for_adapters(self) -> None:
         pair = validate_controlled_pair("openrouter/zai/glm-5.2", "high")
