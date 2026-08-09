@@ -23,12 +23,13 @@ from harness_census_common import (
     bytes_digest,
     campaign_tree_files,
     canonical,
+    cell_stage_digest,
     digest,
     harbor_reward_value,
     load_tasks,
     mcp_identity_digest,
 )
-from harness_census_exchange import collect_attestations, exchange_envelopes, native_cell_failure, native_observation
+from harness_census_exchange import collect_attestations, exchange_envelopes, native_observation, run_cell
 from harness_census_gateway import write_gateway_assets
 from harness_census_staging import (
     _prime_payload,
@@ -37,8 +38,10 @@ from harness_census_staging import (
     node_toolchain_package_info,
     pending_task_ids,
     prime_package_info,
+    receipt_task_ids,
     runtime_package_info,
     stage_prime_package,
+    staged_bytes_digest,
     verifier_source,
 )
 
@@ -432,6 +435,31 @@ class HarnessCensusResumeTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.cell = make_cell(self.root)
         self.stage_digest = h64(0xFF)
+    def test_runtime_package_changes_stage_digests_but_mutable_state_does_not(self) -> None:
+        runtime = self.cell.cell_dir / "tasks" / TASK_IDS[0] / "environment" / "runtime-package"
+        repo = self.cell.cell_dir / "tasks" / TASK_IDS[0] / "environment" / "repo"
+        results = self.cell.cell_dir / "results"
+        runs = self.cell.cell_dir / "runs"
+        for directory in (runtime, repo, results, runs):
+            directory.mkdir(parents=True)
+        runtime_file, repo_file = runtime / "package.tgz", repo / "source.txt"
+        results_file, runs_file = results / "result.json", runs / "run.json"
+        runtime_file.write_bytes(b"runtime-v1")
+        repo_file.write_bytes(b"repo-v1")
+        results_file.write_bytes(b"results-v1")
+        runs_file.write_bytes(b"runs-v1")
+        cell_before = cell_stage_digest(self.cell.cell_dir, include_workspace=False)
+        staged_before = staged_bytes_digest(self.root)
+        runtime_file.write_bytes(b"runtime-v2")
+        self.assertNotEqual(cell_stage_digest(self.cell.cell_dir, include_workspace=False), cell_before)
+        self.assertNotEqual(staged_bytes_digest(self.root), staged_before)
+        cell_after_runtime = cell_stage_digest(self.cell.cell_dir, include_workspace=False)
+        staged_after_runtime = staged_bytes_digest(self.root)
+        for path, value in ((repo_file, b"repo-v2"), (results_file, b"results-v2"), (runs_file, b"runs-v2")):
+            path.write_bytes(value)
+            self.assertEqual(cell_stage_digest(self.cell.cell_dir, include_workspace=False), cell_after_runtime)
+            self.assertEqual(staged_bytes_digest(self.root), staged_after_runtime)
+
 
     def test_absent_cell_selects_all_tasks(self) -> None:
         self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "absent")
@@ -478,7 +506,7 @@ class HarnessCensusResumeTests(unittest.TestCase):
         trial_dir = cell.cell_dir / "results" / "harbor-jobs" / record.task_id / "run" / "trial"
         trial_dir.mkdir(parents=True)
         (trial_dir / "result.json").write_text(
-            json.dumps({"task_name": record.task_id, "exception_info": {"exception_type": "ProviderError", "exception_message": "blocked"}}),
+            json.dumps({"task_name": record.task_id, "started_at": "2026-08-09T00:00:00Z", "finished_at": "2026-08-09T00:00:01Z", "exception_info": {"exception_type": "ProviderError", "exception_message": "blocked"}}),
             encoding="utf-8",
         )
         attestation = {
@@ -503,18 +531,41 @@ class HarnessCensusResumeTests(unittest.TestCase):
             "record": attestation,
         }
 
-        paths = exchange_envelopes(self.root, cell, record, trial_dir, entry, self.stage_digest, None)
+        paths = exchange_envelopes(self.root, cell, record, trial_dir, entry, self.stage_digest, None, ("2026-08-09T00:00:00Z", "2026-08-09T00:00:01Z"))
         trial = json.loads(paths.trial.read_text(encoding="utf-8"))
         result = json.loads(paths.result.read_text(encoding="utf-8"))
         self.assertEqual(trial["source_cluster"], record.source_cluster)
         self.assertEqual(trial["trial_status"], "reliability_failure")
+        self.assertEqual(trial["failure_code"], "provider_request_failed")
         self.assertEqual(result["status"], "execution_error")
+        self.assertTrue(result["error"]["retryable"])
         self.assertIsNone(paths.grader)
+        (trial_dir / "result.json").write_text(json.dumps({"task_name": record.task_id}), encoding="utf-8")
+        malformed = exchange_envelopes(self.root, cell, record, trial_dir, entry, self.stage_digest, None, ("2026-08-09T00:00:00Z", "2026-08-09T00:00:01Z"))
+        malformed_trial = json.loads(malformed.trial.read_text(encoding="utf-8"))
+        self.assertEqual(malformed_trial["failure_code"], "harbor_trial_malformed")
+        self.assertEqual(malformed_trial["failure_detail"]["timestamp_fallback_source"], "bench_cell_subprocess_bounds")
 
     def test_three_valid_receipts_are_complete(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)
         self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "complete")
         self.assertEqual(pending_task_ids(self.root, self.cell), [])
+
+    def test_native_baseline_reconciles_all_canonical_receipts(self) -> None:
+        from dataclasses import replace
+        from harness_census_staging import _reconcile_native_baseline
+
+        cell = replace(self.cell, cell_kind="native_default", composition="native_default", model_requested=None, effort_requested=None, provider_route_resolved=None, provider_effort_resolved=None, row_id=None, cohort_id=None, baseline_id=None)
+        resolved = cell.resolve_native(CONTROLLED_MODEL, "high", "requested", h64(0xF1), h64(0xF2))
+        by_task = {
+            record.task_id: ({"task_id": record.task_id, "task_name": record.task_id, "trial_status": "success", "receipt_id": f"receipt-{index}"}, 1)
+            for index, record in enumerate(cell.task_records, 1)
+        }
+        observation = {"model": CONTROLLED_MODEL, "effort": "high", "effort_source": "requested", "tool": h64(0xF1), "config": h64(0xF2)}
+        _reconcile_native_baseline(self.root, cell, self.stage_digest, resolved, observation, by_task)
+        summary = json.loads((self.root / "baselines" / resolved.baseline_id / "summary.json").read_text(encoding="utf-8"))
+        self.assertEqual(summary["status"], "valid")
+        self.assertEqual(len(summary["receipt_digests"]), cell.task_set_size)
 
     def test_missing_derived_result_is_reconstructed(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)
@@ -552,6 +603,14 @@ class HarnessCensusResumeTests(unittest.TestCase):
             connection.commit()
         (self.root / "cells" / self.cell.cell_id / "result.json").unlink()
         self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "invalid")
+        with sqlite3.connect(db) as connection:
+            connection.execute(
+                "DELETE FROM harness_census_receipts WHERE crucible_run_id != ?",
+                (next(receipt["crucible_run_id"] for receipt in rows if receipt["trial_status"] == "reliability_failure"),),
+            )
+            connection.commit()
+        self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "invalid")
+        self.assertEqual(pending_task_ids(self.root, self.cell), [TASK_IDS[0], TASK_IDS[2]])
 
     def test_tampered_grader_bytes_are_rejected(self) -> None:
         build_complete(self.root, self.cell, self.stage_digest)
@@ -770,15 +829,22 @@ class HarnessCensusResumeTests(unittest.TestCase):
         receipt["result_ref"] = result_ref
         receipt["runner_exchange_result_ref"] = result_ref
         return cell, receipt
-
     def test_native_partial_resume_keeps_baseline_unresolved(self) -> None:
         from harness_census_staging import resolve_resume_cell
 
         cell, receipt = self._native_partial()
         write_db(self.root, [receipt])
+        self.assertEqual(receipt_task_ids(self.root, cell), [TASK_IDS[0]])
         resolved = resolve_resume_cell(self.root, cell, self.stage_digest)
         self.assertIsNone(resolved.baseline_id)
         self.assertEqual(pending_task_ids(self.root, cell), TASK_IDS[1:])
+
+    def test_native_initial_partial_selection_fails_before_provider(self) -> None:
+        from dataclasses import replace
+
+        cell = replace(self.cell, cell_kind="native_default", composition="native_default", row_id=None, cohort_id=None, baseline_id=None)
+        with self.assertRaisesRegex(SystemExit, "native run requires prior plus selected canonical tasks"):
+            run_cell(self.root, cell, Path("/missing/crucible"), Path("/missing/harbor"), self.stage_digest, task_ids=[TASK_IDS[0]], prior_task_ids=[])
 
     def test_native_observation_requires_three_passes(self) -> None:
         from dataclasses import replace
@@ -809,10 +875,6 @@ class HarnessCensusResumeTests(unittest.TestCase):
                     {"task_id": TASK_IDS[2], "record": failed},
                 ],
             )
-        )
-        self.assertEqual(
-            native_cell_failure(cell, None),
-            ("harness", "collect", "native_cell_identity_unresolved"),
         )
 
     def test_wrong_kind_and_cross_task_attestation_evidence_are_rejected(self) -> None:
@@ -853,7 +915,7 @@ class HarnessCensusResumeTests(unittest.TestCase):
 
         self.assertEqual(
             classify_reliability({"exception_info": {"exception_type": "SetupError"}}, {"status": "failed", "reason": "setup_error"}, None),
-            ("harness", "launch", "adapter_setup_failed"),
+            ("harness", "launch", "harbor_job_setup_failed"),
         )
 
     def test_timeout_without_transcript_remains_retryable(self) -> None:
@@ -862,6 +924,20 @@ class HarnessCensusResumeTests(unittest.TestCase):
         failure = classify_reliability({"exception_info": {"exception_type": "TimeoutError"}}, {"status": "failed"}, None)
         self.assertEqual(failure, ("timeout", "run", "adapter_timeout"))
         self.assertIn(failure[0], {"provider", "timeout", "transport"})
+    def test_authentication_and_budget_failures_are_not_retryable(self) -> None:
+        from harness_census_exchange import classify_reliability
+
+        for exception_type, code in (("AuthenticationError", "provider_authentication_failed"), ("BudgetExceededError", "provider_budget_exceeded")):
+            with self.subTest(exception_type=exception_type):
+                self.assertEqual(classify_reliability({"exception_info": {"exception_type": exception_type}}, {"status": "failed"}, None), ("provider", "run", code))
+
+    def test_unsupported_explicit_failure_code_is_canonicalized(self) -> None:
+        from harness_census_exchange import classify_reliability
+
+        self.assertEqual(
+            classify_reliability({"exception_info": {"reliability_code": "made_up_failure"}}, {"status": "failed"}, None),
+            ("harness", "run", "harbor_execution_failed"),
+        )
 
 
 if __name__ == "__main__":

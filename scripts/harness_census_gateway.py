@@ -219,9 +219,9 @@ def validate_gateway_contract() -> None:
         "node_image": NODE_IMAGE,
     }
     expected_toolchains = {
-        "go": {"version": GO_VERSION, "image": GO_IMAGE, "mode": "pinned-offline"},
-        "rust": {"rustc": RUST_VERSION, "cargo": CARGO_VERSION, "image": RUST_IMAGE, "mode": "pinned-offline"},
-        "bun": {"version": BUN_VERSION, "mode": "pinned-offline"},
+        "go": {"version": GO_VERSION, "image": GO_IMAGE, "mode": "pinned-runtime-offline"},
+        "rust": {"rustc": RUST_VERSION, "cargo": CARGO_VERSION, "image": RUST_IMAGE, "mode": "pinned-runtime-offline"},
+        "bun": {"version": BUN_VERSION, "mode": "pinned-runtime-offline"},
     }
     if manifest_gateway != expected_gateway or manifest_toolchains != expected_toolchains:
         raise RuntimeError("Mint gateway or toolchain manifest identity is stale")

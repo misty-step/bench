@@ -140,6 +140,7 @@ Quality outcomes write Harbor's canonical `{"reward": <number>}` map as `verifie
 The driver exports each pinned source SHA without Git history and writes a cell-specific Dockerfile.
 It uses lock-backed Bun and pnpm packages for every worker image.
 Prime also installs its checked-in dependency lock before the in-image CLI probe.
+Dependency acquisition during pre-provider image builds may use network; the validated no-egress boundary starts for the live task container.
 Prime workers relax only Docker's seccomp filter for Bubblewrap user and network namespaces.
 They add no container capability, and the inner kernel remains network-isolated.
 It mounts the hidden content manifest and deterministic grader only through

@@ -523,7 +523,7 @@ def fail(message: str, prefix: str = "harness-census driver") -> NoReturn:
 
 def cell_stage_digest(cell_dir: Path, *, include_workspace: bool) -> str:
     selected: dict[str, bytes] = {}
-    skip_prefixes = ["results", "request.json", "result.json", "tasks/*/environment/runtime-package/*"]
+    skip_prefixes = ["results", "runs", "request.json", "result.json"]
     if not include_workspace:
         skip_prefixes.append("tasks/*/environment/repo/*")
     for name, value in campaign_tree_files(cell_dir, skip=tuple(skip_prefixes)).items():

@@ -1191,7 +1191,7 @@ def run_scope_probes(root: Path, cell: Cell) -> dict[str, object]:
 
 def staged_bytes_digest(root: Path) -> str:
     files: dict[str, bytes] = {}
-    for name, value in campaign_tree_files(root, skip=("cells/*/tasks/*/environment/repo/*", "cells/*/tasks/*/environment/runtime-package/*", "cells/*/request.json", "cells/*/result.json", "cells/*/results/*")).items():
+    for name, value in campaign_tree_files(root, skip=("cells/*/tasks/*/environment/repo/*", "cells/*/request.json", "cells/*/result.json", "cells/*/results/*", "cells/*/runs/*")).items():
         parts = name.split("/")
         if parts[0] in {"context", "packages"} or name == "bin/harbor":
             files[name] = value
@@ -1624,7 +1624,7 @@ def cell_receipt_state(root: Path, cell: Cell, stage_digest: str, expected_stage
         if observation is not None:
             observations.append(observation)
     if set(by_task) != expected_tasks or len(rows) != len(expected_tasks):
-        return "partial"
+        return "invalid" if reliability else "partial"
     resolved: Cell | None = None
     if cell.cell_kind == "native_default" and not reliability:
         if len(observations) != len(cell.task_records):
@@ -1646,6 +1646,18 @@ def pending_task_ids(root: Path, cell: Cell) -> list[str]:
     rows = _receipt_rows(root, cell)
     verified = {receipt.get("task_id") or receipt.get("task_name") for receipt, _ in rows}
     return [record.task_id for record in cell.task_records if record.task_id not in verified]
+def receipt_task_ids(root: Path, cell: Cell) -> list[str]:
+    expected = {record.task_id for record in cell.task_records}
+    rows = _receipt_rows(root, cell)
+    task_ids: list[str] = []
+    for receipt, _ in rows:
+        task_id = receipt.get("task_id") or receipt.get("task_name")
+        if not isinstance(task_id, str) or task_id not in expected or task_id in task_ids:
+            fail(f"resume cell has invalid receipt task identity: {cell.cell_id}")
+        task_ids.append(task_id)
+    return sorted(task_ids)
+
+
 def resume_staged_cells(root: Path, source_root: Path, adapter_root: Path, prime_source: Path) -> tuple[tuple[Cell, ...], dict[str, str], dict[str, str], dict[str, str]]:
     assets, composition_digests = load_compositions()
     with tempfile.TemporaryDirectory(prefix="harness-census-resume-") as temporary:

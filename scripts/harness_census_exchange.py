@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import re
 import subprocess
+import time
 import sys
 from typing import cast
 
@@ -39,6 +40,10 @@ def safe_runtime_environment(harbor: Path | None = None) -> dict[str, str]:
         existing_path = environment.get("PATH")
         environment["PATH"] = os.pathsep.join(part for part in (str(harbor.parent), existing_path) if part)
     return environment
+def _utc_timestamp(epoch_ns: int) -> str:
+    return datetime.fromtimestamp(epoch_ns / 1_000_000_000, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 
 
 
@@ -147,10 +152,75 @@ def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tupl
     return resolved, {"model": model, "effort": effort, "effort_source": effort_source, "tool_manifest_digest": tool_manifest, "config_digest": config_digest, "system_identity": system_identity}
 
 
-def native_cell_failure(cell: Cell, observation: tuple[Cell, dict[str, str]] | None) -> tuple[str, str, str] | None:
-    if cell.cell_kind == "native_default" and cell.baseline_id is None and observation is None:
-        return ("harness", "collect", "native_cell_identity_unresolved")
-    return None
+SUPPORTED_RELIABILITY_CODES = {
+    "provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout",
+    "provider_authentication_failed", "provider_budget_exceeded", "verifier_reward_missing",
+    "verifier_reward_invalid", "harbor_execution_failed", "harbor_command_invalid",
+    "harbor_job_setup_failed", "harbor_spawn_failed", "harbor_status_failed",
+    "harbor_output_failed", "harbor_process_failed", "harbor_trial_missing",
+    "harbor_trial_evidence_unreadable", "harbor_trial_malformed",
+}
+RETRYABLE_RELIABILITY_CODES = {"provider_request_failed", "provider_rate_limited", "adapter_timeout", "harbor_timeout"}
+
+
+def _failure_for_code(code: str) -> tuple[str, str, str]:
+    if code.startswith("provider_"):
+        return "provider", "run", code
+    if code in {"adapter_timeout", "harbor_timeout"}:
+        return "timeout", "run", code
+    if code.startswith("verifier_"):
+        return "harness", "grade", code
+    if code.startswith("harbor_trial_"):
+        return "harness", "collect", code
+    if code in {"harbor_job_setup_failed", "harbor_spawn_failed", "harbor_command_invalid"}:
+        return "harness", "launch", code
+    return "harness", "run", code
+
+
+def _canonical_reliability_code(value: object) -> str:
+    text = value.strip().lower() if isinstance(value, str) else ""
+    if text in SUPPORTED_RELIABILITY_CODES:
+        return text
+    aliases = {
+        "provider_error": "provider_request_failed",
+        "provider_request": "provider_request_failed",
+        "provider_rate_limited": "provider_rate_limited",
+        "adapter_turn_limit_exceeded": "adapter_timeout",
+        "adapter_setup_failed": "harbor_job_setup_failed",
+        "transport_request_failed": "provider_request_failed",
+        "adapter_attestation_missing": "harbor_trial_evidence_unreadable",
+        "adapter_attestation_invalid": "harbor_trial_evidence_unreadable",
+        "transcript_missing": "harbor_trial_evidence_unreadable",
+        "grader_missing": "verifier_reward_missing",
+        "grader_report_missing": "verifier_reward_missing",
+        "grader_report_invalid": "verifier_reward_invalid",
+        "grader_evidence_missing": "harbor_trial_evidence_unreadable",
+        "harbor_trial_unavailable": "harbor_trial_missing",
+        "harbor_dynamic_network_override": "harbor_command_invalid",
+    }
+    if text in aliases:
+        return aliases[text]
+    if "auth" in text:
+        return "provider_authentication_failed"
+    if "rate" in text and "limit" in text:
+        return "provider_rate_limited"
+    if "budget" in text:
+        return "provider_budget_exceeded"
+    if "timeout" in text or "deadline" in text:
+        return "adapter_timeout"
+    if "setup" in text or "bootstrap" in text or "install" in text:
+        return "harbor_job_setup_failed"
+    if "spawn" in text:
+        return "harbor_spawn_failed"
+    if "status" in text:
+        return "harbor_status_failed"
+    if "output" in text:
+        return "harbor_output_failed"
+    if "process" in text:
+        return "harbor_process_failed"
+    if "transport" in text or "connection" in text or "provider" in text:
+        return "provider_request_failed"
+    return "harbor_execution_failed"
 
 
 def _failure_text(trial: HarborTrial, attestation: Attestation) -> str:
@@ -174,44 +244,35 @@ def _sanitize_failure_text(value: str) -> str:
 def classify_reliability(trial: HarborTrial, attestation: Attestation, transcript_path: Path | None) -> tuple[str, str, str] | None:
     exception = trial.get("exception_info")
     exception_type = str(exception.get("exception_type", "") if isinstance(exception, dict) else "")
+    exception_lower = exception_type.lower()
     reason = attestation.get("reason") if isinstance(attestation.get("reason"), str) else ""
     explicit_code = exception.get("reliability_code") if isinstance(exception, dict) else None
-    if isinstance(explicit_code, str) and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*", explicit_code):
-        if explicit_code == "adapter_attestation_missing":
-            return "harness", "collect", explicit_code
-        if "timeout" in explicit_code:
-            return "timeout", "run", explicit_code
-        if explicit_code.startswith("provider_"):
-            return "provider", "run", explicit_code
-        return "harness", "run", explicit_code
+    if explicit_code is not None:
+        return _failure_for_code(_canonical_reliability_code(explicit_code))
     provider_reasons = {"provider_error": "provider_request_failed", "provider_rate_limited": "provider_rate_limited", "provider_authentication_failed": "provider_authentication_failed", "provider_budget_exceeded": "provider_budget_exceeded"}
-    provider_exceptions = {"AuthenticationError": "provider_authentication_failed", "RateLimitError": "provider_rate_limited", "BudgetExceededError": "provider_budget_exceeded", "ProviderError": "provider_request_failed"}
-    if reason in {"adapter_attestation_missing", "adapter_attestation_invalid"}:
-        return "harness", "collect", reason
+    provider_exceptions = {"authenticationerror": "provider_authentication_failed", "ratelimiterror": "provider_rate_limited", "budgetexceedederror": "provider_budget_exceeded", "providererror": "provider_request_failed"}
     if reason in provider_reasons:
-        return "provider", "run", provider_reasons[reason]
-    if exception_type in provider_exceptions:
-        return "provider", "run", provider_exceptions[exception_type]
+        return _failure_for_code(provider_reasons[reason])
+    if exception_lower in provider_exceptions:
+        return _failure_for_code(provider_exceptions[exception_lower])
     if reason in {"verifier_reward_missing", "verifier_reward_invalid", "grader_report_missing", "grader_report_invalid", "grader_missing"}:
-        return "harness", "grade", reason
-    if reason == "turn_limit_exceeded":
-        return "timeout", "run", "adapter_turn_limit_exceeded"
-    if reason == "timeout" or exception_type in {"TimeoutError", "DeadlineExceededError"}:
-        return "timeout", "run", "adapter_timeout"
-    if reason == "setup_error" or exception_type in {"SetupError", "BootstrapError", "InstallError"}:
-        return "harness", "launch", "adapter_setup_failed"
-    if reason in {"transport_error", "connection_error"} or exception_type in {"TransportError", "ConnectionError"}:
-        return "transport", "run", "transport_request_failed"
+        return _failure_for_code(_canonical_reliability_code(reason))
+    if reason == "turn_limit_exceeded" or reason == "timeout" or "timeout" in exception_lower or "deadline" in exception_lower:
+        return _failure_for_code("adapter_timeout")
+    if reason == "setup_error" or exception_lower in {"setuperror", "adaptersetuperror", "bootstraperror", "installerror"}:
+        return _failure_for_code("harbor_job_setup_failed")
+    if reason in {"transport_error", "connection_error"} or "transport" in exception_lower or "connection" in exception_lower:
+        return _failure_for_code("provider_request_failed")
     if exception_type or attestation.get("status") == "failed" or reason:
-        return "harness", "run", "adapter_execution_failed"
+        return _failure_for_code("harbor_execution_failed")
     if transcript_path is None or not transcript_path.is_file():
-        return "transcript", "collect", "transcript_missing"
+        return _failure_for_code("harbor_trial_evidence_unreadable")
     return None
 
 
-def reliability_detail(trial: HarborTrial, attestation: Attestation, failure: tuple[str, str, str]) -> dict[str, object]:
+def reliability_detail(trial: HarborTrial, attestation: Attestation, failure: tuple[str, str, str], *, timestamp_fallback_source: str | None = None, timestamp_error: str | None = None) -> dict[str, object]:
     exception = trial.get("exception_info")
-    return {
+    detail: dict[str, object] = {
         "schema_version": "harness_census.reliability_evidence.v1",
         "failure_class": failure[0],
         "failure_stage": failure[1],
@@ -221,12 +282,36 @@ def reliability_detail(trial: HarborTrial, attestation: Attestation, failure: tu
         "attestation_status": attestation.get("status"),
         "attestation_reason": _sanitize_failure_text(str(attestation.get("reason", ""))) or None,
     }
+    if timestamp_fallback_source is not None:
+        detail["timestamp_fallback_source"] = timestamp_fallback_source
+    if timestamp_error is not None:
+        detail["timestamp_error"] = _sanitize_failure_text(timestamp_error)
+    return detail
+
+
+def _parse_trial_timestamp(value: object, field: str) -> datetime:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"Harbor trial {field} is missing")
+    try:
+        parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError(f"Harbor trial {field} is invalid") from error
+    if parsed.tzinfo is None:
+        raise ValueError(f"Harbor trial {field} has no timezone")
+    return parsed
+
 
 def trial_timestamp(trial: HarborTrial, field: str) -> str:
-    value = trial.get(field)
-    if isinstance(value, str) and value.strip():
-        return value
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    _parse_trial_timestamp(trial.get(field), field)
+    return cast(str, trial[field])
+
+
+def trial_timestamps(trial: HarborTrial) -> tuple[str, str]:
+    started = _parse_trial_timestamp(trial.get("started_at"), "started_at")
+    finished = _parse_trial_timestamp(trial.get("finished_at"), "finished_at")
+    if finished < started:
+        raise ValueError("Harbor trial timestamps are reversed")
+    return trial_timestamp(trial, "started_at"), trial_timestamp(trial, "finished_at")
 
 
 def _read_json_or_failure(path: Path) -> tuple[object | None, str | None]:
@@ -303,37 +388,52 @@ def adapter_identity_payload(cell: Cell, record: TaskRecord, attestation: Attest
         payload.update({"failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail_ref": f"sha256:{bytes_digest(harbor_result_path.read_bytes())}@{harbor_result_path.relative_to(root).as_posix()}"})
     return {key: value for key, value in payload.items() if value is not None}
 
-def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Path, attestation_entry: AttestationEntry, stage_digest: str, cell_failure: tuple[str, str, str] | None) -> ExchangePaths:
+def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Path, attestation_entry: AttestationEntry, stage_digest: str, cell_failure: tuple[str, str, str] | None, cell_run_bounds: tuple[str, str] | None = None) -> ExchangePaths:
     task_id = record.task_id
     generated_grader_path = cell.cell_dir / record.task_dir / "tests" / "verify.py"
     harbor_result_path = trial_dir / "result.json"
     trial_value, trial_error = _read_json_or_failure(harbor_result_path)
     trial_raw = cast(HarborTrial, trial_value if isinstance(trial_value, dict) else {"exception_info": {"exception_type": "HarborTrialMalformed", "exception_message": "Harbor trial result is missing or malformed"}})
+    try:
+        harbor_started_at, harbor_finished_at = trial_timestamps(trial_raw)
+    except ValueError as error:
+        timestamp_error = str(error)
+        timestamp_fallback_source = "bench_cell_subprocess_bounds"
+        if cell_run_bounds is None:
+            fail(f"Harbor trial timestamps are malformed and Bench cell bounds are unavailable: {cell.cell_id}")
+        provenance_started_at, provenance_finished_at = cell_run_bounds
+        failure = _failure_for_code("harbor_trial_malformed")
+    else:
+        timestamp_error = None
+        timestamp_fallback_source = None
+        provenance_started_at, provenance_finished_at = harbor_started_at, harbor_finished_at
+        failure = None
     dynamic_hosts = (((trial_raw.get("config") or {}).get("agent") or {}).get("extra_allowed_hosts") if isinstance(trial_raw.get("config"), dict) else None)
     attestation, transcript = attestation_entry["record"], attestation_entry["transcript_path"]
-    failure = classify_reliability(trial_raw, attestation, transcript)
+    if failure is None:
+        failure = classify_reliability(trial_raw, attestation, transcript)
     if failure is None:
         failure = cell_failure
     if trial_error and failure is None:
-        failure = ("harness", "collect", "harbor_trial_malformed")
+        failure = _failure_for_code("harbor_trial_malformed")
     if dynamic_hosts not in (None, []) and failure is None:
-        failure = ("harness", "launch", "harbor_dynamic_network_override")
+        failure = _failure_for_code("harbor_command_invalid")
     reward_path, report_path = trial_dir / "verifier" / "reward.json", trial_dir / "verifier" / "grader-report.json"
     reward_raw, reward_error = _read_json_or_failure(reward_path)
     report_raw, report_error = _read_json_or_failure(report_path)
     reward_value = harbor_reward_value(reward_raw)
     if failure is None and not generated_grader_path.is_file():
-        failure = ("harness", "grade", "grader_missing")
+        failure = _failure_for_code("verifier_reward_missing")
     if failure is None and reward_error == "missing":
-        failure = ("harness", "grade", "verifier_reward_missing")
+        failure = _failure_for_code("verifier_reward_missing")
     elif failure is None and reward_error == "invalid":
-        failure = ("harness", "grade", "verifier_reward_invalid")
+        failure = _failure_for_code("verifier_reward_invalid")
     elif failure is None and reward_value is None:
-        failure = ("harness", "grade", "verifier_reward_invalid")
+        failure = _failure_for_code("verifier_reward_invalid")
     if failure is None and report_error == "missing":
-        failure = ("harness", "grade", "grader_report_missing")
+        failure = _failure_for_code("verifier_reward_missing")
     elif failure is None and (report_error == "invalid" or not isinstance(report_raw, dict)):
-        failure = ("harness", "grade", "grader_report_invalid")
+        failure = _failure_for_code("verifier_reward_invalid")
     grader_digest = record.grader_digest
     trial_id, run_id = f"{cell.cell_id}--{task_id}", f"{CAMPAIGN_ID}--{cell.cell_id}--{task_id}"
     instruction_file = cell.cell_dir / record.task_dir / "instruction.md"
@@ -363,7 +463,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
         if not final.is_file():
             final = reward_path
         if not final.is_file():
-            failure = ("harness", "grade", "grader_evidence_missing")
+            failure = _failure_for_code("harbor_trial_evidence_unreadable")
         else:
             evidence.append({"kind": "final_state", "path": final.relative_to(root).as_posix(), "sha256": bytes_digest(final.read_bytes()), "media_type": "text/plain"})
     for path, kind in ((reward_path, "verifier_reward"), (report_path, "grader_report")):
@@ -387,7 +487,8 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     observed = attestation.get("observed_identities") or []
     elapsed = attestation.get("elapsed_seconds")
     usage = {"input_tokens": None, "output_tokens": None, "cache_tokens": None, "cost_usd": None, "latency_ms": max(1, int(float(elapsed) * 1000))} if isinstance(elapsed, (int, float)) and math.isfinite(float(elapsed)) else None
-    result: dict[str, object] = {"schema_version": "crucible.runner_exchange_result.v1", "exchange_id": request["exchange_id"], "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "adapter": request["adapter"], "candidate": candidate, "status": "timeout" if failure and failure[0] == "timeout" else "execution_error" if failure else "success", "evidence": evidence, "usage": usage, "provenance": {"response_model": observed[0] if observed else None, "started_at": trial_timestamp(trial_raw, "started_at"), "finished_at": trial_timestamp(trial_raw, "finished_at")}, "adapter_payload": payload}
+    failure_detail = reliability_detail(trial_raw, attestation, failure, timestamp_fallback_source=timestamp_fallback_source, timestamp_error=timestamp_error) if failure is not None else None
+    result: dict[str, object] = {"schema_version": "crucible.runner_exchange_result.v1", "exchange_id": request["exchange_id"], "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "adapter": request["adapter"], "candidate": candidate, "status": "timeout" if failure and failure[0] == "timeout" else "execution_error" if failure else "success", "evidence": evidence, "usage": usage, "provenance": {"response_model": observed[0] if observed else None, "started_at": provenance_started_at, "finished_at": provenance_finished_at}, "adapter_payload": payload}
     result["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
     result.update({"context_digest": context_ref, "context_manifest_digest": context_manifest_ref, "context_pack_digest": context_pack_ref, "skill_digest": skill_ref, "skill_count": record.skill_count})
     result.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
@@ -395,8 +496,8 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     if failure is None:
         result["output"] = {"summary": "Harbor task completed", "primary_artifact": evidence[1]["path"], "metadata": {"reward": reward_value, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement}}
     else:
-        retryable = failure[0] in {"provider", "timeout", "transport"}
-        result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation)) or "Harbor reliability failure", "retryable": retryable, "detail": reliability_detail(trial_raw, attestation, failure)}
+        retryable = failure[2] in RETRYABLE_RELIABILITY_CODES
+        result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation) or timestamp_error or "Harbor reliability failure"), "retryable": retryable, "detail": failure_detail}
     exchange_dir = confined_path(root, "exchange", cell.cell_id, task_id)
     instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
     manifest_path = confined_path(root, "context", "manifests", f"{record.context_manifest_digest}.json")
@@ -418,7 +519,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     trial_record.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
     trial_record.update({"task_id": task_id, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "profile_digest": sha256_ref(cell.profile_digest), "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved})
     if failure is not None:
-        trial_record.update({"trial_status": "reliability_failure", "failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail": reliability_detail(trial_raw, attestation, failure)})
+        trial_record.update({"trial_status": "reliability_failure", "failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail": failure_detail})
     trial_record = {key: value for key, value in trial_record.items() if value is not None}
     write_json(trial_path, trial_record)
     if failure is None:
@@ -502,7 +603,7 @@ def compact_receipt(value: Receipt) -> dict[str, object]:
 
 
 
-def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str, expected_cell_digest: str | None = None, task_ids: list[str] | None = None) -> None:
+def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str, expected_cell_digest: str | None = None, task_ids: list[str] | None = None, prior_task_ids: list[str] | None = None) -> None:
     if expected_cell_digest is not None and cell_stage_digest(cell.cell_dir, include_workspace=False) != expected_cell_digest:
         fail(f"staged cell bytes changed before run: {cell.cell_id}")
     declared = {record.task_id for record in cell.task_records}
@@ -510,6 +611,11 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
         if not set(task_ids) or set(task_ids) - declared or len(set(task_ids)) != len(task_ids):
             fail(f"task selection is invalid for cell: {cell.cell_id}")
     selected = [record for record in cell.task_records if task_ids is None or record.task_id in task_ids]
+    prior = prior_task_ids or []
+    if len(set(prior)) != len(prior) or set(prior) - declared:
+        fail(f"prior task selection is invalid for cell: {cell.cell_id}")
+    if cell.cell_kind == "native_default" and set(prior) | {record.task_id for record in selected} != declared:
+        fail(f"native run requires prior plus selected canonical tasks for cell: {cell.cell_id}")
     if not selected:
         fail(f"no tasks are selected for cell: {cell.cell_id}")
     output = cell.cell_dir / "results"
@@ -519,40 +625,41 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
         for task_id in task_ids:
             command += ["--task", task_id]
     environment = safe_runtime_environment(harbor)
+    started_ns = time.time_ns()
     result_run = subprocess.run(command, cwd=cell.cell_dir, env=environment, text=True, capture_output=True, check=False)
+    finished_ns = time.time_ns()
+    cell_run_bounds = (_utc_timestamp(started_ns), _utc_timestamp(finished_ns))
     # A non-zero Crucible run still leaves per-task failure evidence when the Harbor executor can continue.
     # Missing task artifacts are materialized by collect_attestations as denominator-excluded attempts.
     selected_attestations = collect_attestations(output, cell, selected)
     if len(selected_attestations) != len(selected):
         fail(f"staged cell run left tasks without evidence: {cell.cell_id}")
     all_attestations = selected_attestations
-    if cell.cell_kind == "native_default" and len(selected) != len(cell.task_records):
-        all_attestations = collect_attestations(output, cell, materialize_missing=False)
+    if cell.cell_kind == "native_default":
+        canonical_ids = set(prior) | {record.task_id for record in selected}
+        canonical_records = [record for record in cell.task_records if record.task_id in canonical_ids]
+        all_attestations = collect_attestations(output, cell, canonical_records, materialize_missing=False)
+        if len(all_attestations) != len(canonical_records):
+            fail(f"native run left canonical tasks without evidence: {cell.cell_id}")
     observation = native_observation(cell, all_attestations)
-    cell_failure = native_cell_failure(cell, observation) if len(all_attestations) == len(cell.task_records) else None
-    observed_identity: dict[str, str] = {}
+    cell_failure = ("harness", "collect", "harbor_execution_failed") if cell.cell_kind == "native_default" and len(all_attestations) == len(cell.task_records) and observation is None else None
     if observation is not None:
-        cell, observed_identity = observation
+        cell, _ = observation
     passed = [entry for entry in selected_attestations if entry["record"].get("status") == "passed"]
     receipts: list[dict[str, object]] = []
     for record, attestation in zip(selected, selected_attestations):
         raw_tool_manifest = attestation["record"].get("tool_manifest_digest")
         tool_manifest_digest = raw_tool_manifest if isinstance(raw_tool_manifest, str) and raw_tool_manifest else None
-        paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest, cell_failure)
+        paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest, cell_failure, cell_run_bounds)
         if expected_cell_digest is not None and cell_stage_digest(cell.cell_dir, include_workspace=False) != expected_cell_digest:
             fail(f"staged cell bytes changed before ingest: {cell.cell_id}")
         receipts.append(ingest_task(crucible, root, cell, record, paths, stage_digest, tool_manifest_digest))
     observed = sorted({entry["record"]["observed_identities"][0] for entry in passed if entry["record"].get("observed_identities")})
     observed_efforts = sorted({entry["record"]["effort"] for entry in passed if entry["record"].get("effort")})
     observed_tools = sorted({entry["record"]["tool_manifest_digest"] for entry in passed if entry["record"].get("tool_manifest_digest")})
-    observed_configs = sorted({entry["record"]["config_digest"] for entry in passed if entry["record"].get("config_digest")})
-    observed_systems = sorted({cell.observed_system_identity(entry["record"]["config_digest"], entry["record"]["tool_manifest_digest"]) for entry in passed if isinstance(entry["record"].get("config_digest"), str) and isinstance(entry["record"].get("tool_manifest_digest"), str)})
-    if len(passed) == len(selected_attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
+    if cell.cell_kind != "native_default" and len(passed) == len(selected_attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
         fail(f"cell observed model or effort identity is not singular: {cell.cell_id}")
-    attestation_receipts = [{"task_id": entry["task_id"], "attestation_ref": entry["attestation_ref"], "attestation_digest": entry["attestation_digest"], "transcript_ref": entry["transcript_ref"], "record": entry["record"]} for entry in selected_attestations]
+    observed_systems = sorted({cell.observed_system_identity(entry["record"]["config_digest"], entry["record"]["tool_manifest_digest"]) for entry in passed if isinstance(entry["record"].get("config_digest"), str) and isinstance(entry["record"].get("tool_manifest_digest"), str)})
     compact_receipts = [compact_receipt(cast(Receipt, receipt)) for receipt in receipts]
-    if cell.cell_kind == "native_default" and observation is not None:
-        baseline_summary = {"schema_version": "harness_census.native_baseline_summary.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "baseline_id": cell.baseline_id, "harness": cell.harness, "harness_version": cell.harness_version, "profile_digest": cell.profile_digest, "task_set_digest": cell.task_set_digest, "observed_model": observed_identity["model"], "observed_effort": observed_identity["effort"], "effort_source": observed_identity["effort_source"], "tool_manifest_digest": observed_identity["tool_manifest_digest"], "config_digest": observed_identity["config_digest"], "system_identity": observed_identity["system_identity"], "receipt_digests": [receipt["receipt_digest"] for receipt in compact_receipts], "status": "valid" if len(compact_receipts) == len(cell.task_records) and all(receipt.get("trial_status") == "success" for receipt in compact_receipts) else "invalid"}
-        write_json(confined_path(root, "baselines", str(cell.baseline_id), "summary.json"), baseline_summary)
     if len(selected) == len(cell.task_records):
         write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "observed_tool_manifest_digests": observed_tools, "observed_config_digests": observed_configs, "observed_system_identities": observed_systems, "effort_source": cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in selected_attestations], "runner_exchange_receipts": compact_receipts})
