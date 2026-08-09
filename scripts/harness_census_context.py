@@ -125,17 +125,6 @@ def _record(source: str, target: str, kind: str, value: bytes, task_id: str | No
     }
 
 
-def _write_immutable(path: Path, value: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists() and path.read_bytes() != value:
-        raise RuntimeError(f"immutable context artifact changed: {path}")
-    if not path.exists():
-        path.write_bytes(value)
-
-
-def _write_json_immutable(path: Path, value: object) -> None:
-    _write_immutable(path, json.dumps(value, indent=2, sort_keys=True).encode("utf-8") + b"\n")
-
 
 def _framed(records: Iterable[dict[str, object]], values: dict[str, bytes]) -> bytes:
     output = bytearray()

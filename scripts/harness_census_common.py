@@ -328,34 +328,6 @@ class HarborTrial(TypedDict, total=False):
     verifier_result: object
 
 
-class Receipt(TypedDict, total=False):
-    run_id: str
-    trial_id: str
-    crucible_run_id: str
-    receipt_id: str
-    exchange_record_id: str
-    trial_status: str
-    failure_code: str | None
-    request_ref: str
-    result_ref: str
-    grader_receipt_ref: str | None
-    transcript_ref: str | None
-    stage_manifest_digest: str
-    row_id: str | None
-    cohort_id: str | None
-    baseline_id: str | None
-    profile_digest: str
-    context_digest: str
-    context_manifest_digest: str
-    context_pack_digest: str
-    skill_digest: str
-    skill_count: int
-    dockerfile_digest: str
-    gateway_digest: str
-    gateway_dockerfile_digest: str
-    compose_digest: str
-
-
 @dataclass(frozen=True)
 class ExchangePaths:
     request: Path

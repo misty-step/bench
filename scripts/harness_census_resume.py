@@ -369,33 +369,6 @@ def resolve_native_observation(cell: Cell, observations: list[dict[str, str]]) -
     resolved = cell.resolve_native(observation["model"], observation["effort"], observation["effort_source"], observation["tool"], observation["config"])
     return resolved, observation
 
-def resolve_resume_cell(root: Path, cell: Cell, stage_digest: str) -> Cell:
-    if cell.cell_kind != "native_default":
-        return cell
-    rows = _receipt_rows(root, cell)
-    by_task: dict[str, tuple[dict[str, object], int | None]] = {}
-    for receipt, trusted in rows:
-        task_id = receipt.get("task_id") or receipt.get("task_name")
-        if not isinstance(task_id, str) or task_id in by_task:
-            fail(f"resume cell has duplicate or missing receipt task identity: {cell.cell_id}")
-        by_task[task_id] = (receipt, trusted)
-    observations: list[dict[str, str]] = []
-    for record in cell.task_records:
-        if record.task_id not in by_task:
-            continue
-        reliability, observation = _verified_task_receipt(root, cell, record, stage_digest, *by_task[record.task_id])
-        if not reliability and observation is not None:
-            observations.append(observation)
-    resolved_observation = resolve_native_observation(cell, observations)
-    if resolved_observation is None:
-        return cell
-    resolved, _observation = resolved_observation
-    for receipt, _ in by_task.values():
-        baseline = receipt.get("baseline_id")
-        if baseline is not None and baseline not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
-            fail(f"resume native receipt baseline mismatch: {cell.cell_id}")
-    return resolved
-
 def _reconcile_native_baseline(root: Path, cell: Cell, stage_digest: str, resolved: Cell, observation: dict[str, str], by_task: dict[str, tuple[dict[str, object], int | None]]) -> None:
     receipt_digests = [compact_receipt(receipt)["receipt_digest"] for receipt, _ in by_task.values()]
     expected = {

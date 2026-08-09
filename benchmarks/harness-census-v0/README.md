@@ -148,7 +148,7 @@ Prime also installs its checked-in dependency lock before the in-image CLI probe
 Dependency acquisition during pre-provider image builds may use network; the validated no-egress boundary starts for the live task container.
 Prime workers relax only Docker's seccomp filter for Bubblewrap user and network namespaces.
 They add no container capability, and the inner kernel remains network-isolated.
-Harbor uses a separate verifier environment with the same frozen image and `network_mode = "none"`; the agent cannot read `/tests`.
+Harbor uses a separate verifier environment with the same frozen image and `network_mode = "no-network"`; the agent cannot read `/tests`.
 Each staged task also contains a pinned Node Mint gateway and `docker-compose.yaml`.
 The Compose `main` service joins only the internal network. The
 `mint-gateway` sidecar joins the internal and egress networks and forwards

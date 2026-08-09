@@ -168,6 +168,9 @@ def main() -> None:
             if unknown:
                 fail(f"unknown --cell selection for resume: {', '.join(unknown)}")
             selected = [cell for cell in selected if cell.cell_id in args.cell]
+        selected = [cell for cell in selected if states[cell.cell_id] not in {"complete", "invalid"}]
+        if not selected:
+            fail("--resume has no pending cell to run")
         if len(selected) > args.max_cells:
             fail(f"resume selected {len(selected)} cells exceeds --max-cells {args.max_cells}")
     else:

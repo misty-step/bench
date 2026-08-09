@@ -33,7 +33,7 @@ from harness_census_common import (
 from harness_census_gateway import compose_yaml, write_gateway_assets
 from harness_census_exchange import collect_attestations, exchange_envelopes, native_observation, run_cell
 from harness_census_generation import _prime_payload, dockerfile, node_toolchain_package_info, prime_package_info, runtime_package_info, stage_prime_package, verifier_source
-from harness_census_resume import _derive_cell_result, _reconcile_native_baseline, cell_receipt_state, pending_task_ids, receipt_task_ids, resolve_resume_cell, staged_bytes_digest, verify_pending_task_sources
+from harness_census_resume import _derive_cell_result, _reconcile_native_baseline, cell_receipt_state, pending_task_ids, receipt_task_ids, staged_bytes_digest, verify_pending_task_sources
 from harness_census_staging import staged_task_toml
 
 
@@ -823,8 +823,7 @@ class HarnessCensusResumeTests(unittest.TestCase):
         cell, receipt = self._native_partial()
         write_db(self.root, [receipt])
         self.assertEqual(receipt_task_ids(self.root, cell), [TASK_IDS[0]])
-        resolved = resolve_resume_cell(self.root, cell, self.stage_digest)
-        self.assertIsNone(resolved.baseline_id)
+        self.assertEqual(cell_receipt_state(self.root, cell, self.stage_digest), "partial")
         self.assertEqual(pending_task_ids(self.root, cell), TASK_IDS[1:])
 
     def test_native_initial_partial_selection_fails_before_provider(self) -> None:
