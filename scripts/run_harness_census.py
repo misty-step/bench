@@ -15,7 +15,7 @@ from harness_census_common import (
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
 from harness_census_staging import (
-    build_cells, cell_receipt_state, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, pending_task_ids, preflight_worker_images,
+    build_cells, cell_receipt_state, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, pending_task_ids, preflight_worker_images, resolve_resume_cell,
     probe_controlled_argv_surfaces, probe_harbor_task_validity, probe_verifier, qualification, require_dir,
     resume_staged_cells, run_scope_probes, stage_prime_package, staged_bytes_digest, validate_smoke, validate_stage_manifest, write_harbor_wrapper,
 )
@@ -159,13 +159,14 @@ def main() -> None:
             fail("--resume campaign claims complete without 27 quality receipts")
         if campaign.get("completion_status") == "invalid" and "invalid" not in states.values():
             fail("--resume campaign claims invalid without a reliability receipt")
+        resolved_cells = {cell.cell_id: resolve_resume_cell(root, cell, stage_digest) for cell in cells}
         selected = [cell for cell in cells if cell.cell_id in selected_ids]
         if args.cell:
             unknown = sorted(set(args.cell) - {cell.cell_id for cell in selected})
             if unknown:
                 fail(f"unknown --cell selection for resume: {', '.join(unknown)}")
             selected = [cell for cell in selected if cell.cell_id in args.cell]
-        selected = [cell for cell in selected if states[cell.cell_id] not in {"complete", "invalid"}]
+        selected = [resolved_cells[cell.cell_id] for cell in selected if states[cell.cell_id] not in {"complete", "invalid"}]
     else:
         qualification(source_root)
         assets, composition_digests = load_compositions()

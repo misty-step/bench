@@ -50,7 +50,7 @@
     "product_retry": 0,
     "transport_retry": 0
   },
-  "roster_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
+  "roster_digest": "00399f61eaf22a946e5bfdc7ac68e75a0becaeab41c11c24b1af20173321c0f1",
   "schema_version": "harness_census.stage_manifest.v1",
   "stage_id": "smoke",
   "task_digest": "4366cf33f479e0975f922c61c3473656bdc7a2d3dccf80884d9c90fadf5a5b45",

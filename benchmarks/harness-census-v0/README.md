@@ -104,8 +104,8 @@ exchange/<cell>/<task>/{request,result,trial,grader}.json
 
 Quality outcomes write the numeric Harbor reward as `verifier/reward.json` and the detailed deterministic grader report as `verifier/grader-report.json`. Reliability outcomes write no grader receipt; they persist typed failure fields with null scores and retain transcript and attestation evidence when present.
 
-The driver exports each pinned source SHA without Git history, writes a
-cell-specific Dockerfile, and installs Bun with `npm install -g bun@1.3.14`.
+The driver exports each pinned source SHA without Git history and writes a cell-specific Dockerfile.
+It uses the lock-backed Bun from each runtime package and installs only global pnpm@10.22.0.
 It mounts the hidden content manifest and deterministic grader only through
 `tests/test.sh`.
 Each staged task also contains a pinned Node Mint gateway and `docker-compose.yaml`.
@@ -134,7 +134,7 @@ receipt for the request body.
 Treat a harness that misreports its OpenRouter request model as a residual pilot risk.
 
 Controlled requests use Harbor `model` and `thinking` with exactly
-`openrouter/deepseek/deepseek-v4-flash-0731`.
+`openrouter/anthropic/claude-opus-5`.
 
 Controlled OMP and Pi expose only read, edit, and write tools. Controlled Prime runs IPython inside a clean `bwrap --unshare-net` sandbox.
 The task graders are deterministic and binary.

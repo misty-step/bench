@@ -6,6 +6,7 @@ import json
 import os
 import stat
 from dataclasses import dataclass, replace
+from fnmatch import fnmatchcase
 from pathlib import Path
 import re
 import tomllib
@@ -14,12 +15,15 @@ from typing import Mapping, NoReturn, TypedDict
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "benchmarks" / "harness-census-v0"
 CAMPAIGN_ID = "harness-census-v0"
+NODE_IMAGE = "node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90"
+GO_IMAGE = "golang:1.26.5-bookworm@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599"
+RUST_IMAGE = "rust:1.97.1-bookworm@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3"
 GO_VERSION = "1.26.5"
 RUST_VERSION = "1.97.1"
 CARGO_VERSION = "1.97.1"
 BUN_VERSION = "1.3.14"
 HARBOR_VERSION = "0.13.1"
-CONTROLLED_MODEL = "openrouter/deepseek/deepseek-v4-flash-0731"
+CONTROLLED_MODEL = "openrouter/anthropic/claude-opus-5"
 CONTROLLED_EFFORT = "high"
 AGENT_ALLOWED_HOSTS = ("mint-gateway",)
 SHA40 = re.compile(r"^[0-9a-f]{40}$")
@@ -53,6 +57,7 @@ ROSTER: tuple[RosterEntry, ...] = (
     {"model_requested": "kimi-code/k3", "provider_route": "kimi-code/k3", "efforts": ["low", "high", "max"]},
     {"model_requested": "anthropic/claude-fable-5", "provider_route": "anthropic/claude-fable-5", "efforts": ["low", "medium", "high", "xhigh", "max"]},
     {"model_requested": "anthropic/claude-opus-5", "provider_route": "anthropic/claude-opus-5", "efforts": ["low", "medium", "high", "xhigh", "max"]},
+    {"model_requested": CONTROLLED_MODEL, "provider_route": CONTROLLED_MODEL, "efforts": [CONTROLLED_EFFORT]},
     {"model_requested": "openrouter/meta/muse-spark-1.2", "provider_route": "openrouter/meta/muse-spark-1.2", "efforts": ["minimal", "low", "medium", "high", "xhigh"]},
     {"model_requested": "openrouter/qwen/qwen3.8-max", "provider_route": "openrouter/qwen/qwen3.8-max", "efforts": ["minimal", "low", "medium", "high", "xhigh"]},
     {"model_requested": "openrouter/poolside/laguna-s-2.1", "provider_route": "openrouter/poolside/laguna-s-2.1", "efforts": ["minimal", "low", "medium", "high"]},
@@ -455,13 +460,7 @@ def tree_digest(root: Path, *, exclude_git: bool) -> str:
 
 
 def _skip_match(name: str, patterns: tuple[str, ...]) -> bool:
-    for pattern in patterns:
-        if pattern.endswith("*"):
-            if name.startswith(pattern[:-1]):
-                return True
-        elif name == pattern or name.startswith(pattern + "/"):
-            return True
-    return False
+    return any(fnmatchcase(name, pattern) or name.startswith(pattern + "/") for pattern in patterns)
 
 
 def campaign_tree_files(root: Path, *, skip: tuple[str, ...] = ()) -> dict[str, bytes]:

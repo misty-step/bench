@@ -5,12 +5,21 @@ import hashlib
 import json
 from pathlib import Path
 
+from harness_census_common import (
+    BUN_VERSION,
+    CARGO_VERSION,
+    GO_IMAGE,
+    GO_VERSION,
+    NODE_IMAGE,
+    RUST_IMAGE,
+    RUST_VERSION,
+)
+
 MINT_DEFAULT_BASE_URL = "http://mint.tail5f5eb4.ts.net:4949/proxy/https/openrouter.ai/api/v1"
 MINT_INTERNAL_BASE_URL = "http://mint-gateway:4949/proxy/https/openrouter.ai/api/v1"
 MINT_UPSTREAM_HOST = "mint.tail5f5eb4.ts.net"
 MINT_UPSTREAM_PORT = 4949
 MINT_API_PATH = "/proxy/https/openrouter.ai/api/v1"
-NODE_IMAGE = "node:22.19.0-bookworm-slim@sha256:4a4884e8a44826194dff92ba316264f392056cbe243dcc9fd3551e71cea02b90"
 GATEWAY_UID = 10001
 GATEWAY_GID = 10001
 
@@ -195,8 +204,10 @@ def validate_gateway_contract() -> None:
         raise RuntimeError("Mint gateway image contract is incomplete")
     compose = compose_yaml()
     manifest_path = Path(__file__).resolve().parents[1] / "benchmarks" / "harness-census-v0" / "manifest.json"
-    manifest_gateway = json.loads(manifest_path.read_text(encoding="utf-8")).get("gateway")
-    expected_manifest = {
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_gateway = manifest.get("gateway")
+    manifest_toolchains = manifest.get("toolchains")
+    expected_gateway = {
         "generator": "scripts/harness_census_gateway.py",
         "default_base_url": MINT_DEFAULT_BASE_URL,
         "internal_base_url": MINT_INTERNAL_BASE_URL,
@@ -205,8 +216,13 @@ def validate_gateway_contract() -> None:
         "api_path": MINT_API_PATH,
         "node_image": NODE_IMAGE,
     }
-    if manifest_gateway != expected_manifest:
-        raise RuntimeError("Mint gateway manifest identity is stale")
+    expected_toolchains = {
+        "go": {"version": GO_VERSION, "image": GO_IMAGE, "mode": "pinned-offline"},
+        "rust": {"rustc": RUST_VERSION, "cargo": CARGO_VERSION, "image": RUST_IMAGE, "mode": "pinned-offline"},
+        "bun": {"version": BUN_VERSION, "mode": "pinned-offline"},
+    }
+    if manifest_gateway != expected_gateway or manifest_toolchains != expected_toolchains:
+        raise RuntimeError("Mint gateway or toolchain manifest identity is stale")
     if "main:\n" not in compose or "mint-gateway:\n" not in compose:
         raise RuntimeError("Compose topology is missing required services")
     if "    depends_on:\n      mint-gateway:\n        condition: service_healthy" not in compose or "    networks:\n      - internal\n  mint-gateway:" not in compose:

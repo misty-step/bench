@@ -1,5 +1,6 @@
 """Stage census tasks and run deterministic, provider-free probes."""
 from __future__ import annotations
+from dataclasses import replace
 
 import base64
 import importlib
@@ -35,7 +36,11 @@ def _prime_payload(source: Path, metadata: dict[str, object]) -> dict[str, Path]
         if parts[-1].lower() in _PRIME_FORBIDDEN_NAMES:
             fail(f"Prime package contains a credential-like file: {relative}")
         info = os.lstat(path)
-        if stat.S_ISLNK(info.st_mode) or not stat.S_ISREG(info.st_mode):
+        if stat.S_ISLNK(info.st_mode):
+            fail(f"Prime package contains a non-regular file: {relative}")
+        if stat.S_ISDIR(info.st_mode):
+            continue
+        if not stat.S_ISREG(info.st_mode):
             fail(f"Prime package contains a non-regular file: {relative}")
         value = path.read_bytes()
         if any(pattern.search(value) for pattern in _PRIME_SECRET_PATTERNS):
@@ -98,9 +103,9 @@ from harness_census_archive import archive_git_tree
 from harness_census_common import (
     AGENT_ALLOWED_HOSTS, BUN_VERSION, CARGO_VERSION, CAMPAIGN_ID, CONTROLLED_EFFORT, CONTROLLED_MODEL,
     CONTROLLED_NETWORK_ENFORCEMENT, CONTROLLED_NETWORK_MODE, CONTROLLED_TASK_NETWORK_ENFORCEMENT,
-    CONTROLLED_TRANSPORT_NETWORK_MODE, GO_VERSION, HARBOR_VERSION, HARNESSES, NETWORK_POLICY,
+    CONTROLLED_TRANSPORT_NETWORK_MODE, GO_IMAGE, GO_VERSION, HARBOR_VERSION, HARNESSES, NETWORK_POLICY,
     NATIVE_NETWORK_ENFORCEMENT, NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT,
-    NATIVE_TRANSPORT_NETWORK_MODE, RUST_VERSION,
+    NATIVE_TRANSPORT_NETWORK_MODE, NODE_IMAGE, RUST_IMAGE, RUST_VERSION,
     Cell, Task, TaskRecord, agent_allowed_hosts_identity_digest, agent_kwargs_identity_digest, bytes_digest, campaign_matrix, campaign_tree_files, cell_stage_digest, cell_summary,
     canonical, canonical_task_set_digest, confined_path, digest, fail, file_digest, harness_catalog_digest,
     load_tasks, mcp_identity_digest, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping, row_identity, task_corpus_identity,
@@ -386,8 +391,8 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     task_kind = "go" if task_id and task_id.startswith("iron-forest-") else "rust" if task_id and task_id.startswith("estate-") else "typescript"
     if task_kind == "go":
         base = (
-            f"FROM golang:{GO_VERSION}-bookworm AS go-toolchain\n"
-            "FROM node:22.19.0-bookworm-slim\n"
+            f"FROM {GO_IMAGE} AS go-toolchain\n"
+            f"FROM {NODE_IMAGE}\n"
             "COPY --from=go-toolchain /usr/local/go /usr/local/go\n"
             "COPY --from=go-toolchain /go /go\n"
             "ENV PATH=/usr/local/go/bin:/go/bin:${PATH}\n"
@@ -398,8 +403,8 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
         toolchain_labels = f'LABEL org.misty-step.toolchain.go="{GO_VERSION}"\n'
     elif task_kind == "rust":
         base = (
-            f"FROM rust:{RUST_VERSION}-bookworm AS rust-toolchain\n"
-            "FROM node:22.19.0-bookworm-slim\n"
+            f"FROM {RUST_IMAGE} AS rust-toolchain\n"
+            f"FROM {NODE_IMAGE}\n"
             "COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo\n"
             "COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup\n"
             "ENV CARGO_HOME=/usr/local/cargo RUSTUP_HOME=/usr/local/rustup "
@@ -411,7 +416,7 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
         toolchain_labels = f'LABEL org.misty-step.toolchain.rustc="{RUST_VERSION}"\nLABEL org.misty-step.toolchain.cargo="{CARGO_VERSION}"\n'
     else:
         base = (
-            "FROM node:22.19.0-bookworm-slim\n"
+            f"FROM {NODE_IMAGE}\n"
             "WORKDIR /workspace\n"
             "RUN node --version | grep -Eq '^v(22\\.(19|[2-9][0-9])\\.|2[3-9]\\.)'\n"
         )
@@ -436,7 +441,7 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     elif task_kind == "rust":
         dependencies += "RUN cd /workspace && CARGO_NET_OFFLINE=false cargo fetch --locked\nENV CARGO_NET_OFFLINE=true CARGO_TERM_COLOR=never CARGO_TARGET_DIR=/tmp/cargo-target\n"
     else:
-        dependencies += f"RUN npm install --global bun@{BUN_VERSION} pnpm@10.22.0 && bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '10.22.0'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
+        dependencies += f"RUN npm install --global pnpm@10.22.0 && bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '10.22.0'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
     return base + install + labels + f'ENV PATH="{path}"\n' + dependencies
 
 
@@ -1176,23 +1181,59 @@ def _verify_content_ref(root: Path, value: object, label: str) -> Path:
     return path
 
 
-def _receipt_attestation(root: Path, cell: Cell, receipt: dict[str, object]) -> dict[str, object]:
-    candidates: list[dict[str, object]] = []
-    for value in receipt.get("evidence_refs", []):
-        try:
-            path = _verify_content_ref(root, value, "evidence ref")
-        except SystemExit:
-            raise
-        try:
-            loaded = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-            continue
-        if isinstance(loaded, dict) and loaded.get("schema_version") == "crucible.adapter_attestation.v1" and loaded.get("adapter") == cell.harness:
-            candidates.append(loaded)
-    if not candidates:
-        fail(f"resume receipt attestation evidence is missing: {cell.cell_id} {receipt.get('task_id')}")
-    passed = [item for item in candidates if item.get("status") == "passed"]
-    return passed[0] if passed else candidates[0]
+def _receipt_attestation(root: Path, cell: Cell, record: TaskRecord, receipt: dict[str, object]) -> tuple[dict[str, object], str]:
+    task_exchange = confined_path(root, "exchange", cell.cell_id, record.task_id)
+    result_path = _verify_content_ref(root, receipt.get("runner_exchange_result_ref") or receipt.get("result_ref"), "runner-exchange result")
+    if result_path != task_exchange / "result.json":
+        fail(f"resume runner-exchange result reference mismatch: {cell.cell_id} {record.task_id}")
+    try:
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"resume runner-exchange result is invalid: {cell.cell_id} {record.task_id}: {error}")
+    evidence = result.get("evidence") if isinstance(result, dict) else None
+    matches = [item for item in evidence if isinstance(item, dict) and item.get("kind") == "attestation"] if isinstance(evidence, list) else []
+    if len(matches) != 1:
+        fail(f"resume runner-exchange attestation evidence must contain exactly one item: {cell.cell_id} {record.task_id}")
+    item = matches[0]
+    relative = item.get("path")
+    expected_prefix = f"cells/{cell.cell_id}/results/harbor-jobs/{record.task_id}/"
+    if not isinstance(relative, str) or not relative.startswith(expected_prefix):
+        fail(f"resume attestation path is outside the current task result directory: {cell.cell_id} {record.task_id}")
+    raw_digest = item.get("sha256")
+    if isinstance(raw_digest, str) and raw_digest.startswith("sha256:"):
+        raw_digest = raw_digest.removeprefix("sha256:")
+    if not _valid_digest(raw_digest):
+        fail(f"resume attestation evidence digest is invalid: {cell.cell_id} {record.task_id}")
+    attestation_path = _verify_content_ref(root, f"sha256:{raw_digest}@{relative}", "attestation evidence")
+    attestation_ref = f"sha256:{raw_digest}@{relative}"
+    evidence_refs = receipt.get("evidence_refs")
+    if not isinstance(evidence_refs, list) or attestation_ref not in evidence_refs:
+        fail(f"resume attestation evidence reference is not bound to the receipt: {cell.cell_id} {record.task_id}")
+    try:
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"resume attestation is invalid: {cell.cell_id} {record.task_id}: {error}")
+    if not isinstance(attestation, dict) or attestation.get("schema_version") != "crucible.adapter_attestation.v1" or attestation.get("adapter") != cell.harness or attestation.get("composition") != cell.composition or attestation.get("version") != cell.harness_version:
+        fail(f"resume attestation adapter identity mismatch: {cell.cell_id} {record.task_id}")
+    for key, expected in {"harness": cell.harness, "composition": cell.composition, "harness_version": cell.harness_version}.items():
+        if receipt.get(key) != expected:
+            fail(f"resume receipt {key} is not bound to the attestation: {cell.cell_id} {record.task_id}")
+    observed = attestation.get("observed_identities")
+    if attestation.get("status") == "passed":
+        if not isinstance(observed, list) or len(observed) != 1 or not isinstance(observed[0], str) or not observed[0].strip():
+            fail(f"resume attestation observed model identity is invalid: {cell.cell_id} {record.task_id}")
+        effort, effort_source = attestation.get("effort"), attestation.get("effort_source")
+        if not isinstance(effort, str) or not effort.strip() or not isinstance(effort_source, str) or not effort_source.strip():
+            fail(f"resume attestation effort identity is invalid: {cell.cell_id} {record.task_id}")
+        required_bindings = {"provider_route_resolved": observed[0], "provider_effort_resolved": effort, "effort_source": effort_source}
+        optional_bindings = {"response_model_attestation": observed[0], "response_effort_attestation": effort}
+        for key, expected in required_bindings.items():
+            if receipt.get(key) != expected:
+                fail(f"resume attestation {key} is not bound to the receipt: {cell.cell_id} {record.task_id}")
+        for key, expected in optional_bindings.items():
+            if receipt.get(key) is not None and receipt[key] != expected:
+                fail(f"resume attestation {key} is not bound to the receipt: {cell.cell_id} {record.task_id}")
+    return attestation, relative
 
 
 def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_digest: str, receipt: dict[str, object], trusted: int | None) -> tuple[bool, dict[str, str] | None]:
@@ -1288,7 +1329,7 @@ def _verified_task_receipt(root: Path, cell: Cell, record: TaskRecord, stage_dig
         expected_hard_pass = status == "success"
         if grader.get("hard_pass") != expected_hard_pass or receipt.get("hard_pass") != expected_hard_pass or receipt.get("task_points") != grader.get("task_points"):
             fail(f"resume receipt score disagrees with grader: {cell.cell_id} {record.task_id}")
-        attestation = _receipt_attestation(root, cell, receipt)
+        attestation, _ = _receipt_attestation(root, cell, record, receipt)
         tool_manifest = attestation.get("tool_manifest_digest")
         config_digest = attestation.get("config_digest")
         receipt_tool = receipt.get("tool_manifest_digest")
@@ -1335,7 +1376,7 @@ def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict
     receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
     for record in cell.task_records:
         receipt, _ = by_task[record.task_id]
-        attestation = _receipt_attestation(root, cell, receipt)
+        attestation, attestation_path = _receipt_attestation(root, cell, record, receipt)
         tool_manifest = attestation.get("tool_manifest_digest")
         config_digest = attestation.get("config_digest")
         if isinstance(tool_manifest, str) and tool_manifest:
@@ -1344,10 +1385,11 @@ def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict
             observed_configs.append(config_digest)
             if isinstance(tool_manifest, str) and tool_manifest:
                 observed_systems.append(cell.observed_system_identity(config_digest, tool_manifest))
-        model = receipt.get("response_model_attestation")
+        observed = attestation.get("observed_identities")
+        model = observed[0] if isinstance(observed, list) and len(observed) == 1 and isinstance(observed[0], str) else None
         if isinstance(model, str) and model:
             observed_models.append(model)
-        effort = receipt.get("provider_effort_resolved")
+        effort = attestation.get("effort")
         if isinstance(effort, str) and effort:
             observed_efforts.append(effort)
         transcript_ref = receipt.get("transcript_ref")
@@ -1355,10 +1397,6 @@ def _derive_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: dict
             transcript_cell_ref = transcript_ref.split("@", 1)[1].removeprefix(cell_dir_prefix)
         else:
             transcript_cell_ref = None
-        evidence_paths = [value.split("@", 1)[1] for value in receipt.get("evidence_refs", []) if isinstance(value, str) and "@" in value]
-        attestation_path = next((path for path in evidence_paths if path.endswith(".json") and path.removeprefix(cell_dir_prefix).startswith(("results/", "exchange/"))), None)
-        if attestation_path is None:
-            fail(f"resume attestation reference is missing: {cell.cell_id} {record.task_id}")
         attestation_ref = attestation_path.removeprefix(cell_dir_prefix)
         attestation_path_obj = confined_path(root, *attestation_path.split("/"))
         attestations.append({"task_id": record.task_id, "attestation_ref": attestation_ref, "attestation_digest": bytes_digest(attestation_path_obj.read_bytes()), "transcript_ref": transcript_cell_ref, "record": attestation})
@@ -1385,6 +1423,72 @@ def _reconcile_cell_result(root: Path, cell: Cell, stage_digest: str, by_task: d
     derivable = {"schema_version", "campaign_id", "cell_id", "cell_run_id", "task_set_digest", "task_set_size", "retry_policy_digest", "agent_kwargs_base_digest", "stage_manifest_digest", "model_requested", "effort_requested", "provider_route_resolved", "provider_effort_resolved", "response_model", "observed_models", "response_effort", "observed_efforts", "observed_tool_manifest_digests", "observed_config_digests", "observed_system_identities", "effort_source", "network_mode", "transport_network_mode", "network_enforcement", "task_network_enforcement", "row_id", "cohort_id", "baseline_id", "profile_digest", "agent_kwargs", "agent_allowed_hosts", "attestations", "attestation_digests", "runner_exchange_receipts"}
     if {key: stored.get(key) for key in derivable} != {key: expected.get(key) for key in derivable}:
         fail(f"resume completed cell result is stale or mismatched: {cell.cell_id}")
+
+def resolve_resume_cell(root: Path, cell: Cell, stage_digest: str) -> Cell:
+    if cell.cell_kind != "native_default":
+        return cell
+    rows = _receipt_rows(root, cell)
+    by_task: dict[str, tuple[dict[str, object], int | None]] = {}
+    for receipt, trusted in rows:
+        task_id = receipt.get("task_id") or receipt.get("task_name")
+        if not isinstance(task_id, str) or task_id in by_task:
+            fail(f"resume cell has duplicate or missing receipt task identity: {cell.cell_id}")
+        by_task[task_id] = (receipt, trusted)
+    observations: list[dict[str, str]] = []
+    for record in cell.task_records:
+        if record.task_id not in by_task:
+            continue
+        reliability, observation = _verified_task_receipt(root, cell, record, stage_digest, *by_task[record.task_id])
+        if not reliability and observation is not None:
+            observations.append(observation)
+    if not observations:
+        return cell
+    if len({tuple(sorted(observation.items())) for observation in observations}) != 1:
+        fail(f"resume native receipts disagree on observed identity: {cell.cell_id}")
+    observation = observations[0]
+    resolved = cell.resolve_native(observation["model"], observation["effort"], observation["effort_source"], observation["tool"], observation["config"])
+    for receipt, _ in by_task.values():
+        baseline = receipt.get("baseline_id")
+        if baseline is not None and baseline not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
+            fail(f"resume native receipt baseline mismatch: {cell.cell_id}")
+    return resolved
+
+def _reconcile_native_baseline(root: Path, cell: Cell, stage_digest: str, resolved: Cell, observation: dict[str, str], by_task: dict[str, tuple[dict[str, object], int | None]]) -> None:
+    receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
+    receipt_digests = [
+        digest({key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))})
+        for receipt, _ in by_task.values()
+    ]
+    expected = {
+        "schema_version": "harness_census.native_baseline_summary.v1",
+        "campaign_id": CAMPAIGN_ID,
+        "stage_manifest_digest": stage_digest,
+        "cell_id": cell.cell_id,
+        "cell_run_id": cell.cell_run_id,
+        "baseline_id": resolved.baseline_id,
+        "harness": cell.harness,
+        "harness_version": cell.harness_version,
+        "profile_digest": cell.profile_digest,
+        "task_set_digest": cell.task_set_digest,
+        "observed_model": observation["model"],
+        "observed_effort": observation["effort"],
+        "effort_source": observation["effort_source"],
+        "tool_manifest_digest": observation["tool"],
+        "config_digest": observation["config"],
+        "system_identity": cell.observed_system_identity(observation["config"], observation["tool"]),
+        "receipt_digests": receipt_digests,
+        "status": "valid",
+    }
+    summary_path = confined_path(root, "baselines", str(resolved.baseline_id), "summary.json")
+    if not summary_path.is_file():
+        write_json(summary_path, expected)
+        return
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        fail(f"resume native baseline summary is invalid: {cell.cell_id}: {error}")
+    if not isinstance(summary, dict) or any(summary.get(key) != value for key, value in expected.items() if key != "receipt_digests") or sorted(summary.get("receipt_digests", [])) != sorted(receipt_digests):
+        fail(f"resume native baseline summary identity mismatch: {cell.cell_id}")
 
 
 def cell_receipt_state(root: Path, cell: Cell, stage_digest: str, expected_stage_digest: str | None = None) -> str:
@@ -1422,27 +1526,17 @@ def cell_receipt_state(root: Path, cell: Cell, stage_digest: str, expected_stage
         return "partial"
     resolved: Cell | None = None
     if cell.cell_kind == "native_default" and not reliability:
-        if len(observations) != 3:
+        if len(observations) != len(cell.task_records):
             fail(f"resume native observation is incomplete: {cell.cell_id}")
         if len({tuple(sorted(observation.items())) for observation in observations}) != 1:
             fail(f"resume native receipts disagree on observation: {cell.cell_id}")
         observation = observations[0]
         resolved = cell.resolve_native(observation["model"], observation["effort"], observation["effort_source"], observation["tool"], observation["config"])
         for receipt, _ in by_task.values():
-            if receipt.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
+            baseline = receipt.get("baseline_id")
+            if baseline is not None and baseline not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"}:
                 fail(f"resume native receipt baseline mismatch: {cell.cell_id}")
-        summary_path = confined_path(root, "baselines", str(resolved.baseline_id), "summary.json")
-        try:
-            summary = json.loads(summary_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-            fail(f"resume native baseline summary is invalid: {cell.cell_id}: {error}")
-        receipt_keys = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
-        receipt_digests: list[str] = []
-        for receipt, _ in by_task.values():
-            compact = {key: receipt[key] for key in receipt_keys if key in receipt and isinstance(receipt[key], (str, int, float, bool))}
-            receipt_digests.append(digest(compact))
-        if not isinstance(summary, dict) or summary.get("schema_version") != "harness_census.native_baseline_summary.v1" or summary.get("cell_id") != cell.cell_id or summary.get("stage_manifest_digest") != stage_digest or summary.get("baseline_id") not in {resolved.baseline_id, f"sha256:{resolved.baseline_id}"} or summary.get("observed_model") != observation["model"] or summary.get("observed_effort") != observation["effort"] or summary.get("effort_source") != observation["effort_source"] or summary.get("tool_manifest_digest") not in {observation["tool"], f"sha256:{observation['tool']}"} or summary.get("config_digest") not in {observation["config"], f"sha256:{observation['config']}"} or summary.get("system_identity") != cell.observed_system_identity(observation["config"], observation["tool"]) or not isinstance(summary.get("receipt_digests"), list) or sorted(summary["receipt_digests"]) != sorted(receipt_digests) or summary.get("status") != "valid":
-            fail(f"resume native baseline summary identity mismatch: {cell.cell_id}")
+        _reconcile_native_baseline(root, cell, stage_digest, resolved, observation, by_task)
     _reconcile_cell_result(root, cell, stage_digest, by_task, resolved)
     return "invalid" if reliability else "complete"
 

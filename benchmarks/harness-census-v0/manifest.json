@@ -41,8 +41,8 @@
   },
   "grader_visibility": "outside-worker-image",
   "toolchains": {
-    "go": {"version": "1.26.5", "mode": "pinned-offline"},
-    "rust": {"rustc": "1.97.1", "cargo": "1.97.1", "mode": "pinned-offline"},
+    "go": {"version": "1.26.5", "image": "golang:1.26.5-bookworm@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599", "mode": "pinned-offline"},
+    "rust": {"rustc": "1.97.1", "cargo": "1.97.1", "image": "rust:1.97.1-bookworm@sha256:14bc9c5966e7b3a385794b3d5389a8765668342025fbcc7b2e3d2866ac4bd8c3", "mode": "pinned-offline"},
     "bun": {"version": "1.3.14", "mode": "pinned-offline"}
   },
   "tasks": [

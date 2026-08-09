@@ -19,12 +19,13 @@ from harness_census_common import (
     agent_allowed_hosts_identity_digest,
     agent_kwargs_identity_digest,
     bytes_digest,
+    campaign_tree_files,
     canonical,
     digest,
     load_tasks,
     mcp_identity_digest,
 )
-from harness_census_staging import cell_receipt_state, pending_task_ids
+from harness_census_staging import _prime_payload, cell_receipt_state, pending_task_ids
 
 
 TASK_IDS = sorted((
@@ -127,6 +128,7 @@ def stage_task_artifacts(
 ) -> None:
     task_exchange = root / "exchange" / cell.cell_id / record.task_id
     task_exchange.mkdir(parents=True, exist_ok=True)
+    provider, name = CONTROLLED_MODEL.split("/", 1)
     run_id = f"{CAMPAIGN_ID}--{cell.cell_id}--{record.task_id}"
     exchange_id = f"{run_id}--{record.task_id}"
     instruction_path = f"cells/{cell.cell_id}/{record.task_dir}/instruction.md"
@@ -149,7 +151,7 @@ def stage_task_artifacts(
             "kind": "agent",
             "harness": "omp",
             "harness_version": "17.2.11",
-            "model": {"provider": "openrouter", "name": "deepseek/deepseek-v4-flash-0731"},
+            "model": {"provider": provider, "name": name},
             "reasoning_effort": "high",
         },
         "capabilities": ["workspace_edit"],
@@ -311,6 +313,7 @@ def stage_task_artifacts(
         "effort_requested": CONTROLLED_EFFORT,
         "provider_route_resolved": CONTROLLED_MODEL,
         "provider_effort_resolved": CONTROLLED_EFFORT,
+        "effort_source": "requested",
         "composition_digest": f"sha256:{cell.composition_digest}",
         "adapter_digest": f"sha256:{cell.adapter_digest}",
         "mcp_digest": f"sha256:{mcp_identity_digest()}",
@@ -383,6 +386,27 @@ def build_complete(root: Path, cell: Cell, stage_digest: str) -> None:
     result_path = root / "cells" / cell.cell_id / "result.json"
     result_path.parent.mkdir(parents=True, exist_ok=True)
     result_path.write_text(json.dumps(result), encoding="utf-8")
+
+
+def make_prime_package(root: Path) -> tuple[Path, dict[str, object]]:
+    package = root / "prime-package"
+    package.mkdir()
+    metadata: dict[str, object] = {
+        "name": "prime-agent",
+        "version": "0.7.0",
+        "bin": {"prime-agent": "dist/bundle/cli.js"},
+        "files": ["dist"],
+    }
+    (package / "package.json").write_text(json.dumps(metadata), encoding="utf-8")
+    for relative in (
+        "dist/bundle/cli.js",
+        "dist/prime-agent-runtime/pyproject.toml",
+        "dist/prime-agent-runtime/src/rlm/__init__.py",
+    ):
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"")
+    return package, metadata
 
 
 class HarnessCensusResumeTests(unittest.TestCase):
@@ -470,6 +494,157 @@ class HarnessCensusResumeTests(unittest.TestCase):
         result_path.write_text(json.dumps(result), encoding="utf-8")
         with self.assertRaisesRegex(SystemExit, "stale"):
             cell_receipt_state(self.root, self.cell, self.stage_digest)
+
+    def test_prime_payload_accepts_nested_regular_directories(self) -> None:
+        package, metadata = make_prime_package(self.root)
+        payload = _prime_payload(package, metadata)
+        self.assertEqual(
+            set(payload),
+            {
+                "package.json",
+                "dist/bundle/cli.js",
+                "dist/prime-agent-runtime/pyproject.toml",
+                "dist/prime-agent-runtime/src/rlm/__init__.py",
+            },
+        )
+
+    def test_prime_payload_rejects_nested_symlink(self) -> None:
+        package, metadata = make_prime_package(self.root)
+        link = package / "dist/bundle/linked.js"
+        link.symlink_to(package / "dist/bundle/cli.js")
+        with self.assertRaisesRegex(SystemExit, "non-regular file"):
+            _prime_payload(package, metadata)
+
+    def test_campaign_tree_skips_workspace_symlink_before_safety_check(self) -> None:
+        workspace = self.root / "cells" / "omp-controlled_raw" / "tasks" / "task" / "environment" / "repo"
+        workspace.mkdir(parents=True)
+        target = self.root / "workspace-target"
+        target.mkdir()
+        (workspace / "linked").symlink_to(target, target_is_directory=True)
+        with self.assertRaisesRegex(SystemExit, "unsafe entry"):
+            campaign_tree_files(self.root)
+        self.assertEqual(
+            campaign_tree_files(self.root, skip=("cells/*/tasks/*/environment/repo/*",)),
+            {},
+        )
+
+    def _native_partial(self) -> tuple[Cell, dict[str, object]]:
+        from dataclasses import replace
+
+        cell = replace(
+            self.cell,
+            cell_id="omp-native_default",
+            cell_run_id=f"{CAMPAIGN_ID}--omp-native_default",
+            cell_kind="native_default",
+            composition="native_default",
+            model_requested=None,
+            effort_requested=None,
+            provider_route_resolved=None,
+            provider_effort_resolved=None,
+            default_resolution_source=None,
+            effort_source=None,
+            row_id=None,
+            cohort_id=None,
+            baseline_id=None,
+            agent_kwargs={"composition": "native_default", "mint_base_url": "http://mint-gateway:4949"},
+        )
+        record = cell.task_records[0]
+        receipt: dict[str, object] = {}
+        stage_task_artifacts(self.root, cell, self.stage_digest, record, receipt)
+        attestation_path = self.root / "cells" / cell.cell_id / "results" / "harbor-jobs" / record.task_id / "run" / "trial" / "omp.attestation.json"
+        attestation = json.loads(attestation_path.read_text(encoding="utf-8"))
+        attestation["composition"] = "native_default"
+        attestation_path.write_bytes(canonical(attestation))
+        result_path = self.root / "exchange" / cell.cell_id / record.task_id / "result.json"
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        result["evidence"][1]["sha256"] = bytes_digest(canonical(attestation))
+        result_path.write_text(json.dumps(result), encoding="utf-8")
+        grader_path = self.root / "exchange" / cell.cell_id / record.task_id / "grader.json"
+        grader = json.loads(grader_path.read_text(encoding="utf-8"))
+        grader.update({"row_id": None, "cohort_id": None})
+        grader_path.write_text(json.dumps(grader), encoding="utf-8")
+        model = attestation["observed_identities"][0]
+        resolved = cell.resolve_native(model, attestation["effort"], attestation["effort_source"], attestation["tool_manifest_digest"], attestation["config_digest"])
+        receipt.update({
+            "cell_kind": "native_default",
+            "composition": "native_default",
+            "model_requested": None,
+            "effort_requested": None,
+            "provider_route_resolved": model,
+            "provider_effort_resolved": attestation["effort"],
+            "effort_source": attestation["effort_source"],
+            "baseline_id": resolved.baseline_id,
+            "row_id": None,
+            "cohort_id": None,
+            "agent_kwargs_digest": f"sha256:{agent_kwargs_identity_digest(cell.agent_kwargs)}",
+            "grader_receipt_ref": content_ref(bytes_digest(grader_path.read_bytes()), grader_path.relative_to(self.root).as_posix()),
+            "evidence_refs": [
+                receipt["evidence_refs"][0],
+                content_ref(bytes_digest(canonical(attestation)), attestation_path.relative_to(self.root).as_posix()),
+                receipt["evidence_refs"][2],
+            ],
+        })
+        result_ref = content_ref(bytes_digest(result_path.read_bytes()), result_path.relative_to(self.root).as_posix())
+        receipt["result_ref"] = result_ref
+        receipt["runner_exchange_result_ref"] = result_ref
+        return cell, receipt
+
+    def test_native_partial_resume_resolves_baseline_and_pending_tasks(self) -> None:
+        from harness_census_staging import resolve_resume_cell
+
+        cell, receipt = self._native_partial()
+        write_db(self.root, [receipt])
+        resolved = resolve_resume_cell(self.root, cell, self.stage_digest)
+        self.assertEqual(resolved.baseline_id, cell.native_baseline_id(CONTROLLED_MODEL, "high", "requested", h64(0xF1), h64(0xF2)))
+        self.assertEqual(pending_task_ids(self.root, cell), TASK_IDS[1:])
+
+    def test_wrong_kind_and_cross_task_attestation_evidence_are_rejected(self) -> None:
+        for mutation in ("wrong-kind", "cross-task"):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory(prefix="census-evidence-") as temporary:
+                root = Path(temporary)
+                cell = make_cell(root)
+                receipt: dict[str, object] = {}
+                record = cell.task_records[0]
+                stage_task_artifacts(root, cell, self.stage_digest, record, receipt)
+                result_path = root / "exchange" / cell.cell_id / record.task_id / "result.json"
+                result = json.loads(result_path.read_text(encoding="utf-8"))
+                evidence = result["evidence"][1]
+                if mutation == "wrong-kind":
+                    evidence["kind"] = "transcript"
+                else:
+                    evidence["path"] = f"cells/{cell.cell_id}/results/harbor-jobs/{TASK_IDS[1]}/run/trial/omp.attestation.json"
+                result_path.write_text(json.dumps(result), encoding="utf-8")
+                result_ref = content_ref(bytes_digest(result_path.read_bytes()), result_path.relative_to(root).as_posix())
+                receipt["result_ref"] = result_ref
+                receipt["runner_exchange_result_ref"] = result_ref
+                write_db(root, [receipt])
+                with self.assertRaisesRegex(SystemExit, "attestation"):
+                    cell_receipt_state(root, cell, self.stage_digest)
+
+    def test_reconstructed_attestation_ref_is_the_adapter_attestation(self) -> None:
+        build_complete(self.root, self.cell, self.stage_digest)
+        result_path = self.root / "cells" / self.cell.cell_id / "result.json"
+        result_path.unlink()
+        self.assertEqual(cell_receipt_state(self.root, self.cell, self.stage_digest), "complete")
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+        attestation_ref = result["attestations"][0]["attestation_ref"]
+        self.assertEqual(attestation_ref, f"results/harbor-jobs/{TASK_IDS[0]}/run/trial/omp.attestation.json")
+        self.assertEqual(json.loads((self.cell.cell_dir / attestation_ref).read_text(encoding="utf-8"))["schema_version"], "crucible.adapter_attestation.v1")
+
+    def test_setup_error_without_transcript_preserves_root_cause(self) -> None:
+        from harness_census_exchange import classify_reliability
+
+        self.assertEqual(
+            classify_reliability({"exception_info": {"exception_type": "SetupError"}}, {"status": "failed", "reason": "setup_error"}, None),
+            ("harness", "launch", "adapter_setup_failed"),
+        )
+
+    def test_timeout_without_transcript_remains_retryable(self) -> None:
+        from harness_census_exchange import classify_reliability
+
+        failure = classify_reliability({"exception_info": {"exception_type": "TimeoutError"}}, {"status": "failed"}, None)
+        self.assertEqual(failure, ("timeout", "run", "adapter_timeout"))
+        self.assertIn(failure[0], {"provider", "timeout", "transport"})
 
 
 if __name__ == "__main__":

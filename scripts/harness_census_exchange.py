@@ -185,10 +185,6 @@ def classify_reliability(trial: HarborTrial, attestation: Attestation, transcrip
         return "provider", "run", provider_exceptions[exception_type]
     if reason in {"verifier_reward_missing", "verifier_reward_invalid", "grader_report_missing", "grader_report_invalid", "grader_missing"}:
         return "harness", "grade", reason
-    if transcript_path is None or not transcript_path.is_file():
-        return "transcript", "collect", "transcript_missing"
-    if not exception and attestation.get("status") != "failed":
-        return None
     if reason == "turn_limit_exceeded":
         return "timeout", "run", "adapter_turn_limit_exceeded"
     if reason == "timeout" or exception_type in {"TimeoutError", "DeadlineExceededError"}:
@@ -197,7 +193,11 @@ def classify_reliability(trial: HarborTrial, attestation: Attestation, transcrip
         return "harness", "launch", "adapter_setup_failed"
     if reason in {"transport_error", "connection_error"} or exception_type in {"TransportError", "ConnectionError"}:
         return "transport", "run", "transport_request_failed"
-    return "harness", "run", "adapter_execution_failed"
+    if exception_type or attestation.get("status") == "failed" or reason:
+        return "harness", "run", "adapter_execution_failed"
+    if transcript_path is None or not transcript_path.is_file():
+        return "transcript", "collect", "transcript_missing"
+    return None
 
 
 def reliability_detail(trial: HarborTrial, attestation: Attestation, failure: tuple[str, str, str]) -> dict[str, object]:
@@ -383,7 +383,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     if failure is None:
         result["output"] = {"summary": "Harbor task completed", "primary_artifact": evidence[1]["path"], "metadata": {"reward": reward_raw, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement}}
     else:
-        retryable = failure[2] in {"provider_request_failed", "provider_rate_limited", "adapter_timeout", "transport_request_failed"}
+        retryable = failure[0] in {"provider", "timeout", "transport"}
         result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation)) or "Harbor reliability failure", "retryable": retryable, "detail": reliability_detail(trial_raw, attestation, failure)}
     exchange_dir = confined_path(root, "exchange", cell.cell_id, task_id)
     instruction_path = confined_path(root, "cells", cell.cell_id, *record.task_dir.split("/"), "instruction.md")
