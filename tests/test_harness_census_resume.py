@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -22,10 +24,22 @@ from harness_census_common import (
     campaign_tree_files,
     canonical,
     digest,
+    harbor_reward_value,
     load_tasks,
     mcp_identity_digest,
 )
-from harness_census_staging import _prime_payload, cell_receipt_state, pending_task_ids
+from harness_census_gateway import write_gateway_assets
+from harness_census_staging import (
+    _prime_payload,
+    cell_receipt_state,
+    dockerfile,
+    node_toolchain_package_info,
+    pending_task_ids,
+    prime_package_info,
+    runtime_package_info,
+    stage_prime_package,
+    verifier_source,
+)
 
 
 TASK_IDS = sorted((
@@ -391,11 +405,14 @@ def build_complete(root: Path, cell: Cell, stage_digest: str) -> None:
 def make_prime_package(root: Path) -> tuple[Path, dict[str, object]]:
     package = root / "prime-package"
     package.mkdir()
+    locked = json.loads((ROOT / "benchmarks/harness-census-v0/packages/prime/package.json").read_text(encoding="utf-8"))
     metadata: dict[str, object] = {
         "name": "prime-agent",
         "version": "0.7.0",
         "bin": {"prime-agent": "dist/bundle/cli.js"},
         "files": ["dist"],
+        "dependencies": locked["dependencies"],
+        "optionalDependencies": locked["optionalDependencies"],
     }
     (package / "package.json").write_text(json.dumps(metadata), encoding="utf-8")
     for relative in (
@@ -406,6 +423,7 @@ def make_prime_package(root: Path) -> tuple[Path, dict[str, object]]:
         path = package / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"")
+    (package / "dist/bundle/cli.js").chmod(0o755)
     return package, metadata
 
 
@@ -507,6 +525,98 @@ class HarnessCensusResumeTests(unittest.TestCase):
                 "dist/prime-agent-runtime/src/rlm/__init__.py",
             },
         )
+
+    def test_prime_payload_accepts_documented_credential_field_names(self) -> None:
+        package, metadata = make_prime_package(self.root)
+        (package / "dist/bundle/cli.js").write_text("token: 'bearer_exampletoken'\n", encoding="utf-8")
+        self.assertIn("dist/bundle/cli.js", _prime_payload(package, metadata))
+
+    def test_prime_payload_rejects_known_secret_prefixes(self) -> None:
+        package, metadata = make_prime_package(self.root)
+        (package / "dist/bundle/cli.js").write_text("const key = 'sk-realcredential1234567890'\n", encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "secret-like value"):
+            _prime_payload(package, metadata)
+
+    def test_prime_payload_ignores_unselected_dependency_examples(self) -> None:
+        package, metadata = make_prime_package(self.root)
+        example = package / "node_modules/example.js"
+        example.parent.mkdir()
+        example.write_text("const key = 'sk-examplecredential123456'\n", encoding="utf-8")
+        bin_dir = package / "node_modules/.bin"
+        bin_dir.mkdir()
+        (bin_dir / "prime").symlink_to(example)
+        self.assertNotIn("node_modules/example.js", _prime_payload(package, metadata))
+
+    def test_stage_prime_package_copies_the_selected_payload(self) -> None:
+        package, _metadata = make_prime_package(self.root)
+        staged = Path(stage_prime_package(self.root, package)["path"])
+        self.assertTrue((staged / "package.json").is_file())
+        self.assertTrue((staged / "dist/bundle/cli.js").is_file())
+        self.assertTrue((staged / "package-lock.json").is_file())
+        self.assertTrue((staged / "dist/bundle/cli.js").stat().st_mode & 0o111)
+
+    def test_prime_package_rejects_non_executable_cli(self) -> None:
+        package, _metadata = make_prime_package(self.root)
+        (package / "dist/bundle/cli.js").chmod(0o644)
+        with self.assertRaisesRegex(SystemExit, "CLI must be executable"):
+            prime_package_info(package)
+
+    def test_node_workers_use_lock_backed_bun_and_pnpm(self) -> None:
+        node_toolchain_package_info()
+        runtime_package_info("omp")
+        runtime_package_info("pi")
+        for harness in ("omp", "pi", "prime"):
+            package_name = "prime-package" if harness == "prime" else "runtime-package"
+            text = dockerfile(harness, package_name, "sploot-hydration-device-lane")
+            self.assertNotIn("npm install --global", text)
+            self.assertIn("bun --version", text)
+            self.assertIn("pnpm --version", text)
+        prime_dockerfile = dockerfile("prime", "prime-package", "sploot-hydration-device-lane")
+        self.assertIn("COPY runtime-package/ /opt/node-toolchain/", prime_dockerfile)
+        self.assertIn("RUN cd /opt/prime-agent && npm ci --omit=dev", prime_dockerfile)
+        self.assertIn("RUN /opt/prime-agent/dist/bundle/cli.js --version 2>&1", prime_dockerfile)
+
+    def test_prime_gateway_opens_seccomp_only_for_inner_namespaces(self) -> None:
+        normal = self.root / "normal-task"
+        prime = self.root / "prime-task"
+        write_gateway_assets(normal)
+        write_gateway_assets(prime, allow_user_namespaces=True)
+        normal_compose = (normal / "environment/docker-compose.yaml").read_text(encoding="utf-8")
+        prime_compose = (prime / "environment/docker-compose.yaml").read_text(encoding="utf-8")
+        self.assertNotIn("seccomp=unconfined", normal_compose)
+        self.assertEqual(prime_compose.count("seccomp=unconfined"), 1)
+        self.assertIn("no-new-privileges:true", prime_compose)
+
+    def test_harbor_reward_value_requires_one_bounded_named_reward(self) -> None:
+        self.assertEqual(harbor_reward_value({"reward": 0}), 0.0)
+        self.assertEqual(harbor_reward_value({"reward": 1.0}), 1.0)
+        for value in (0.5, {"score": 0.5}, {"reward": True}, {"reward": -0.1}, {"reward": 1.1}, {"reward": float("nan")}, {"reward": 0.5, "other": 0.5}):
+            with self.subTest(value=value):
+                self.assertIsNone(harbor_reward_value(value))
+
+    def test_generated_verifier_writes_harbor_reward_map(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            output = root / "verifier"
+            workspace.mkdir()
+            source = verifier_source(
+                ROOT / "benchmarks/harness-census-v0/tasks/iron-forest-go-checkruns-array/grader.py",
+                {},
+                (),
+            )
+            verifier = root / "verify.py"
+            verifier.write_text(source, encoding="utf-8")
+            run = subprocess.run(
+                [sys.executable, str(verifier), str(workspace)],
+                env={**os.environ, "HARNESS_CENSUS_LOG_DIR": str(output)},
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(run.returncode, 1)
+            self.assertEqual(json.loads((output / "reward.json").read_text(encoding="utf-8")), {"reward": 0.0})
+
 
     def test_prime_payload_rejects_nested_symlink(self) -> None:
         package, metadata = make_prime_package(self.root)

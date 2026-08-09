@@ -14,8 +14,8 @@ from typing import cast
 from harness_census_common import (
     CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
     AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, agent_allowed_hosts_identity_digest,
-    agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, digest, fail, load_tasks,
-    mcp_identity_digest, write_json,
+    agent_kwargs_identity_digest, bytes_digest, cell_allowed_hosts, cell_stage_digest, confined_path, digest, fail,
+    harbor_reward_value, load_tasks, mcp_identity_digest, write_json,
 )
 
 RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
@@ -310,13 +310,14 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     reward_path, report_path = trial_dir / "verifier" / "reward.json", trial_dir / "verifier" / "grader-report.json"
     reward_raw, reward_error = _read_json_or_failure(reward_path)
     report_raw, report_error = _read_json_or_failure(report_path)
+    reward_value = harbor_reward_value(reward_raw)
     if failure is None and not generated_grader_path.is_file():
         failure = ("harness", "grade", "grader_missing")
     if failure is None and reward_error == "missing":
         failure = ("harness", "grade", "verifier_reward_missing")
     elif failure is None and reward_error == "invalid":
         failure = ("harness", "grade", "verifier_reward_invalid")
-    elif failure is None and (isinstance(reward_raw, bool) or not isinstance(reward_raw, (int, float)) or not math.isfinite(float(reward_raw)) or not 0.0 <= float(reward_raw) <= 1.0):
+    elif failure is None and reward_value is None:
         failure = ("harness", "grade", "verifier_reward_invalid")
     if failure is None and report_error == "missing":
         failure = ("harness", "grade", "grader_report_missing")
@@ -381,7 +382,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     result.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
     result.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
     if failure is None:
-        result["output"] = {"summary": "Harbor task completed", "primary_artifact": evidence[1]["path"], "metadata": {"reward": reward_raw, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement}}
+        result["output"] = {"summary": "Harbor task completed", "primary_artifact": evidence[1]["path"], "metadata": {"reward": reward_value, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement}}
     else:
         retryable = failure[0] in {"provider", "timeout", "transport"}
         result["error"] = {"code": failure[2], "message": _sanitize_failure_text(_failure_text(trial_raw, attestation)) or "Harbor reliability failure", "retryable": retryable, "detail": reliability_detail(trial_raw, attestation, failure)}
@@ -410,7 +411,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     trial_record = {key: value for key, value in trial_record.items() if value is not None}
     write_json(trial_path, trial_record)
     if failure is None:
-        grader_record: dict[str, object] = {"schema_version": "harness_census.grader_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "task_id": task_id, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "grader_identity": "harness_census_deterministic", "grader_digest": grader_digest, "hard_pass": reward_raw == 1.0, "task_points": float(reward_raw), "grader_ms": None}
+        grader_record: dict[str, object] = {"schema_version": "harness_census.grader_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "task_id": task_id, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "grader_identity": "harness_census_deterministic", "grader_digest": grader_digest, "hard_pass": reward_value == 1.0, "task_points": reward_value, "grader_ms": None}
         write_json(grader_path, {key: value for key, value in grader_record.items() if value is not None})
     else:
         grader_path = None

@@ -10,7 +10,7 @@ import subprocess
 
 from harness_census_common import (
     BUN_VERSION, CAMPAIGN_ID, CONTROLLED_MODEL, HARBOR_VERSION,
-    HARNESSES, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
+    HARNESSES, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
     fail, harness_catalog_digest, model_roster_digest, runtime_harness_records, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment

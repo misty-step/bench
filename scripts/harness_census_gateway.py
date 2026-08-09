@@ -142,7 +142,8 @@ ENTRYPOINT ["node", "/app/mint-gateway.mjs"]
 '''
 
 
-def compose_yaml() -> str:
+def compose_yaml(*, allow_user_namespaces: bool = False) -> str:
+    sandbox_profile = "    security_opt:\n      - seccomp=unconfined\n" if allow_user_namespaces else ""
     return '''services:
   main:
     build:
@@ -153,7 +154,7 @@ def compose_yaml() -> str:
         condition: service_healthy
     networks:
       - internal
-  mint-gateway:
+''' + sandbox_profile + '''  mint-gateway:
     build:
       context: .
       dockerfile: mint-gateway.Dockerfile
@@ -203,6 +204,7 @@ def validate_gateway_contract() -> None:
     if f"FROM {NODE_IMAGE}\n" not in dockerfile or "COPY mint-gateway.mjs /app/mint-gateway.mjs" not in dockerfile:
         raise RuntimeError("Mint gateway image contract is incomplete")
     compose = compose_yaml()
+    prime_compose = compose_yaml(allow_user_namespaces=True)
     manifest_path = Path(__file__).resolve().parents[1] / "benchmarks" / "harness-census-v0" / "manifest.json"
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest_gateway = manifest.get("gateway")
@@ -235,6 +237,8 @@ def validate_gateway_contract() -> None:
     for marker in ("read_only: true", 'user: "10001:10001"', "- ALL", "no-new-privileges:true", "internal: true"):
         if marker not in compose:
             raise RuntimeError(f"Compose gateway hardening is incomplete: {marker}")
+    if "seccomp=unconfined" in compose or prime_compose.count("      - seccomp=unconfined") != 1:
+        raise RuntimeError("Prime Compose sandbox profile must permit only its inner user namespace")
     expected_paths = {
         "environment/mint-gateway.mjs",
         "environment/mint-gateway.Dockerfile",
@@ -244,16 +248,16 @@ def validate_gateway_contract() -> None:
         raise RuntimeError("Mint gateway asset paths do not match Harbor's environment contract")
 
 
-def gateway_assets() -> dict[str, bytes]:
+def gateway_assets(*, allow_user_namespaces: bool = False) -> dict[str, bytes]:
     return {
         "environment/mint-gateway.mjs": gateway_source().encode("utf-8"),
         "environment/mint-gateway.Dockerfile": gateway_dockerfile().encode("utf-8"),
-        "environment/docker-compose.yaml": compose_yaml().encode("utf-8"),
+        "environment/docker-compose.yaml": compose_yaml(allow_user_namespaces=allow_user_namespaces).encode("utf-8"),
     }
 
 
-def gateway_identity() -> dict[str, str]:
-    assets = gateway_assets()
+def gateway_identity(*, allow_user_namespaces: bool = False) -> dict[str, str]:
+    assets = gateway_assets(allow_user_namespaces=allow_user_namespaces)
     return {
         "gateway_digest": hashlib.sha256(assets["environment/mint-gateway.mjs"]).hexdigest(),
         "gateway_dockerfile_digest": hashlib.sha256(assets["environment/mint-gateway.Dockerfile"]).hexdigest(),
@@ -261,8 +265,8 @@ def gateway_identity() -> dict[str, str]:
     }
 
 
-def write_gateway_assets(task_dir: Path) -> dict[str, str]:
-    assets = gateway_assets()
+def write_gateway_assets(task_dir: Path, *, allow_user_namespaces: bool = False) -> dict[str, str]:
+    assets = gateway_assets(allow_user_namespaces=allow_user_namespaces)
     for relative, value in assets.items():
         path = task_dir / relative
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,4 +278,4 @@ def write_gateway_assets(task_dir: Path) -> dict[str, str]:
     expected = {relative: hashlib.sha256(value).hexdigest() for relative, value in assets.items()}
     if observed != expected:
         raise RuntimeError("Mint gateway assets changed while staging")
-    return gateway_identity()
+    return gateway_identity(allow_user_namespaces=allow_user_namespaces)

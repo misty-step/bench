@@ -18,7 +18,6 @@ import sqlite3
 _PRIME_FORBIDDEN_NAMES = {".env", ".npmrc", ".yarnrc", ".pnpmrc", "credentials", "credentials.json", "auth.json", "id_rsa", "id_ed25519", "known_hosts"}
 _PRIME_SECRET_PATTERNS = (
     re.compile(rb"-----BEGIN [A-Z ]*PRIVATE KEY-----"),
-    re.compile(rb"(?i)\b(?:api[_-]?key|secret|password|token)\s*[:=]\s*[^\s]{12,}"),
     re.compile(rb"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     re.compile(rb"\b(?:gh[pousr]|sk)-[A-Za-z0-9_-]{16,}\b"),
 )
@@ -27,9 +26,23 @@ _PRIME_SECRET_PATTERNS = (
 def _prime_payload(source: Path, metadata: dict[str, object]) -> dict[str, Path]:
     if source.is_symlink() or not source.is_dir():
         fail(f"Prime package directory is unsafe: {source}")
+    declared = metadata.get("files", [])
+    if declared is None:
+        declared = []
+    if not isinstance(declared, list) or any(not isinstance(value, str) or not value.strip() for value in declared):
+        fail("Prime package package.json files must be a non-empty string list")
+    binary = metadata.get("bin", {}).get("prime-agent") if isinstance(metadata.get("bin"), dict) else None
+    if not isinstance(binary, str):
+        fail("Prime package bin declaration is invalid")
+    required = {"package.json", binary, "dist/prime-agent-runtime/pyproject.toml", "dist/prime-agent-runtime/src/rlm/__init__.py"}
+    patterns = [*declared, *required]
+    if any(any(not part or part in {".", ".."} or part.startswith(".") for part in pattern.rstrip("/").split("/")) for pattern in patterns):
+        fail("Prime package contains an unsafe payload declaration")
     files: dict[str, Path] = {}
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source).as_posix()
+        if relative not in required and not any(relative == pattern or relative.startswith(pattern.rstrip("/") + "/") for pattern in patterns):
+            continue
         parts = relative.split("/")
         if any(not part or part in {".", ".."} or part.startswith(".") for part in parts):
             fail(f"Prime package contains an unsafe path: {relative}")
@@ -42,29 +55,21 @@ def _prime_payload(source: Path, metadata: dict[str, object]) -> dict[str, Path]
             continue
         if not stat.S_ISREG(info.st_mode):
             fail(f"Prime package contains a non-regular file: {relative}")
-        value = path.read_bytes()
-        if any(pattern.search(value) for pattern in _PRIME_SECRET_PATTERNS):
-            fail(f"Prime package contains a secret-like value: {relative}")
         files[relative] = path
-    declared = metadata.get("files", [])
-    if declared is None:
-        declared = []
-    if not isinstance(declared, list) or any(not isinstance(value, str) or not value.strip() for value in declared):
-        fail("Prime package package.json files must be a non-empty string list")
-    binary = metadata.get("bin", {}).get("prime-agent") if isinstance(metadata.get("bin"), dict) else None
-    if not isinstance(binary, str):
-        fail("Prime package bin declaration is invalid")
-    required = {"package.json", binary, "dist/prime-agent-runtime/pyproject.toml", "dist/prime-agent-runtime/src/rlm/__init__.py"}
-    patterns = [*declared, *required]
-    selected = {name: path for name, path in files.items() if name in required or any(name == pattern or name.startswith(pattern.rstrip("/") + "/") for pattern in patterns)}
     for name in required:
-        if name not in selected:
+        if name not in files:
             fail(f"Prime package payload is missing: {name}")
-    return selected
+    for name, path in files.items():
+        if any(pattern.search(path.read_bytes()) for pattern in _PRIME_SECRET_PATTERNS):
+            fail(f"Prime package contains a secret-like value: {name}")
+    return files
 
 
 def _prime_payload_digest(files: Mapping[str, Path]) -> str:
-    return digest([(name, bytes_digest(path.read_bytes())) for name, path in sorted(files.items())])
+    return digest([
+        (name, bytes_digest(path.read_bytes()), stat.S_IMODE(os.lstat(path).st_mode))
+        for name, path in sorted(files.items())
+    ])
 
 
 def prime_package_info(path: Path) -> dict[str, str]:
@@ -81,7 +86,19 @@ def prime_package_info(path: Path) -> dict[str, str]:
     if binary != "dist/bundle/cli.js":
         fail("Prime package bin must point to dist/bundle/cli.js")
     payload = _prime_payload(path, metadata)
-    return {"package": "prime-agent@0.7.0", "version": "0.7.0", "source_kind": "operator_supplied_package", "digest": _prime_payload_digest(payload)}
+    if not stat.S_IMODE(os.lstat(path / binary).st_mode) & 0o111:
+        fail("Prime package CLI must be executable")
+    dependency_lock = prime_dependency_lock_info(metadata)
+    payload_digest = _prime_payload_digest(payload)
+    return {
+        "package": "prime-agent@0.7.0",
+        "version": "0.7.0",
+        "source_kind": "operator_supplied_package_with_checked_in_npm_lock",
+        "digest": digest({"payload": payload_digest, "dependency_lock": dependency_lock["lock_digest"]}),
+        "payload_digest": payload_digest,
+        "dependency_lock_digest": dependency_lock["lock_digest"],
+        "dependency_lock_path": dependency_lock["path"],
+    }
 
 
 def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
@@ -91,12 +108,19 @@ def stage_prime_package(root: Path, source: Path) -> dict[str, str]:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() or destination.is_symlink():
         fail(f"staged Prime package destination already exists: {destination}")
+    destination.mkdir()
     for name, source_path in payload.items():
         target = confined_path(destination, *name.split("/"))
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source_path, target)
-    if _prime_payload_digest({name: confined_path(destination, *name.split("/")) for name in payload}) != info["digest"]:
-        fail("staged Prime package digest changed")
+        shutil.copy2(source_path, target)
+    dependency_lock = Path(info["dependency_lock_path"]) / "package-lock.json"
+    shutil.copy2(dependency_lock, destination / "package-lock.json")
+    if _prime_payload_digest({name: confined_path(destination, *name.split("/")) for name in payload}) != info["payload_digest"]:
+        fail("staged Prime package payload digest changed")
+    if bytes_digest((destination / "package-lock.json").read_bytes()) != info["dependency_lock_digest"]:
+        fail("staged Prime package dependency lock digest changed")
+    if not stat.S_IMODE(os.lstat(destination / "dist/bundle/cli.js").st_mode) & 0o111:
+        fail("staged Prime package CLI is not executable")
     return {**info, "path": str(destination)}
 
 from harness_census_archive import archive_git_tree
@@ -107,7 +131,7 @@ from harness_census_common import (
     NATIVE_NETWORK_ENFORCEMENT, NATIVE_NETWORK_MODE, NATIVE_TASK_NETWORK_ENFORCEMENT,
     NATIVE_TRANSPORT_NETWORK_MODE, NODE_IMAGE, RUST_IMAGE, RUST_VERSION,
     Cell, Task, TaskRecord, agent_allowed_hosts_identity_digest, agent_kwargs_identity_digest, bytes_digest, campaign_matrix, campaign_tree_files, cell_stage_digest, cell_summary,
-    canonical, canonical_task_set_digest, confined_path, digest, fail, file_digest, harness_catalog_digest,
+    canonical, canonical_task_set_digest, cohort_identity, confined_path, digest, fail, file_digest, harbor_reward_value, harness_catalog_digest,
     load_tasks, mcp_identity_digest, model_roster_digest, qualification_harness_records, reference_hunk_map_digest, reference_hunk_mapping, row_identity, task_corpus_identity,
     task_identity, tree_digest, tree_files, verified_commit, write_json,
 )
@@ -346,34 +370,83 @@ def staged_task_toml(task: Task, composition: str) -> tuple[str, str]:
 
 
 
-def runtime_package_info(harness: str) -> dict[str, str]:
-    spec = HARNESSES[harness]
-    path = PACKAGE / "packages" / harness
+def locked_package_info(
+    path: Path,
+    expected: dict[str, str],
+    label: str,
+    *,
+    expected_optional: dict[str, str] | None = None,
+    expected_name: str | None = None,
+    expected_version: str | None = None,
+) -> dict[str, str]:
     metadata_path, lock_path = path / "package.json", path / "package-lock.json"
     if not metadata_path.is_file() or not lock_path.is_file():
-        fail(f"locked runtime package is missing for {harness}")
+        fail(f"locked package is missing for {label}")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    expected = {spec.package.rsplit("@", 1)[0]: spec.version, "bun": BUN_VERSION}
     if metadata.get("private") is not True or metadata.get("dependencies") != expected:
-        fail(f"locked runtime package dependencies are invalid for {harness}")
-    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+        fail(f"locked package dependencies are invalid for {label}")
+    if expected_optional is not None and metadata.get("optionalDependencies", {}) != expected_optional:
+        fail(f"locked package optional dependencies are invalid for {label}")
+    if expected_name is not None and metadata.get("name") != expected_name:
+        fail(f"locked package name is invalid for {label}")
+    if expected_version is not None and metadata.get("version") != expected_version:
+        fail(f"locked package version is invalid for {label}")
+    lock_bytes = lock_path.read_bytes()
+    lock = json.loads(lock_bytes)
     root = lock.get("packages", {}).get("", {})
     if lock.get("lockfileVersion") != 3 or root.get("dependencies") != expected:
-        fail(f"runtime package lock does not bind the declared dependencies for {harness}")
+        fail(f"package lock does not bind the declared dependencies for {label}")
+    if expected_optional is not None and root.get("optionalDependencies", {}) != expected_optional:
+        fail(f"package lock does not bind the optional dependencies for {label}")
+    if expected_name is not None and (lock.get("name") != expected_name or root.get("name") != expected_name):
+        fail(f"package lock does not bind the name for {label}")
+    if expected_version is not None and (lock.get("version") != expected_version or root.get("version") != expected_version):
+        fail(f"package lock does not bind the version for {label}")
     unpinned = [
         name
         for name, value in lock.get("packages", {}).items()
         if name and isinstance(value, dict) and not value.get("link") and not value.get("integrity")
     ]
     if unpinned:
-        fail(f"runtime package lock has entries without integrity for {harness}: {unpinned}")
+        fail(f"package lock has entries without integrity for {label}: {unpinned}")
+    return {"digest": tree_digest(path, exclude_git=False), "lock_digest": bytes_digest(lock_bytes), "path": str(path)}
+
+
+def prime_dependency_lock_info(metadata: dict[str, object]) -> dict[str, str]:
+    dependencies = metadata.get("dependencies")
+    optional = metadata.get("optionalDependencies", {})
+    if (
+        not isinstance(dependencies, dict)
+        or not isinstance(optional, dict)
+        or any(not isinstance(key, str) or not isinstance(value, str) for key, value in dependencies.items())
+        or any(not isinstance(key, str) or not isinstance(value, str) for key, value in optional.items())
+    ):
+        fail("Prime package dependencies are invalid")
+    return locked_package_info(
+        PACKAGE / "packages" / "prime",
+        dependencies,
+        "Prime runtime",
+        expected_optional=optional,
+        expected_name="prime-agent",
+        expected_version="0.7.0",
+    )
+
+
+def runtime_package_info(harness: str) -> dict[str, str]:
+    spec = HARNESSES[harness]
+    path = PACKAGE / "packages" / harness
+    expected = {spec.package.rsplit("@", 1)[0]: spec.version, "bun": BUN_VERSION, "pnpm": "10.22.0"}
     return {
         "package": spec.package,
         "version": spec.version,
         "source_kind": "checked_in_npm_lock",
-        "digest": tree_digest(path, exclude_git=False),
-        "path": str(path),
+        **locked_package_info(path, expected, harness),
     }
+
+
+def node_toolchain_package_info() -> dict[str, str]:
+    expected = {"bun": BUN_VERSION, "pnpm": "10.22.0"}
+    return locked_package_info(PACKAGE / "packages" / "node-toolchain", expected, "Node toolchain")
 
 
 def harness_package_info(harness: str, prime_package: dict[str, str] | None) -> dict[str, str]:
@@ -381,7 +454,13 @@ def harness_package_info(harness: str, prime_package: dict[str, str] | None) -> 
         return runtime_package_info(harness)
     if prime_package is None:
         fail("Prime package metadata is missing")
-    return prime_package
+    toolchain = node_toolchain_package_info()
+    return {
+        **prime_package,
+        "digest": digest({"prime": prime_package["digest"], "node_toolchain": toolchain["digest"]}),
+        "prime_digest": prime_package["digest"],
+        "node_toolchain_path": toolchain["path"],
+    }
 
 
 
@@ -429,11 +508,11 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     install = f"RUN apt-get update && apt-get install -y --no-install-recommends {packages} && rm -rf /var/lib/apt/lists/*\n"
     labels = f'LABEL org.misty-step.harness="{harness}"\nLABEL org.misty-step.agent-package="{spec.package}"\n' + toolchain_labels
     if harness == "prime":
-        install += f"COPY {package_name}/ /opt/prime-agent/\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
-        path = "/opt/prime-agent/node_modules/.bin:/usr/local/bin:${PATH}"
+        install += f"COPY runtime-package/ /opt/node-toolchain/\nRUN cd /opt/node-toolchain && npm ci --omit=dev\nRUN /opt/node-toolchain/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/node-toolchain/node_modules/.bin/pnpm --version | grep -Fx '10.22.0'\nCOPY {package_name}/ /opt/prime-agent/\nRUN test -x /opt/prime-agent/dist/bundle/cli.js\nRUN cd /opt/prime-agent && npm ci --omit=dev\nRUN python3 -m pip install --break-system-packages /opt/prime-agent/dist/prime-agent-runtime\nRUN python3 -c 'import ipykernel, rlm; assert callable(rlm.run)'\nRUN python3 -c 'import IPython'\nRUN node -e 'const p=require(\"/opt/prime-agent/package.json\"); if(p.name!==\"prime-agent\"||p.version!==\"0.7.0\"||p.bin?.[\"prime-agent\"]!==\"dist/bundle/cli.js\") process.exit(1)'\nRUN /opt/prime-agent/dist/bundle/cli.js --version 2>&1 | grep -F '0.7.0'\nRUN ln -sf /opt/prime-agent/dist/bundle/cli.js /usr/local/bin/prime-agent && ln -sf /usr/local/bin/prime-agent /usr/local/bin/prime\n"
+        path = "/opt/node-toolchain/node_modules/.bin:/opt/prime-agent/node_modules/.bin:/usr/local/bin:${PATH}"
     else:
         binary = "omp" if harness == "omp" else "pi"
-        install += f"COPY {package_name}/ /opt/harness/\nRUN cd /opt/harness && npm ci --omit=dev\nRUN /opt/harness/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}'\nRUN ln -sf /opt/harness/node_modules/.bin/{binary} /usr/local/bin/{binary}\n"
+        install += f"COPY {package_name}/ /opt/harness/\nRUN cd /opt/harness && npm ci --omit=dev\nRUN /opt/harness/node_modules/.bin/bun --version | grep -Fx '{BUN_VERSION}' && /opt/harness/node_modules/.bin/pnpm --version | grep -Fx '10.22.0'\nRUN ln -sf /opt/harness/node_modules/.bin/{binary} /usr/local/bin/{binary}\n"
         path = "/opt/harness/node_modules/.bin:${PATH}"
     dependencies = "COPY repo/ /workspace/\n"
     if task_kind == "go":
@@ -441,7 +520,7 @@ def dockerfile(harness: str, package_name: str, task_id: str | None = None) -> s
     elif task_kind == "rust":
         dependencies += "RUN cd /workspace && CARGO_NET_OFFLINE=false cargo fetch --locked\nENV CARGO_NET_OFFLINE=true CARGO_TERM_COLOR=never CARGO_TARGET_DIR=/tmp/cargo-target\n"
     else:
-        dependencies += f"RUN npm install --global pnpm@10.22.0 && bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '10.22.0'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
+        dependencies += f"RUN bun --version | grep -Fx '{BUN_VERSION}' && pnpm --version | grep -Fx '10.22.0'\nRUN cd /workspace && pnpm install --frozen-lockfile\nENV BUN_INSTALL_CACHE_DIR=/tmp/bun-cache\n"
     return base + install + labels + f'ENV PATH="{path}"\n' + dependencies
 
 
@@ -484,7 +563,7 @@ def reward(payload, reward_value, status):
         passed_checks, total_checks, task_points, hard_pass = 0, 1, 0.0, False
     hard_pass = bool(hard_pass) and passed_checks == total_checks and float(task_points) == 1.0
     report = {{"schema_version": "harness_census.grader_report.v1", "reward": float(task_points), "status": status, "passed": hard_pass, "hard_pass": hard_pass, "passed_checks": passed_checks, "total_checks": total_checks, "task_points": float(task_points), "grader_report": payload}}
-    (LOG_DIR / "reward.json").write_text(json.dumps(float(task_points)) + "\\n", encoding="utf-8")
+    (LOG_DIR / "reward.json").write_text(json.dumps({{"reward": float(task_points)}}) + "\\n", encoding="utf-8")
     (LOG_DIR / "grader-report.json").write_text(json.dumps(report, sort_keys=True) + "\\n", encoding="utf-8")
 def scope_check(workspace):
     before = MANIFEST["files"]
@@ -578,11 +657,13 @@ def stage_task(cell_dir: Path, task: Task, harness: str, composition: str, asset
             target_pack.write_bytes(b"")
     package_name = "prime-package" if harness == "prime" else "runtime-package"
     shutil.copytree(package["path"], env / package_name, symlinks=True, copy_function=lambda source, destination: Path(destination).hardlink_to(source))
+    if harness == "prime":
+        shutil.copytree(package["node_toolchain_path"], env / "runtime-package", symlinks=True, copy_function=lambda source, destination: Path(destination).hardlink_to(source))
     docker_text = dockerfile(harness, package_name, task.id)
     (env / "Dockerfile").write_text(docker_text, encoding="utf-8")
     task_toml, network_mode = staged_task_toml(task, composition)
     (task_dir / "task.toml").write_text(task_toml, encoding="utf-8")
-    gateway = write_gateway_assets(task_dir)
+    gateway = write_gateway_assets(task_dir, allow_user_namespaces=harness == "prime")
     tests = task_dir / "tests"
     tests.mkdir(parents=True, exist_ok=True)
     source_manifest = {name: bytes_digest(value) for name, value in tree_files(source, exclude_git=False).items()}
@@ -721,10 +802,15 @@ def preflight_worker_images(root: Path, cells: tuple[Cell, ...]) -> dict[str, ob
         "lines = [line for line in pathlib.Path(sys.argv[1]).read_text(encoding='utf-8').splitlines() if line.strip()]\n"
         "report = json.loads(lines[-1]) if lines else {}\n"
         "reward = 1.0 if int(sys.argv[3]) == 0 and report.get('passed') is True else 0.0\n"
-        "pathlib.Path(sys.argv[2]).write_text(json.dumps(reward) + '\\n', encoding='utf-8')\n"
+        "pathlib.Path(sys.argv[2]).write_text(json.dumps({'reward': reward}) + '\\n', encoding='utf-8')\n"
         "print(json.dumps({'reward': reward, 'report': report}, sort_keys=True))\n"
         "raise SystemExit(0 if reward == 1.0 else 1)\n"
         "PY"
+    )
+    prime_sandbox_args = (
+        "bwrap", "--die-with-parent", "--unshare-user", "--uid", "0", "--gid", "0", "--unshare-net",
+        "--proc", "/proc", "--dev", "/dev", "--ro-bind", "/usr", "/usr", "--ro-bind", "/bin", "/bin",
+        "--ro-bind", "/lib", "/lib", "--ro-bind", "/lib64", "/lib64", "/usr/bin/true",
     )
     with tempfile.TemporaryDirectory(prefix="harness-census-preflight-") as temporary:
         workspace = Path(temporary)
@@ -736,6 +822,8 @@ def preflight_worker_images(root: Path, cells: tuple[Cell, ...]) -> dict[str, ob
                 shutil.copytree(environment / "repo", context / "repo", symlinks=True)
                 package_name = "prime-package" if harness == "prime" else "runtime-package"
                 shutil.copytree(environment / package_name, context / package_name, symlinks=True)
+                if harness == "prime":
+                    shutil.copytree(environment / "runtime-package", context / "runtime-package", symlinks=True)
                 (context / "Dockerfile").write_text(dockerfile(harness, package_name, task_id), encoding="utf-8")
                 tag = f"harness-census-preflight-{CAMPAIGN_ID}-{harness}-{task_id}"
                 build = subprocess.run(
@@ -755,6 +843,20 @@ def preflight_worker_images(root: Path, cells: tuple[Cell, ...]) -> dict[str, ob
                     f"{output}:/preflight:rw",
                 ]
                 try:
+                    if harness == "prime":
+                        sandbox = subprocess.run(
+                            [
+                                "docker", "run", "--rm", "--network", "none", "--read-only",
+                                "--security-opt", "seccomp=unconfined",
+                                "--tmpfs", "/tmp:rw,exec,nosuid,nodev", tag, *prime_sandbox_args,
+                            ],
+                            text=True,
+                            capture_output=True,
+                            check=False,
+                        )
+                        if sandbox.returncode:
+                            detail = (sandbox.stderr or sandbox.stdout).strip().splitlines()[-1:]
+                            fail(f"{harness}/{task_id} inner sandbox preflight failed: {' '.join(detail)}")
                     run = subprocess.run(
                         [
                             "docker", "run", "--rm", "--network", "none", "--read-only",
@@ -775,15 +877,16 @@ def preflight_worker_images(root: Path, cells: tuple[Cell, ...]) -> dict[str, ob
                 if run.returncode or not reward_path.is_file():
                     detail = (run.stderr or run.stdout).strip().splitlines()[-1:]
                     fail(f"{harness}/{task_id} in-image grader failed: {' '.join(detail)}")
-                reward = json.loads(reward_path.read_text(encoding="utf-8"))
-                if isinstance(reward, bool) or float(reward) != 1.0:
+                reward = harbor_reward_value(json.loads(reward_path.read_text(encoding="utf-8")))
+                if reward != 1.0:
                     fail(f"{harness}/{task_id} preflight reward is not 1.0: {reward!r}")
-                results.append({"harness": harness, "task_id": task_id, "reward": 1.0})
+                results.append({"harness": harness, "task_id": task_id, "reward": reward, "sandbox": "bwrap-user-net" if harness == "prime" else "container"})
     report = {
         "status": "passed",
         "network": "none",
         "filesystem": "read-only-root-tmpfs-tmp",
         "toolchains": {"go": GO_VERSION, "rustc": RUST_VERSION, "cargo": CARGO_VERSION, "bun": BUN_VERSION, "pnpm": "10.22.0"},
+        "prime_inner_sandbox": "bwrap-user-net",
         "checks": len(results),
         "results": results,
         "network_enforcement": network_report,
@@ -954,7 +1057,7 @@ def build_cells(root: Path, assets: Mapping[str, str], composition_digests: Mapp
             composition_digest = digest({"composition": composition, "context_manifest_digests": [record.context_manifest_digest for record in records], "context_pack_digests": [record.context_pack_digest for record in records], "skill_digest": records[0].skill_digest, "skill_count": records[0].skill_count, **composition_identity})
         docker_digests = tuple(sorted({record.dockerfile_digest for record in records}))
         package_digest = package["digest"]
-        prime_digest = package["digest"] if harness == "prime" else None
+        prime_digest = package["prime_digest"] if harness == "prime" else None
         row_id = row_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, harness, composition) if controlled else None
         cohort_id = cohort_identity(CONTROLLED_MODEL, CONTROLLED_EFFORT, CONTROLLED_MODEL, CONTROLLED_EFFORT) if controlled else None
         baseline_id = None
@@ -1032,15 +1135,15 @@ def read_verifier_result(log_dir: Path) -> tuple[float, dict[str, object]]:
     reward_path, report_path = log_dir / "reward.json", log_dir / "grader-report.json"
     if not reward_path.is_file() or not report_path.is_file():
         fail(f"staged verifier evidence is incomplete: {log_dir}")
-    reward = json.loads(reward_path.read_text(encoding="utf-8"))
-    if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not 0.0 <= float(reward) <= 1.0:
-        fail(f"Harbor reward.json must contain one bounded numeric value: {reward!r}")
+    reward = harbor_reward_value(json.loads(reward_path.read_text(encoding="utf-8")))
+    if reward is None:
+        fail("Harbor reward.json must contain one canonical bounded reward map")
     report = json.loads(report_path.read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         fail(f"grader report is not an object: {report!r}")
-    if report.get("task_points") != float(reward) or not isinstance(report.get("hard_pass"), bool) or report.get("passed") != report.get("hard_pass"):
+    if report.get("task_points") != reward or not isinstance(report.get("hard_pass"), bool) or report.get("passed") != report.get("hard_pass"):
         fail(f"staged verifier score identity is invalid: {report!r}")
-    return float(reward), report
+    return reward, report
 
 
 def probe_verifier(root: Path, cell: Cell) -> dict[str, object]:

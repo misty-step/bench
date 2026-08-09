@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import stat
 from dataclasses import dataclass, replace
@@ -348,6 +349,16 @@ def canonical(value: object) -> bytes:
 
 def digest(value: object) -> str:
     return hashlib.sha256(canonical(value)).hexdigest()
+
+
+def harbor_reward_value(value: object) -> float | None:
+    if not isinstance(value, dict) or set(value) != {"reward"}:
+        return None
+    reward = value["reward"]
+    if isinstance(reward, bool) or not isinstance(reward, (int, float)):
+        return None
+    reward = float(reward)
+    return reward if math.isfinite(reward) and 0.0 <= reward <= 1.0 else None
 
 def mcp_identity_digest() -> str:
     return digest({"identity": "none", "tools": [], "network": "denied"})

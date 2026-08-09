@@ -102,10 +102,13 @@ cells/<harness>-<composition>/{eval.json,request.json,result.json,tasks/}
 exchange/<cell>/<task>/{request,result,trial,grader}.json
 ```
 
-Quality outcomes write the numeric Harbor reward as `verifier/reward.json` and the detailed deterministic grader report as `verifier/grader-report.json`. Reliability outcomes write no grader receipt; they persist typed failure fields with null scores and retain transcript and attestation evidence when present.
+Quality outcomes write Harbor's canonical `{"reward": <number>}` map as `verifier/reward.json` and the detailed deterministic grader report as `verifier/grader-report.json`. Reliability outcomes write no grader receipt; they persist typed failure fields with null scores and retain transcript and attestation evidence when present.
 
 The driver exports each pinned source SHA without Git history and writes a cell-specific Dockerfile.
-It uses the lock-backed Bun from each runtime package and installs only global pnpm@10.22.0.
+It uses lock-backed Bun and pnpm packages for every worker image.
+Prime also installs its checked-in dependency lock before the in-image CLI probe.
+Prime workers relax only Docker's seccomp filter for Bubblewrap user and network namespaces.
+They add no container capability, and the inner kernel remains network-isolated.
 It mounts the hidden content manifest and deterministic grader only through
 `tests/test.sh`.
 Each staged task also contains a pinned Node Mint gateway and `docker-compose.yaml`.
