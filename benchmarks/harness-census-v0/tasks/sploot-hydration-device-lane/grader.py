@@ -10,8 +10,12 @@ import sys
 import tempfile
 
 
-def fail(check: str, detail: str) -> None:
-    print(json.dumps({"passed": False, "failed_check": check, "detail": detail}, sort_keys=True))
+CHECKS = ("hydration-snapshot", "desktop-server-lane", "android-device", "ios-device", "ipad-device", "desktop-device", "render-path", "semantic-lanes", "desktop-surface")
+
+
+def fail(check: str, detail: str, passed_checks: int = 0) -> None:
+    total_checks = len(CHECKS)
+    print(json.dumps({"passed": False, "hard_pass": False, "passed_checks": passed_checks, "total_checks": total_checks, "task_points": passed_checks / total_checks, "failed_check": check, "detail": detail}, sort_keys=True))
     raise SystemExit(1)
 
 
@@ -225,10 +229,25 @@ def require_output(report: dict[str, object], key: str, expected: str, check: st
         detail = str(value["error"])
         if check == "server-desktop" or "window" in detail.lower():
             fail("server-desktop", detail)
-        fail(check, detail)
     text = str(value.get("text", ""))
     if expected not in text:
         fail(check, f"{key} render did not expose {expected!r}: {text}")
+
+
+def require_semantic_tokens(source_text: str) -> None:
+    lanes = {
+        "desktop": ("device === 'desktop'", "chrome extension", "right-click any image, anywhere", "get the extension", "paste / drag", "⌘V or drop files on this page", "SPLOOT_EXTENSION_STORE_URL", "target=\"_blank\""),
+        "android": ("device === 'android'", "share sheet", "app installed — share any image to sploot", "install the app once, then share images from anywhere", "browser menu → add to home screen, then share images from anywhere", "paste or drop images here — already live", "wire the share sheet"),
+        "ios": ("device === 'ios'", "iphone shortcut", "put sploot in your share sheet — one tap from any app", "set up the shortcut", "home screen", "paste images here — already live", "Link href=\"/app/settings#upload-tokens\""),
+    }
+    for lane, tokens in lanes.items():
+        missing = [token for token in tokens if token not in source_text]
+        if missing:
+            fail("semantic-lanes", f"{lane} lane is missing semantic tokens or controls: {missing}")
+    desktop_tokens = ("SurfaceRow", "Button asChild", "variant=\"primary\"", "get the extension", "paste / drag", "SPLOOT_EXTENSION_STORE_URL")
+    missing = [token for token in desktop_tokens if token not in source_text]
+    if missing:
+        fail("desktop-surface", f"desktop surface changed or lost controls: {missing}")
 
 
 def main() -> None:
@@ -239,6 +258,7 @@ def main() -> None:
     if not source.is_file():
         fail("invalid-syntax", "target TSX source is missing")
     source_text = source.read_text(encoding="utf-8")
+    require_semantic_tokens(source_text)
     with tempfile.TemporaryDirectory(prefix="harness-census-build-") as temporary:
         syntax = subprocess.run(
             ["bun", "build", "--target", "browser", "--outfile", str(Path(temporary) / "empty-state.js"), str(source), "--external=*"],
@@ -270,7 +290,8 @@ def main() -> None:
     require_output(report, "ios", "iphone shortcut", "browser-device")
     require_output(report, "ipad", "iphone shortcut", "browser-device")
     require_output(report, "desktop", "chrome extension", "browser-device")
-    print(json.dumps({"passed": True, "checks": ["hydration-snapshot", "desktop-server-lane", "android-device", "ios-device", "ipad-device", "desktop-device", "render-path"]}, sort_keys=True))
+    total_checks = len(CHECKS)
+    print(json.dumps({"passed": True, "hard_pass": True, "passed_checks": total_checks, "total_checks": total_checks, "task_points": 1.0, "checks": list(CHECKS)}, sort_keys=True))
 
 
 if __name__ == "__main__":

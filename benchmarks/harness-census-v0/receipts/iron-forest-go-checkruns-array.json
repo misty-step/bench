@@ -4,18 +4,33 @@
       "changed_paths": [
         "prs.go"
       ],
+      "hard_pass": true,
+      "id": "map-query",
+      "passed_checks": 5,
+      "patch_digest": "c3c29ddc75b40b203273c67fa648ee8f4a9142f097af2832be35b5e47d0b1bb4",
+      "task_points": 1.0,
+      "total_checks": 5
+    },
+    {
+      "changed_paths": [
+        "prs.go"
+      ],
+      "hard_pass": true,
       "id": "whitespace",
-      "patch_digest": "d6366c23cc85b446e1088968e06ba3f692fbc6ace375545902a1224f62c55f83"
+      "passed_checks": 5,
+      "patch_digest": "d6366c23cc85b446e1088968e06ba3f692fbc6ace375545902a1224f62c55f83",
+      "task_points": 1.0,
+      "total_checks": 5
     }
   ],
   "comment_only_image": {
-    "intended_failure": "failing-checks-array",
+    "intended_failure": "multiple-failures",
     "passed": false
   },
   "exposure": {
     "future_git_objects_exposed": false,
     "grader_and_reference_hidden_from_worker": true,
-    "private_source_bytes_checked_in": true
+    "private_source_bytes_checked_in": false
   },
   "fixture": {
     "git_history_in_image": false,
@@ -32,7 +47,7 @@
       "changed_paths": [
         "prs.go"
       ],
-      "failure_check": "failing-checks-array",
+      "failure_check": "multiple-failures",
       "id": "rollup-only-array",
       "patch_digest": "956e64571b006eba97915f0dea74625f7a71f6ff32ca4c7ee5c2c1a986467460"
     },
@@ -51,11 +66,30 @@
     "changed_paths": [
       "prs.go"
     ],
-    "grader_digest": "3dfe6f46753ab134cb9857e5cd4cc778c21bd5928820ef44496b013a3f05a55f",
+    "grader_digest": "d0391a889b8fa72a36f3ac8f112648657b22928556396262973414668db51c02",
+    "hard_pass": true,
     "passed": true,
+    "passed_checks": 5,
     "patch_digest": "50585d1c8eac0c904f029fdbcac2d0a4929d1776e39a436b8224b5daf8efcf6f",
-    "reference_commit_verified": true
+    "reference_commit_verified": true,
+    "task_points": 1.0,
+    "total_checks": 5
   },
+  "reference_hunk_map_digest": "3d90a128efbf264e22cfc1736f16cc39cbc8d78cda71fb1b04d719d735ae38cf",
+  "reference_hunks": [
+    {
+      "grader_check": "checkruns-array",
+      "header": "@@ -139,7 +139,7 @@ func listOpenForestPRs(repo string) ([]int, error) {",
+      "hunk_id": "hunk-001",
+      "patch_digest": "e803f35f6f1e5350169fbfe4a936f520ecb95ebdb34719fe351d632ca14f191d"
+    },
+    {
+      "grader_check": "failing-output-decode",
+      "header": "@@ -206,11 +206,18 @@ func latestRequestedChange(repo string, n int) (body, commitID string, err error",
+      "hunk_id": "hunk-002",
+      "patch_digest": "360404c9e7243e24d52be73b522357fa7c07b130de1fd7576abaf59fdb5157b4"
+    }
+  ],
   "reference_sha": "520c629d4987720e9533ae63e4478cd9479c6b78",
   "schema_version": "harness_census.qualification_receipt.v1",
   "scope": {
@@ -72,7 +106,7 @@
   "source_sha": "e98569f48664759242b062a5a46910c03375c0ed",
   "task_id": "iron-forest-go-checkruns-array",
   "unchanged_image": {
-    "intended_failure": "failing-checks-array",
+    "intended_failure": "multiple-failures",
     "passed": false
   }
 }

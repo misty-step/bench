@@ -5,7 +5,7 @@
     {
       "id": "rollup-only-array",
       "path": "rollup-only-array.patch",
-      "failure_marker": "failing-checks-array"
+      "failure_marker": "multiple-failures"
     },
     {
       "id": "failing-output-not-decoded",

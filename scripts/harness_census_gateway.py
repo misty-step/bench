@@ -24,6 +24,8 @@ const API_PATH = "/proxy/https/openrouter.ai/api/v1";
 const UPSTREAM_HOST = "mint.tail5f5eb4.ts.net";
 const UPSTREAM_PORT = 4949;
 const LISTEN_PORT = 4949;
+const CONTROL = /[\u0000-\u001f\u007f]/;
+const ENCODED_UNSAFE = /%(?:2e|2f|5c|0[0-9a-f]|1[0-9a-f]|7f)/i;
 const HOP_BY_HOP = new Set([
   "connection",
   "keep-alive",
@@ -41,15 +43,35 @@ function reject(response, status, message) {
 }
 
 function requestPath(raw) {
-  if (!raw || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//")) {
+  if (!raw || CONTROL.test(raw) || ENCODED_UNSAFE.test(raw) || raw.includes("\\") || raw.includes("#") || /^[a-z][a-z0-9+.-]*:/i.test(raw) || raw.startsWith("//")) {
     return null;
   }
   const query = raw.indexOf("?");
   const path = query < 0 ? raw : raw.slice(0, query);
-  return path === API_PATH || path.startsWith(`${API_PATH}/`) ? raw : null;
+  if (!path.startsWith("/") || path.includes("//") || path.split("/").some(segment => segment === "." || segment === "..")) {
+    return null;
+  }
+  if (path.includes("%")) {
+    try {
+      if (decodeURIComponent(path) !== path) return null;
+    } catch {
+      return null;
+    }
+  }
+  if (path !== API_PATH && !path.startsWith(`${API_PATH}/`)) return null;
+  return query < 0 ? path : `${path}${raw.slice(query)}`;
+}
+
+function hasUpgrade(request) {
+  const connection = request.headers.connection;
+  return request.headers.upgrade !== undefined || (typeof connection === "string" && connection.split(",").some(value => value.trim().toLowerCase() === "upgrade"));
 }
 
 const server = http.createServer((request, response) => {
+  if (hasUpgrade(request)) {
+    reject(response, 400, "upgrade not allowed");
+    return;
+  }
   if (request.method !== "GET" && request.method !== "POST") {
     reject(response, 405, "method not allowed");
     return;
@@ -88,6 +110,10 @@ const server = http.createServer((request, response) => {
 
 server.on("connect", (_request, socket) => {
   socket.end("HTTP/1.1 405 Method Not Allowed\r\nConnection: close\r\n\r\n");
+});
+
+server.on("upgrade", (_request, socket) => {
+  socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
 });
 
 server.listen(LISTEN_PORT, "0.0.0.0");
@@ -149,7 +175,13 @@ def validate_gateway_contract() -> None:
     required_source = (
         'const API_PATH = "/proxy/https/openrouter.ai/api/v1";',
         'const UPSTREAM_HOST = "mint.tail5f5eb4.ts.net";',
+        'const CONTROL = /[\\u0000-\\u001f\\u007f]/;',
+        'const ENCODED_UNSAFE = /%(?:2e|2f|5c|0[0-9a-f]|1[0-9a-f]|7f)/i;',
+        'decodeURIComponent(path)',
+        'path.split("/").some(segment => segment === "." || segment === "..")',
         'server.on("connect"',
+        'server.on("upgrade"',
+        'request.headers.upgrade !== undefined',
         'request.method !== "GET" && request.method !== "POST"',
         'raw.startsWith("//")',
         'server.listen(LISTEN_PORT, "0.0.0.0")',

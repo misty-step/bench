@@ -13,7 +13,7 @@ from harness_census_common import (
     HARNESSES, cell_summary, digest, fail, harness_catalog_digest,
     model_roster_digest, runtime_harness_records, verified_commit, write_json,
 )
-from harness_census_exchange import normalized_request, run_cell, safe_runtime_environment
+from harness_census_exchange import cell_static_digest, normalized_request, run_cell, safe_runtime_environment
 from harness_census_staging import (
     build_cells, cell_receipt_state, crucible_identity, ensure_clean_bench_source, immutable_stage_cells, load_compositions, preflight_worker_images,
     probe_controlled_argv_surfaces, probe_harbor_task_validity, probe_verifier, qualification, require_dir,
@@ -29,13 +29,14 @@ def campaign_stage(cells: tuple, composition_digests: dict[str, str], prime_pack
     gateway_dockerfile_digests = sorted({value for cell in cells for value in cell.gateway_dockerfile_digests})
     compose_digests = sorted({value for cell in cells for value in cell.compose_digests})
     package_digests = sorted({cell.package_digest for cell in cells})
+    reference_hunk_map_digest = digest(sorted((record.task_id, record.reference_hunk_map_digest) for cell in cells for record in cell.task_records))
     return {
         "schema_version": "harness_census.stage_manifest.v1", "campaign_id": CAMPAIGN_ID, "stage_id": "campaign", "bench_commit": bench_commit,
         "crucible_commit": crucible_meta["commit"], "crucible_binary_digest": crucible_meta["binary_digest"], "roster_digest": model_roster_digest(),
         "catalog_digest": harness_catalog_digest(), "harness_digest": harness_catalog_digest(), "adapter_digest": cells[0].adapter_digest,
         "pack_digest": digest({"compositions": composition_digests, "context": sorted((cell.cell_id, record.task_id, record.context_manifest_digest, record.context_pack_digest, record.context_digest, record.skill_digest) for cell in cells for record in cell.task_records), "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "prime_package": prime_package["digest"]}), "prime_package_digest": prime_package["digest"],
         "dockerfile_digests": dockerfile_digests, "gateway_digests": gateway_digests, "gateway_dockerfile_digests": gateway_dockerfile_digests, "compose_digests": compose_digests, "package_digests": package_digests, "profile_digest": digest(sorted((cell.cell_id, cell.profile_digest) for cell in cells)),
-        "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})),
+        "mcp_digest": digest({"identity": "none", "tools": [], "network": "denied"}), "task_digest": digest(sorted({record.task_digest for cell in cells for record in cell.task_records})), "reference_hunk_map_digest": reference_hunk_map_digest,
         "grader_digest": digest([record.grader_digest for record in cells[0].task_records]),
         "transport_network_mode": {"controlled": cells[1].transport_network_mode, "native_default": cells[0].transport_network_mode},
         "network_enforcement": {"controlled": cells[1].network_enforcement, "native_default": cells[0].network_enforcement},
@@ -196,6 +197,7 @@ def main() -> None:
         run_kind = "final" if len(selected) == len(cells) == 9 else "partial"
         campaign = {"schema_version": "harness_census.campaign.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "planned_cells": 9, "planned_trials": 27, "selected_cells": len(selected), "selected_trials": sum(len(cell.task_records) for cell in selected), "selected_cell_ids": [cell.cell_id for cell in selected], "run_kind": run_kind, "completion_status": "staged", "cell_status": {cell.cell_id: "staged" for cell in cells}, "immutable_stage_digest": staged_bytes_digest(root), "smoke_digest": smoke["smoke_digest"], "worker_preflight": worker_preflight, "scope_probes": scope_probes, "composition_digests": composition_digests, "controlled_tool_surface_probe": controlled_tool_surface_probe, "verifier_probe": probe, "harbor_task_validity": harbor_tasks, "harbor": {"version": HARBOR_VERSION, "wrapper": str(harbor.relative_to(root))}, "cells": [cell_summary(cell) for cell in cells]}
         write_json(root / "campaign.json", campaign)
+        expected_cell_digests = {cell.cell_id: cell_static_digest(cell.cell_dir) for cell in cells}
     for index, cell in enumerate(selected, 1):
         print(f"cell {index}/{len(selected)} harness={cell.harness} composition={cell.composition} model={json.dumps(cell.model_requested)} effort={json.dumps(cell.effort_requested)} tasks={len(cell.task_records)}")
     if args.dry_run:
@@ -211,8 +213,8 @@ def main() -> None:
         campaign["harbor"]["observed_version"] = observed_harbor
         write_json(root / "campaign.json", campaign)
     for cell in selected:
-        run_cell(root, cell, crucible, harbor, stage_digest)
-    terminal_states = {cell.cell_id: cell_receipt_state(root, cell, stage_digest) for cell in cells}
+        run_cell(root, cell, crucible, harbor, stage_digest, expected_cell_digests[cell.cell_id])
+    terminal_states = {cell.cell_id: cell_receipt_state(root, cell, stage_digest, expected_cell_digests[cell.cell_id]) for cell in cells}
     if run_kind == "final":
         if any(state not in {"complete", "invalid"} for state in terminal_states.values()):
             fail("final campaign stopped before all 27 canonical receipts became terminal")

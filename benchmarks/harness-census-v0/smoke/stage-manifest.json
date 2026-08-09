@@ -14,12 +14,12 @@
   },
   "dockerfile_digests": [],
   "gateway_digests": [
-    "d0f47c23dacb9cf8fed99d1e233b823a1aafebbb2911fe117b35c3aac9235f2e"
+    "5a5c77288be8dd51990ea44520f70e1c6e3dfaf93a5e898d7d4660c282aa67b3"
   ],
   "gateway_dockerfile_digests": [
     "95c0b1efb8e5fa17c2f57fa31371975e1036df4d8935533db7c166cfb5b0c135"
   ],
-  "grader_digest": "a023e5612da51bae0be0d1342a34fb15fef1653e5b6d76f5b882de4798b05288",
+  "grader_digest": "c866fc242dd953192223da353e23888d9e6c234e1383dfc6e7f952852b474f6a",
   "harness_digest": "0a08078e40f76cdb4f9bc9432c2d2aba9e0011c6d5e30d54d8627809d123cb2c",
   "mcp_digest": "1eae4b218651568ba51b3b042b121c6dfcc0e96fe4c68ea8c7ddf58ca0aa773e",
   "network_enforcement": {
@@ -29,7 +29,8 @@
   "pack_digest": "5dd1beb22bbb7523194b2e5851e9d13eebe0dc69505153a23eadd3398d58abfe",
   "package_digests": [],
   "prime_package_digest": null,
-  "profile_digest": "1d2f337b185b9b343896fa7ae24557282f98d8c69370d1c25ef914174117cb6e",
+  "profile_digest": "1a312683c4df0bde2b5477e8db2099c1f77fdccd4bf045ef1271ca8c9e5bf7df",
+  "reference_hunk_map_digest": "87abb9843bb028bf45a7331ff43d20a342a1725643e65a641574955933a52117",
   "retry_policy": {
     "product_retry": 0,
     "transport_retry": 0
@@ -37,7 +38,7 @@
   "roster_digest": "618441b4ccecba889ca00f9daff00ea07237b21ec95866572a0ba146523af79a",
   "schema_version": "harness_census.stage_manifest.v1",
   "stage_id": "smoke",
-  "task_digest": "3a1652be6fcddcad0957dae749d3aa1b672e7899665f1fa1e964c8e40f146613",
+  "task_digest": "70e2f48fc987ca6478dd614420a73e250d71910c83fd9ef176be9813a51c12c6",
   "task_network_enforcement": {
     "controlled": "docker_internal_network",
     "native_default": "docker_internal_network"

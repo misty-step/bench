@@ -122,7 +122,58 @@ class Task:
     source_cluster: str
     task_dir: Path
     manifest: Mapping[str, object]
+    reference_hunk_checks: tuple[tuple[str, str], ...]
 
+
+@dataclass(frozen=True)
+class ReferenceHunk:
+    hunk_id: str
+    header: str
+    patch_digest: str
+    grader_check: str
+
+
+def parse_reference_hunks(patch: Path) -> tuple[tuple[str, str, str], ...]:
+    lines = patch.read_text(encoding="utf-8").splitlines(keepends=True)
+    hunks: list[tuple[str, str, str]] = []
+    current_header: str | None = None
+    current: list[str] = []
+    for line in lines:
+        if line.startswith("@@ "):
+            if current_header is not None:
+                hunk_id = f"hunk-{len(hunks) + 1:03d}"
+                hunks.append((hunk_id, current_header, bytes_digest("".join(current).encode("utf-8"))))
+            current_header = line.rstrip("\n")
+            current = [line]
+        elif current_header is not None:
+            current.append(line)
+    if current_header is not None:
+        hunk_id = f"hunk-{len(hunks) + 1:03d}"
+        hunks.append((hunk_id, current_header, bytes_digest("".join(current).encode("utf-8"))))
+    if not hunks:
+        fail(f"reference patch has no hunks: {patch}")
+    return tuple(hunks)
+
+
+def reference_hunk_mapping(task: Task) -> tuple[ReferenceHunk, ...]:
+    declared = dict(task.reference_hunk_checks)
+    parsed = parse_reference_hunks(task.task_dir / "reference.patch")
+    actual_ids = {hunk_id for hunk_id, _, _ in parsed}
+    declared_ids = set(declared)
+    if declared_ids != actual_ids:
+        missing = sorted(actual_ids - declared_ids)
+        extra = sorted(declared_ids - actual_ids)
+        fail(f"{task.id} reference hunk mapping is incomplete: missing={missing} extra={extra}")
+    if any(not check.strip() for check in declared.values()):
+        fail(f"{task.id} reference hunk mapping contains an unnamed grader check")
+    return tuple(ReferenceHunk(hunk_id, header, patch_digest, declared[hunk_id]) for hunk_id, header, patch_digest in parsed)
+
+
+def reference_hunk_map_digest(task: Task) -> str:
+    return digest([
+        {"hunk_id": hunk.hunk_id, "header": hunk.header, "patch_digest": hunk.patch_digest, "grader_check": hunk.grader_check}
+        for hunk in reference_hunk_mapping(task)
+    ])
 
 @dataclass(frozen=True)
 class TaskRecord:
@@ -131,6 +182,7 @@ class TaskRecord:
     comparison_task_digest: str
     source_tree_digest: str
     grader_digest: str
+    reference_hunk_map_digest: str
     dockerfile_digest: str
     gateway_digest: str
     gateway_dockerfile_digest: str
@@ -187,8 +239,20 @@ class Cell:
     compose_digests: tuple[str, ...]
     task_records: tuple[TaskRecord, ...]
 
-    def resolve_native(self, model: str, effort: str, effort_source: str) -> Cell:
-        baseline_id = digest({
+    def observed_system_identity(self, config_digest: str, tool_manifest_digest: str) -> str:
+        return digest({
+            "adapter_digest": self.adapter_digest,
+            "package_digest": self.package_digest,
+            "prime_package_digest": self.prime_package_digest,
+            "harness": self.harness,
+            "harness_version": self.harness_version,
+            "config_digest": config_digest,
+            "tool_manifest_digest": tool_manifest_digest,
+        })
+
+    def native_baseline_id(self, model: str, effort: str, effort_source: str, tool_manifest_digest: str, config_digest: str) -> str:
+        system_identity = self.observed_system_identity(config_digest, tool_manifest_digest)
+        return digest({
             "campaign_id": CAMPAIGN_ID,
             "harness": self.harness,
             "harness_version": self.harness_version,
@@ -196,10 +260,14 @@ class Cell:
             "model": model,
             "effort": effort,
             "effort_source": effort_source,
-            "system_identity": f"{self.harness}@{self.harness_version}",
+            "tool_manifest_digest": tool_manifest_digest,
+            "system_identity": system_identity,
             "profile_digest": self.profile_digest,
-            "task_digest": self.task_digest,
+            "task_set_digest": self.task_set_digest,
         })
+
+    def resolve_native(self, model: str, effort: str, effort_source: str, tool_manifest_digest: str, config_digest: str) -> Cell:
+        baseline_id = self.native_baseline_id(model, effort, effort_source, tool_manifest_digest, config_digest)
         return replace(self, provider_route_resolved=model, provider_effort_resolved=effort, default_resolution_source="adapter_attestation:observed-native", effort_source=effort_source, baseline_id=baseline_id)
 
 
@@ -262,6 +330,10 @@ class Receipt(TypedDict, total=False):
     context_pack_digest: str
     skill_digest: str
     skill_count: int
+    dockerfile_digest: str
+    gateway_digest: str
+    gateway_dockerfile_digest: str
+    compose_digest: str
 
 
 @dataclass(frozen=True)
@@ -292,12 +364,12 @@ def canonical_task_set_digest(pairs: list[tuple[str, str]]) -> str:
     normalized = sorted([[task_id, comparison.removeprefix("sha256:")] for task_id, comparison in pairs])
     return digest(normalized)
 
-def task_identity(task: Task, source_tree_digest: str, instruction_digest: str, task_manifest_digest: str, grader_digest: str, reference_patch_digest: str) -> str:
-    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "instruction_digest": instruction_digest, "task_manifest_digest": task_manifest_digest, "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest})
+def task_identity(task: Task, source_tree_digest: str, instruction_digest: str, task_manifest_digest: str, grader_digest: str, reference_patch_digest: str, hunk_map_digest: str) -> str:
+    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "instruction_digest": instruction_digest, "task_manifest_digest": task_manifest_digest, "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest, "reference_hunk_map_digest": hunk_map_digest})
 
 
-def task_corpus_identity(task: Task, source_tree_digest: str, grader_digest: str, reference_patch_digest: str) -> str:
-    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest})
+def task_corpus_identity(task: Task, source_tree_digest: str, grader_digest: str, reference_patch_digest: str, hunk_map_digest: str) -> str:
+    return digest({"task": task.id, "source_repository": task.source_repository, "source_sha": task.source_sha, "reference_sha": task.reference_sha, "allowed_paths": list(task.allowed_paths), "immutable_paths": list(task.immutable_paths), "source_tree_digest": source_tree_digest, "grader_digest": grader_digest, "reference_patch_digest": reference_patch_digest, "reference_hunk_map_digest": hunk_map_digest})
 
 
 def bytes_digest(value: bytes) -> str:
@@ -342,6 +414,7 @@ def verified_commit(value: str, label: str) -> str:
 
 def load_tasks() -> dict[str, Task]:
     loaded: dict[str, Task] = {}
+    minimum_alternatives = int(MANIFEST.get("qualification", {}).get("alternatives_per_task_minimum", 2))
     for raw in MANIFEST["tasks"]:
         task_id = raw["id"]
         task_dir = PACKAGE / "tasks" / task_id
@@ -351,7 +424,22 @@ def load_tasks() -> dict[str, Task]:
         for name in ("instruction.md", "grader.py", "reference.patch"):
             if not (task_dir / name).is_file():
                 fail(f"task asset missing: {task_id}/{name}")
-        loaded[task_id] = Task(task_id, raw["source_repository"], raw["source_sha"], raw["reference_sha"], tuple(raw["allowed_paths"]), tuple(raw["immutable_paths"]), raw["source_cluster"], task_dir, manifest)
+        alternatives = sorted((task_dir / "alternatives").glob("*.patch"))
+        if len(alternatives) < minimum_alternatives:
+            fail(f"{task_id} has {len(alternatives)} alternatives; minimum is {minimum_alternatives}")
+        raw_mapping = raw.get("reference_hunk_checks")
+        if not isinstance(raw_mapping, list):
+            fail(f"{task_id} reference_hunk_checks must be a list")
+        pairs: list[tuple[str, str]] = []
+        for item in raw_mapping:
+            if not isinstance(item, dict) or not isinstance(item.get("hunk_id"), str) or not isinstance(item.get("grader_check"), str):
+                fail(f"{task_id} reference_hunk_checks has an invalid entry")
+            pairs.append((item["hunk_id"], item["grader_check"]))
+        if len({hunk_id for hunk_id, _ in pairs}) != len(pairs):
+            fail(f"{task_id} reference_hunk_checks contains duplicate hunk IDs")
+        task = Task(task_id, raw["source_repository"], raw["source_sha"], raw["reference_sha"], tuple(raw["allowed_paths"]), tuple(raw["immutable_paths"]), raw["source_cluster"], task_dir, manifest, tuple(pairs))
+        reference_hunk_mapping(task)
+        loaded[task_id] = task
     return loaded
 
 
@@ -380,27 +468,12 @@ def cell_summary(cell: Cell) -> dict[str, object]:
         "task_set_size": cell.task_set_size,
         "retry_policy_digest": cell.retry_policy_digest,
         "agent_kwargs_base_digest": cell.agent_kwargs_base_digest,
-        "agent_kwargs_digest": digest(dict(cell.agent_kwargs)),
-        "agent_allowed_hosts_digest": digest(list(cell.agent_allowed_hosts)),
-        "agent_kwargs": dict(cell.agent_kwargs),
-        "composition_digest": cell.composition_digest,
-        "adapter_digest": cell.adapter_digest,
-        "package_digest": cell.package_digest,
-        "prime_package_digest": cell.prime_package_digest,
-        "dockerfile_digests": list(cell.dockerfile_digests),
-        "gateway_digests": list(cell.gateway_digests),
-        "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests),
-        "compose_digests": list(cell.compose_digests),
-        "network_mode": cell.network_mode,
-        "transport_network_mode": cell.transport_network_mode,
-        "network_enforcement": cell.network_enforcement,
-        "task_network_enforcement": cell.task_network_enforcement,
-        "agent_allowed_hosts": list(cell.agent_allowed_hosts),
         "task_context": [
             {
                 "task_id": record.task_id,
                 "task_digest": record.task_digest,
                 "comparison_task_digest": record.comparison_task_digest,
+                "reference_hunk_map_digest": record.reference_hunk_map_digest,
                 "context_manifest_digest": record.context_manifest_digest,
                 "context_pack_digest": record.context_pack_digest,
                 "skill_digest": record.skill_digest,
@@ -409,4 +482,10 @@ def cell_summary(cell: Cell) -> dict[str, object]:
             }
             for record in cell.task_records
         ],
+        "compose_digests": list(cell.compose_digests),
+        "network_mode": cell.network_mode,
+        "transport_network_mode": cell.transport_network_mode,
+        "network_enforcement": cell.network_enforcement,
+        "task_network_enforcement": cell.task_network_enforcement,
+        "agent_allowed_hosts": list(cell.agent_allowed_hosts),
     }

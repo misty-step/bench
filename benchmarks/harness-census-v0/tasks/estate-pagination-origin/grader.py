@@ -10,8 +10,12 @@ import sys
 import tempfile
 
 
-def fail(check: str, detail: str) -> None:
-    print(json.dumps({"passed": False, "failed_check": check, "detail": detail}, sort_keys=True))
+CHECKS = ("relative-path", "scheme-check", "host-check", "port-check", "pagination-use", "request-path")
+
+
+def fail(check: str, detail: str, passed_checks: int = 0) -> None:
+    total_checks = len(CHECKS)
+    print(json.dumps({"passed": False, "hard_pass": False, "passed_checks": passed_checks, "total_checks": total_checks, "task_points": passed_checks / total_checks, "failed_check": check, "detail": detail}, sort_keys=True))
     raise SystemExit(1)
 
 
@@ -288,11 +292,12 @@ def main() -> None:
         output = (result.stdout + result.stderr)[-5000:]
         for marker in ("relative-path", "request-path", "host-check", "scheme-check", "port-check", "pagination-use"):
             if marker in output:
-                fail(marker, output)
+                fail(marker, output, len(CHECKS) - 1)
         if "could not find" in output or "cannot find function" in output:
             fail("invalid-syntax", output)
         fail("invalid-syntax", output)
-    print(json.dumps({"passed": True, "checks": ["relative-path", "scheme-check", "host-check", "port-check", "pagination-use", "request-path"]}, sort_keys=True))
+    total_checks = len(CHECKS)
+    print(json.dumps({"passed": True, "hard_pass": True, "passed_checks": total_checks, "total_checks": total_checks, "task_points": 1.0, "checks": list(CHECKS)}, sort_keys=True))
 
 
 if __name__ == "__main__":

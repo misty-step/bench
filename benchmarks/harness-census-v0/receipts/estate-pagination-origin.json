@@ -4,15 +4,23 @@
       "changed_paths": [
         "src/collect/digitalocean.rs"
       ],
+      "hard_pass": true,
       "id": "renamed-pagination-validator",
-      "patch_digest": "3a27a3f8f56a767a852c15bbe4774462be68a40fb23d073eb9182e4ce537f3cf"
+      "passed_checks": 6,
+      "patch_digest": "3a27a3f8f56a767a852c15bbe4774462be68a40fb23d073eb9182e4ce537f3cf",
+      "task_points": 1.0,
+      "total_checks": 6
     },
     {
       "changed_paths": [
         "src/collect/digitalocean.rs"
       ],
+      "hard_pass": true,
       "id": "reordered-origin-check",
-      "patch_digest": "0e3971385db860077b4d5e03db5baf93a8f98b80c60ce36e71c586c199cd7951"
+      "passed_checks": 6,
+      "patch_digest": "0e3971385db860077b4d5e03db5baf93a8f98b80c60ce36e71c586c199cd7951",
+      "task_points": 1.0,
+      "total_checks": 6
     }
   ],
   "comment_only_image": {
@@ -22,7 +30,7 @@
   "exposure": {
     "future_git_objects_exposed": false,
     "grader_and_reference_hidden_from_worker": true,
-    "private_source_bytes_checked_in": true
+    "private_source_bytes_checked_in": false
   },
   "fixture": {
     "git_history_in_image": false,
@@ -66,11 +74,42 @@
     "changed_paths": [
       "src/collect/digitalocean.rs"
     ],
-    "grader_digest": "b2f233eac34b1af4b39d390a47fa2fdb66eab50107ff1c9801a03b0e0e8894c0",
+    "grader_digest": "f6f348d5a910f7000fc39d23b59e7f2f4d42abc851b433ccf8ed995bd54a5c45",
+    "hard_pass": true,
     "passed": true,
+    "passed_checks": 6,
     "patch_digest": "ac22ecde1169a166333fe8f48daa8e3acfc2d44ebed7f8e8f2250a649c60b492",
-    "reference_commit_verified": true
+    "reference_commit_verified": true,
+    "task_points": 1.0,
+    "total_checks": 6
   },
+  "reference_hunk_map_digest": "de08d6928f2b77d3c71150ef352e44b0c7b21b7599d5b1ca0052178aa3a84ba2",
+  "reference_hunks": [
+    {
+      "grader_check": "host-check",
+      "header": "@@ -171,6 +171,21 @@ async fn get_json<T: serde::de::DeserializeOwned>(",
+      "hunk_id": "hunk-001",
+      "patch_digest": "be3a671a2ef7f9a60f2fa7a00468ad7afa53818496d203f146f4b2033431a472"
+    },
+    {
+      "grader_check": "pagination-use",
+      "header": "@@ -186,7 +201,7 @@ async fn fetch_droplets(",
+      "hunk_id": "hunk-002",
+      "patch_digest": "ac1c8ae48012de4330b34a897a1d4293a7700520a35de6371195a4e77914deb1"
+    },
+    {
+      "grader_check": "pagination-use",
+      "header": "@@ -203,7 +218,7 @@ async fn fetch_apps(client: &reqwest::Client, base: &str, token: &str) -> anyhow",
+      "hunk_id": "hunk-003",
+      "patch_digest": "f898b125b362bd9bc5d11891e5219be88f05abbcdfd099e1d520621c452853c2"
+    },
+    {
+      "grader_check": "request-path",
+      "header": "@@ -498,6 +513,29 @@ mod tests {",
+      "hunk_id": "hunk-004",
+      "patch_digest": "3e52032e72d718172b36c7df3a60863b73b6b324c29666fabcf4a8e30d484775"
+    }
+  ],
   "reference_sha": "c6e92b73ee69fb6ef56d349000f85fb8b70843ed",
   "schema_version": "harness_census.qualification_receipt.v1",
   "scope": {

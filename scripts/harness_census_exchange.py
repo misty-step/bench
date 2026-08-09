@@ -14,10 +14,10 @@ from typing import cast
 from harness_census_common import (
     CAMPAIGN_ID, NATIVE_NETWORK_ENFORCEMENT, Cell, Attestation,
     AttestationEntry, ExchangePaths, HarborTrial, Receipt, TaskRecord, bytes_digest,
-    digest, fail, load_tasks, write_json,
+    digest, fail, load_tasks, tree_files, write_json,
 )
 
-RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count")
+RECEIPT_KEYS = ("run_id", "trial_id", "crucible_run_id", "receipt_id", "exchange_record_id", "trial_status", "failure_code", "request_ref", "result_ref", "grader_receipt_ref", "transcript_ref", "stage_manifest_digest", "row_id", "cohort_id", "baseline_id", "profile_digest", "context_digest", "context_manifest_digest", "context_pack_digest", "skill_digest", "skill_count", "dockerfile_digest", "gateway_digest", "gateway_dockerfile_digest", "compose_digest")
 
 SAFE_RUNTIME_ENV_KEYS = (
     "PATH",
@@ -40,6 +40,17 @@ def safe_runtime_environment(harbor: Path | None = None) -> dict[str, str]:
         environment["PATH"] = os.pathsep.join(part for part in (str(harbor.parent), existing_path) if part)
     return environment
 
+
+def cell_static_digest(cell_dir: Path) -> str:
+    selected: dict[str, bytes] = {}
+    for name, value in tree_files(cell_dir, exclude_git=False).items():
+        parts = name.split("/")
+        if parts[0] in {"results", "request.json", "result.json"}:
+            continue
+        if parts[0] == "tasks" and len(parts) >= 4 and parts[2:4] == ["environment", "repo"]:
+            continue
+        selected[name] = value
+    return digest([(name, bytes_digest(value)) for name, value in sorted(selected.items())])
 
 def model_parts(identity: str) -> dict[str, str]:
     provider, name = identity.split("/", 1)
@@ -117,6 +128,29 @@ def collect_attestations(results: Path, cell: Cell) -> list[AttestationEntry]:
         transcript = path.with_name(f"{cell.harness}.jsonl")
         entries.append({"task_id": record.task_id, "trial_dir": trial_dir, "attestation_path": path, "attestation_ref": path.relative_to(cell.cell_dir).as_posix(), "attestation_digest": bytes_digest(path.read_bytes()), "transcript_ref": transcript.relative_to(cell.cell_dir).as_posix() if transcript.is_file() else None, "transcript_path": transcript if transcript.is_file() else None, "record": attestation})
     return entries
+
+def native_observation(cell: Cell, attestations: list[AttestationEntry]) -> tuple[Cell, dict[str, str]] | None:
+    passed = [entry for entry in attestations if entry["record"].get("status") == "passed"]
+    if cell.cell_kind != "native_default" or len(cell.task_records) != 3 or len(passed) != 3:
+        return None
+    observations: list[tuple[str, str, str, str, str, str]] = []
+    for entry in passed:
+        record = entry["record"]
+        observed = record.get("observed_identities")
+        model = observed[0] if isinstance(observed, list) and len(observed) == 1 and isinstance(observed[0], str) else None
+        effort = record.get("effort")
+        effort_source = record.get("effort_source")
+        tool_manifest = record.get("tool_manifest_digest")
+        config_digest = record.get("config_digest")
+        if not all(isinstance(value, str) and value.strip() for value in (model, effort, effort_source, tool_manifest, config_digest)):
+            fail(f"native attestation identity is incomplete: {cell.cell_id} {entry['task_id']}")
+        system_identity = cell.observed_system_identity(config_digest, tool_manifest)
+        observations.append((model, effort, effort_source, tool_manifest, config_digest, system_identity))
+    if len(set(observations)) != 1:
+        fail(f"native task attestations disagree on observed identity: {cell.cell_id}")
+    model, effort, effort_source, tool_manifest, config_digest, system_identity = observations[0]
+    resolved = cell.resolve_native(model, effort, effort_source, tool_manifest, config_digest)
+    return resolved, {"model": model, "effort": effort, "effort_source": effort_source, "tool_manifest_digest": tool_manifest, "config_digest": config_digest, "system_identity": system_identity}
 
 
 def _failure_text(trial: HarborTrial, attestation: Attestation) -> str:
@@ -253,6 +287,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     payload["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
     payload = {key: value for key, value in payload.items() if value is not None}
     payload.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
+    payload.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
     if failure is not None:
         payload.update({"failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail_ref": f"sha256:{bytes_digest(harbor_result_path.read_bytes())}@{harbor_result_path.relative_to(root).as_posix()}"})
     if cell.cell_kind == "native_default":
@@ -266,6 +301,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     authority_hosts = list(cell.agent_allowed_hosts) if authority_network == "allowlist" else []
     request = {"schema_version": "crucible.runner_exchange_request.v1", "exchange_id": f"{run_id}--{task_id}", "task_id": task_id, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": sha256_ref(cell.task_set_digest), "task_set_size": cell.task_set_size, "retry_policy_digest": sha256_ref(cell.retry_policy_digest), "agent_kwargs_base_digest": sha256_ref(cell.agent_kwargs_base_digest), "adapter": {"name": f"crucible.harbor_agents.{cell.harness}", "version": cell.harness_version, "digest": sha256_ref(cell.adapter_digest)}, "candidate": candidate, "capabilities": ["workspace_edit", "transcript", "usage"], "input": {"workspace": workspace_path, "instruction": instruction_path, "context": [], "digest": sha256_ref(bytes_digest((root / instruction_path).read_bytes()))}, "authority": {"filesystem_roots": [workspace_path, instruction_path], "network": authority_network, "allowed_hosts": authority_hosts, "credential_refs": []}, "limits": {"timeout_ms": 900000, "max_output_bytes": 1048576, "cpu_millicores": 1000, "memory_mb": 1024, "storage_mb": 2048}, "provenance": {"repo": load_tasks()[task_id].source_repository, "git_sha": load_tasks()[task_id].source_sha, "invocation_id": f"{run_id}--{task_id}"}, "trust": {"required_evidence_kinds": ["final_state", "transcript"], "require_transcript": True, "require_usage": True, "require_cost": False, "require_response_model": model_requested is not None}, "adapter_payload": payload}
     request.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
+    request.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
     attestation_path = attestation_entry["attestation_path"]
     evidence: list[dict[str, object]] = [{"kind": "harbor_trial", "path": harbor_result_path.relative_to(root).as_posix(), "sha256": bytes_digest(harbor_result_path.read_bytes()), "media_type": "application/json"}]
     if failure is None:
@@ -301,6 +337,7 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     result["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
     result.update({"context_digest": context_ref, "context_manifest_digest": context_manifest_ref, "context_pack_digest": context_pack_ref, "skill_digest": skill_ref, "skill_count": record.skill_count})
     result.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
+    result.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
     if failure is None:
         result["output"] = {"summary": "Harbor task completed", "primary_artifact": evidence[1]["path"], "metadata": {"reward": reward_raw, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement}}
     else:
@@ -324,11 +361,15 @@ def exchange_envelopes(root: Path, cell: Cell, record: TaskRecord, trial_dir: Pa
     trial_record.update({"context_digest": context_ref, "context_manifest_digest": context_manifest_ref, "context_pack_digest": context_pack_ref, "skill_digest": skill_ref, "skill_count": record.skill_count})
     trial_record["comparison_task_digest"] = sha256_ref(record.comparison_task_digest)
     trial_record.update({"gateway_digests": list(cell.gateway_digests), "gateway_dockerfile_digests": list(cell.gateway_dockerfile_digests), "compose_digests": list(cell.compose_digests)})
+    trial_record.update({"dockerfile_digest": sha256_ref(record.dockerfile_digest), "gateway_digest": sha256_ref(record.gateway_digest), "gateway_dockerfile_digest": sha256_ref(record.gateway_dockerfile_digest), "compose_digest": sha256_ref(record.compose_digest)})
+    trial_record.update({"task_id": task_id, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "profile_digest": sha256_ref(cell.profile_digest), "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved})
     if failure is not None:
         trial_record.update({"trial_status": "reliability_failure", "failure_class": failure[0], "failure_stage": failure[1], "failure_code": failure[2], "failure_detail": reliability_detail(trial_raw, attestation, failure)})
+    trial_record = {key: value for key, value in trial_record.items() if value is not None}
     write_json(trial_path, trial_record)
     if failure is None:
-        write_json(grader_path, {"schema_version": "harness_census.grader_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "task_id": task_id, "grader_identity": "harness_census_deterministic", "grader_digest": grader_digest, "hard_pass": reward_raw == 1.0, "task_points": float(reward_raw), "grader_ms": None})
+        grader_record: dict[str, object] = {"schema_version": "harness_census.grader_receipt.v1", "campaign_id": CAMPAIGN_ID, "trial_id": trial_id, "task_id": task_id, "row_id": sha256_ref(cell.row_id) if cell.row_id else None, "cohort_id": sha256_ref(cell.cohort_id) if cell.cohort_id else None, "baseline_id": sha256_ref(cell.baseline_id) if cell.baseline_id else None, "grader_identity": "harness_census_deterministic", "grader_digest": grader_digest, "hard_pass": reward_raw == 1.0, "task_points": float(reward_raw), "grader_ms": None}
+        write_json(grader_path, {key: value for key, value in grader_record.items() if value is not None})
     else:
         grader_path = None
     return ExchangePaths(request_path, result_path, trial_path, grader_path)
@@ -414,7 +455,9 @@ def normalized_request(cell: Cell, stage_digest: str) -> dict[str, object]:
     return request
 
 
-def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str) -> None:
+def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest: str, expected_cell_digest: str | None = None) -> None:
+    if expected_cell_digest is not None and cell_static_digest(cell.cell_dir) != expected_cell_digest:
+        fail(f"staged cell bytes changed before run: {cell.cell_id}")
     output = cell.cell_dir / "results"
     output.mkdir(exist_ok=True)
     command = [str(crucible), "run", str(cell.spec_path), "--out", str(output), "--json"]
@@ -424,23 +467,30 @@ def run_cell(root: Path, cell: Cell, crucible: Path, harbor: Path, stage_digest:
     # A non-zero Crucible run still leaves per-task failure evidence when the Harbor executor can continue.
     # Missing task artifacts are materialized by collect_attestations as denominator-excluded attempts.
     attestations = collect_attestations(output, cell)
+    observation = native_observation(cell, attestations)
+    observed_identity: dict[str, str] = {}
+    if observation is not None:
+        cell, observed_identity = observation
+    normalized_request(cell, stage_digest)
     passed = [entry for entry in attestations if entry["record"].get("status") == "passed"]
-    if cell.cell_kind == "native_default" and passed:
-        observed_models = sorted({entry["record"]["observed_identities"][0] for entry in passed})
-        observed_efforts = sorted({entry["record"]["effort"] for entry in passed})
-        effort_sources = sorted({entry["record"]["effort_source"] for entry in passed})
-        if len(observed_models) != 1 or len(observed_efforts) != 1 or len(effort_sources) != 1:
-            fail(f"native cell observed model, effort, or effort source is not singular: {cell.cell_id}")
-        cell = cell.resolve_native(observed_models[0], observed_efforts[0], effort_sources[0])
     receipts: list[dict[str, object]] = []
     for record, attestation in zip(cell.task_records, attestations):
         raw_tool_manifest = attestation["record"].get("tool_manifest_digest")
         tool_manifest_digest = raw_tool_manifest if isinstance(raw_tool_manifest, str) and raw_tool_manifest else None
         paths = exchange_envelopes(root, cell, record, attestation["trial_dir"], attestation, stage_digest)
+        if expected_cell_digest is not None and cell_static_digest(cell.cell_dir) != expected_cell_digest:
+            fail(f"staged cell bytes changed before ingest: {cell.cell_id}")
         receipts.append(ingest_task(crucible, root, cell, record, paths, stage_digest, tool_manifest_digest))
     observed = sorted({entry["record"]["observed_identities"][0] for entry in passed if entry["record"].get("observed_identities")})
     observed_efforts = sorted({entry["record"]["effort"] for entry in passed if entry["record"].get("effort")})
+    observed_tools = sorted({entry["record"]["tool_manifest_digest"] for entry in passed if entry["record"].get("tool_manifest_digest")})
+    observed_configs = sorted({entry["record"]["config_digest"] for entry in passed if entry["record"].get("config_digest")})
+    observed_systems = sorted({cell.observed_system_identity(entry["record"]["config_digest"], entry["record"]["tool_manifest_digest"]) for entry in passed if isinstance(entry["record"].get("config_digest"), str) and isinstance(entry["record"].get("tool_manifest_digest"), str)})
     if len(passed) == len(attestations) and (observed != [cell.provider_route_resolved] or observed_efforts != [cell.provider_effort_resolved]):
         fail(f"cell observed model or effort identity is not singular: {cell.cell_id}")
     attestation_receipts = [{"task_id": entry["task_id"], "attestation_ref": entry["attestation_ref"], "attestation_digest": entry["attestation_digest"], "transcript_ref": entry["transcript_ref"], "record": entry["record"]} for entry in attestations]
-    write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in attestations], "runner_exchange_receipts": [compact_receipt(cast(Receipt, receipt)) for receipt in receipts]})
+    compact_receipts = [compact_receipt(cast(Receipt, receipt)) for receipt in receipts]
+    if cell.cell_kind == "native_default" and observation is not None:
+        baseline_summary = {"schema_version": "harness_census.native_baseline_summary.v1", "campaign_id": CAMPAIGN_ID, "stage_manifest_digest": stage_digest, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "baseline_id": cell.baseline_id, "harness": cell.harness, "harness_version": cell.harness_version, "profile_digest": cell.profile_digest, "task_set_digest": cell.task_set_digest, "observed_model": observed_identity["model"], "observed_effort": observed_identity["effort"], "effort_source": observed_identity["effort_source"], "tool_manifest_digest": observed_identity["tool_manifest_digest"], "config_digest": observed_identity["config_digest"], "system_identity": observed_identity["system_identity"], "receipt_digests": [receipt["receipt_digest"] for receipt in compact_receipts], "status": "valid" if len(compact_receipts) == len(cell.task_records) and all(receipt.get("trial_status") == "success" for receipt in compact_receipts) else "invalid"}
+        write_json(root / "baselines" / str(cell.baseline_id) / "summary.json", baseline_summary)
+    write_json(cell.cell_dir / "result.json", {"schema_version": "harness_census.normalized_result.v1", "campaign_id": CAMPAIGN_ID, "cell_id": cell.cell_id, "cell_run_id": cell.cell_run_id, "task_set_digest": cell.task_set_digest, "task_set_size": cell.task_set_size, "retry_policy_digest": cell.retry_policy_digest, "agent_kwargs_base_digest": cell.agent_kwargs_base_digest, "stage_manifest_digest": stage_digest, "return_code": result_run.returncode, "model_requested": cell.model_requested, "effort_requested": cell.effort_requested, "provider_route_resolved": cell.provider_route_resolved, "provider_effort_resolved": cell.provider_effort_resolved, "response_model": observed[0] if len(observed) == 1 else None, "observed_models": observed, "response_effort": observed_efforts[0] if len(observed_efforts) == 1 else None, "observed_efforts": observed_efforts, "observed_tool_manifest_digests": observed_tools, "observed_config_digests": observed_configs, "observed_system_identities": observed_systems, "effort_source": cell.effort_source, "network_mode": cell.network_mode, "transport_network_mode": cell.transport_network_mode, "network_enforcement": cell.network_enforcement, "task_network_enforcement": cell.task_network_enforcement, "row_id": cell.row_id, "cohort_id": cell.cohort_id, "baseline_id": cell.baseline_id, "profile_digest": cell.profile_digest, "agent_kwargs": dict(cell.agent_kwargs), "agent_allowed_hosts": list(cell.agent_allowed_hosts), "attestations": attestation_receipts, "attestation_digests": [entry["attestation_digest"] for entry in attestations], "runner_exchange_receipts": compact_receipts})

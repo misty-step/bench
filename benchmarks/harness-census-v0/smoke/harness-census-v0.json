@@ -1,50 +1,11 @@
 {
-  "aggregation": "proportion",
-  "decision": "Qualify harness identity and task receipt plumbing without paid model quality claims.",
-  "graders": {
-    "graders": [
-      {
-        "id": "harness_census_deterministic",
-        "kind": "deterministic"
-      }
-    ]
-  },
-  "id": "harness-census-v0-smoke",
-  "inputs": "Three history-free pinned repository repair tasks with deterministic graders.",
-  "outputs": "Nine-cell dry-run staging and task receipt plumbing.",
-  "runner": {
-    "corpus": {
-      "config": {
-        "agent": "pi",
-        "agent_import_path": "crucible.harbor_agents.pi_agent:PiAgent",
-        "agent_kwargs": {
-          "mint_base_url": "http://mint-gateway:4949/proxy/https/openrouter.ai/api/v1"
-        },
-        "job_timeout_ms": 900000,
-        "model": "openrouter/deepseek/deepseek-v4-flash-0731"
-      },
-      "source": "harbor_tasks",
-      "tasks": [
-        {
-          "task_id": "iron-forest-go-checkruns-array"
-        },
-        {
-          "task_id": "estate-pagination-origin"
-        },
-        {
-          "task_id": "sploot-hydration-device-lane"
-        }
-      ]
-    },
-    "kind": "harbor_task"
-  },
-  "schema_version": "crucible.eval_spec.v1",
-  "smoke_cells": [
+  "cells": [
     {
       "cell_id": "prime-native_default",
       "composition": "native_default",
       "effort_requested": null,
       "harness": "prime",
+      "identity_digest": "23909d1ca2a62260db3f37ba687287a5c9453fa429c8ad6c1af2d64122b678c0",
       "model_requested": null,
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -57,6 +18,7 @@
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "prime",
+      "identity_digest": "88b9f63468ac5b4f1a2521b0aa9f6a27185061d75e6706288a3a8b5a1a63c156",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -69,6 +31,7 @@
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "prime",
+      "identity_digest": "4c9957fb5f03cc1bffa5a229718dc7b8a743dcd9d60d458cc0195d3bbf18f334",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -81,6 +44,7 @@
       "composition": "native_default",
       "effort_requested": null,
       "harness": "omp",
+      "identity_digest": "605e08580ce019473850b716eb6811f84a58b4fbcf13b0efa9e7c8b7da8dff54",
       "model_requested": null,
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -93,6 +57,7 @@
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "omp",
+      "identity_digest": "758ee854489f62f2dbc9251d814a0926df3398cc7fb90382f8a97fdeb2767e36",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -105,6 +70,7 @@
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "omp",
+      "identity_digest": "dfb3186fa7c4f6c9aafb1a34297c26c9920cb9d6610a8ccc90fd40b610bbf58a",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -117,6 +83,7 @@
       "composition": "native_default",
       "effort_requested": null,
       "harness": "pi",
+      "identity_digest": "8ea0f4fd878493bcf5291e94a191b26e35f72f0c8bbd051168e552b04c2a4688",
       "model_requested": null,
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -129,6 +96,7 @@
       "composition": "controlled_raw",
       "effort_requested": "high",
       "harness": "pi",
+      "identity_digest": "c584ec6d3660f3b23b3be608a7090bed04384145818c476555ef943c9de53662",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -141,6 +109,7 @@
       "composition": "controlled_enriched",
       "effort_requested": "high",
       "harness": "pi",
+      "identity_digest": "aefca0841bad51dae21e0fd2163e1876313f21112cb1d94eb0b4ec2b87d53276",
       "model_requested": "openrouter/deepseek/deepseek-v4-flash-0731",
       "task_ids": [
         "iron-forest-go-checkruns-array",
@@ -149,9 +118,17 @@
       ]
     }
   ],
-  "task": "harness-census-v0",
-  "uncertainty": {
-    "confidence": 0.95,
-    "method": "wilson"
-  }
+  "grader_digest": "c866fc242dd953192223da353e23888d9e6c234e1383dfc6e7f952852b474f6a",
+  "id": "harness-census-v0-smoke",
+  "kind": "staging_manifest",
+  "pack_digest": "5dd1beb22bbb7523194b2e5851e9d13eebe0dc69505153a23eadd3398d58abfe",
+  "reference_hunk_map_digest": "87abb9843bb028bf45a7331ff43d20a342a1725643e65a641574955933a52117",
+  "runnable": false,
+  "schema_version": "harness_census.smoke.v1",
+  "task_digest": "70e2f48fc987ca6478dd614420a73e250d71910c83fd9ef176be9813a51c12c6",
+  "task_ids": [
+    "iron-forest-go-checkruns-array",
+    "estate-pagination-origin",
+    "sploot-hydration-device-lane"
+  ]
 }
