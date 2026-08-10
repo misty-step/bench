@@ -24,14 +24,9 @@ from harness_census_common import (
 )
 from harness_census_staging import build_cells, immutable_stage_cells, probe_controlled_argv_surfaces
 from harness_census_resume import cell_receipt_state
-from harness_census_test_support import build_complete, h64, make_cell
+from harness_census_test_support import TASK_IDS, build_complete, h64, make_cell
 from run_harness_census import campaign_stage, validate_resume_campaign_binding
 
-TASK_IDS = sorted((
-    "estate-pagination-origin",
-    "iron-forest-go-checkruns-array",
-    "sploot-hydration-device-lane",
-))
 
 
 class ResumeCampaignBindingTests(unittest.TestCase):
