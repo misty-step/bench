@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 
 from harness_census_common import (
-    BUN_VERSION, CAMPAIGN_ID, DECISION_POLICY, DEFAULT_CONTROLLED_PAIR, HARBOR_VERSION, RETRY_POLICY, ControlledPair, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
+    BUN_VERSION, CAMPAIGN_ID, DECISION_POLICY, DEFAULT_CONTROLLED_PAIR, HARBOR_VERSION, RETRY_POLICY, cell_stage_digest, cell_summary, confined_path, digest, ensure_campaign_layout, ensure_campaign_root,
     fail, harness_catalog_digest, mcp_identity_digest, model_roster_digest, validate_controlled_pair, verified_commit, write_json,
 )
 from harness_census_exchange import run_cell, safe_runtime_environment
