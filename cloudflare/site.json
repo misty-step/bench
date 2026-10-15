@@ -1,0 +1,8 @@
+{
+  "repo": "misty-step/bench",
+  "source_commit": "182685eadd0d6887804bc34ac735780e4b1aa7a6",
+  "source_folder": "docs",
+  "project_prefix": "bench",
+  "before_url": "https://misty-step.github.io/bench/",
+  "build_kind": "static"
+}
